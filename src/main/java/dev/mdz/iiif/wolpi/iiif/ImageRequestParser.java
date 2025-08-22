@@ -194,27 +194,6 @@ public class ImageRequestParser {
     }
   }
 
-  ///  Scales a crop rectangle to the target size based on the source image size.
-  /// Use this method if you want to scale before you crop the image. In the IIIF Image API spec,
-  /// cropping always precedes scaling, but in many cases scaling beforehand is much more efficient,
-  /// especially for large images in formats that support multiple resolutions (like JPEG2000). In
-  /// these cases, users should use this method to scale the crop rectangle so it matches the
-  /// resized image.
-  ///
-  /// @param crop   The original crop rectangle to scale.
-  /// @param src    The original source image size the crop rectangle is in reference to.
-  /// @param scaled The scaled image size.
-  /// @return A new [CropRectangle] that is scaled to be in reference to the scaled image size.
-  public CropRectangle scaleCropToTargetSize(CropRectangle crop, ImageSize src, ImageSize scaled) {
-    double scaleX = (src.width() == 0) ? 0.0 : (scaled.width() / (double) src.width());
-    double scaleY = (src.height() == 0) ? 0.0 : (scaled.height() / (double) src.height());
-    int sx = (int) Math.floor(crop.x() * scaleX);
-    int sy = (int) Math.floor(crop.y() * scaleY);
-    int sw = (int) Math.floor(crop.width() * scaleX);
-    int sh = (int) Math.floor(crop.height() * scaleY);
-    return new CropRectangle(sx, sy, sw, sh);
-  }
-
   /// Parses the size specification from the request.
   ///
   /// The size can be expressed in several ways:
@@ -397,26 +376,8 @@ public class ImageRequestParser {
     return result;
   }
 
-  /// Computes the uncropped size of an image based on the source size, crop rectangle, and target
-  /// size.
-  ///
-  /// This is the analogue to [#scaleCropToTargetSize(CropRectangle,ImageSize,ImageSize)]
-  /// for the `size` parameter. In the IIIF Image API, the `size` parameter is always
-  /// applied after the `region``, so it expresses the scaling for the cropped region, not for
-  /// the native image. This method computes what the size of the uncropped image would be, if the
-  /// same scaling was applied to it before cropping.
-  ///
-  /// @param sourceSize The original size of the source image.
-  /// @param crop       The crop rectangle applied to the image, **in reference to the unscaled,
-  //                    native image**.
-  /// @param targetSize The target size to which the cropped image will be scaled.
-  /// @return An [ImageSize] object representing the uncropped and scaled size of the image.
-  public ImageSize computeUncroppedSize(
-      ImageSize sourceSize, CropRectangle crop, ImageSize targetSize) {
-    double scaleX = (double) targetSize.width() / crop.width();
-    double scaleY = (double) targetSize.height() / crop.height();
-    int scaledWidth = (int) Math.floor(sourceSize.width() * scaleX);
-    int scaledHeight = (int) Math.floor(sourceSize.height() * scaleY);
-    return new ImageSize(scaledWidth, scaledHeight);
+  public boolean isRequestForUncroppedAndDownScaledImage(String regionSpec, String sizeSpec) {
+    return "full".equals(regionSpec)
+        && !("full".equals(sizeSpec) || "max".equals(sizeSpec) || sizeSpec.startsWith("^"));
   }
 }

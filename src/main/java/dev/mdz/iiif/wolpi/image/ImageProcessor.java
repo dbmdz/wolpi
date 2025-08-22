@@ -2,10 +2,12 @@ package dev.mdz.iiif.wolpi.image;
 
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VTarget;
+import app.photofox.vipsffm.VipsHelper;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsDirection;
 import app.photofox.vipsffm.enums.VipsInterpretation;
 import app.photofox.vipsffm.enums.VipsOperationRelational;
+import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
 import dev.mdz.iiif.wolpi.iiif.ImageRequestParser;
 import dev.mdz.iiif.wolpi.iiif.NotImplementedException;
@@ -47,60 +49,67 @@ public class ImageProcessor {
   /// @param request unparsed IIIF Image API request
   public VImage processImage(ImageSource imageSource, ImageRequest request)
       throws IOException, InterruptedException, NotImplementedException {
-    // For performance reasons, we deviate a bit from the IIIF Image API spec:
-    // In the specification, cropping always happens before scaling. However, this is not ideal from
-    // a performance perspective, as we cannot make use of the shrink-on-load feature of libvips[1]
-    // if we first crop and only then scale (see docstring for `VImage#thumbnailImage`)
-    // Instead, we first scale the image to the target size, then crop it to the requested region,
-    // which requires some transformations to the crop rectangle and scaling specification.
-    // [1] https://github.com/libvips/libvips/wiki/HOWTO----Image-shrinking#opening-images
-
-    // To parse scaling and cropping requests, we need to know the reference size of the input
-    // image, so either get it from the ImageSource (if available) or load the image to determine
-    // its size.
+    // Pre-load the image (just the header) if neccessary to determine the native dimensiosn
+    VImage image = null;
     ImageSize sourceSize;
-    VImage unscaledSource = null;
     if (imageSource.imageInfo() != null) {
       sourceSize =
           new ImageSize(
               imageSource.imageInfo().nativeWidth(), imageSource.imageInfo().nativeHeight());
     } else {
-      unscaledSource = loader.loadImage(imageSource);
-      sourceSize = new ImageSize(unscaledSource.getWidth(), unscaledSource.getHeight());
+      image = loader.loadImage(imageSource);
+      sourceSize = new ImageSize(image.getWidth(), image.getHeight());
     }
-    var croppedAndScaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);
-    var unscaledCropRectangle = parser.parseRegion(request.cropSpec(), sourceSize);
 
-    // Transform crop rectangle and scaling target size so we can apply the crop after scaling.
-    var uncroppedScaledSize =
-        parser.computeUncroppedSize(sourceSize, unscaledCropRectangle, croppedAndScaledSize);
-    var scaledCropRectangle =
-        parser.scaleCropToTargetSize(unscaledCropRectangle, sourceSize, uncroppedScaledSize);
-
-    VImage scaled;
-    if (sourceSize.equals(uncroppedScaledSize)) {
-      scaled = unscaledSource != null ? unscaledSource : loader.loadImage(imageSource);
+    // Crop and Scale
+    if (parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
+      // Fast path: No cropping, only downscaling, we can make use of libvips' "shrink-on-load"
+      // feature
+      // for supported image formats like JP2 and TIFF.
+      // Benchmarks showed that this is the only case among the common IIIF use cases, where
+      // shrink-on-load
+      // actually gives a performance benefit. For use cases involving cropping, shrink-on-load
+      // actually
+      // resulted in worse performance.
+      image =
+          loader.loadImage(
+              imageSource, parser.parseSize(request.version(), request.sizeSpec(), sourceSize));
     } else {
-      scaled = loader.loadImage(imageSource, uncroppedScaledSize);
+      if (image == null) {
+        image = loader.loadImage(imageSource);
+      }
+      var cropRectangle = parser.parseRegion(request.cropSpec(), sourceSize);
+      VImage cropped;
+      if (cropRectangle.width() == sourceSize.width()
+          && cropRectangle.height() == sourceSize.height()) {
+        cropped = image;
+      } else {
+        cropped =
+            image.extractArea(
+                cropRectangle.x(),
+                cropRectangle.y(),
+                cropRectangle.width(),
+                cropRectangle.height());
+      }
+
+      var scaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);
+      VImage scaled;
+      if (cropRectangle.width() == scaledSize.width()
+          || cropRectangle.height() == scaledSize.height()) {
+        scaled = cropped;
+      } else {
+        scaled =
+            cropped.thumbnailImage(
+                scaledSize.width(),
+                VipsOption.Int("height", scaledSize.height()),
+                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+      }
+      image = scaled;
     }
 
-    VImage cropped;
-    if (scaledCropRectangle.width() == scaled.getWidth()
-        || scaledCropRectangle.height() == scaled.getHeight()) {
-      cropped = scaled;
-    } else {
-      cropped =
-          scaled.extractArea(
-              scaledCropRectangle.x(),
-              scaledCropRectangle.y(),
-              scaledCropRectangle.width(),
-              scaledCropRectangle.height());
-    }
-
-    VImage rotated;
+    VImage rotated = image;
     var rotation = parser.parseRotation(request.rotationSpec());
     if (rotation.mirror() || rotation.degrees() != 0.0) {
-      rotated = cropped;
       // Apply mirroring and rotation
       if (rotation.mirror()) {
         rotated = rotated.flip(VipsDirection.DIRECTION_VERTICAL);
@@ -108,9 +117,6 @@ public class ImageProcessor {
       if (rotation.degrees() != 0.0) {
         rotated = rotated.rotate(rotation.degrees());
       }
-    } else {
-      // No rotation needed
-      rotated = cropped;
     }
 
     String qualitySpec = request.qualitySpec();
