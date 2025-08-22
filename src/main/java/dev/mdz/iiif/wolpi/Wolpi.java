@@ -47,12 +47,14 @@ public class Wolpi implements WebMvcConfigurer {
   }
 
   @Override
-  public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+  public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
     converters.add(new ByteBufferHttpMessageConverter());
   }
 
   public static void main(String[] args) {
-    Vips.init();
+    // Need to enable untrusted loaders, since OpenJPEG is categorized as untrusted
+    // due to a lack of fuzz-testing
+    Vips.init(true, false);
     SpringApplication.run(Wolpi.class, args);
   }
 }
