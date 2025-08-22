@@ -125,12 +125,19 @@ public class ImageProcessor {
     }
     IIIFQuality quality = parser.parseQuality(qualitySpec);
 
-    return rotated.colourspace(
+    var outputInterpretation =
         switch (quality) {
           case COLOR -> VipsInterpretation.INTERPRETATION_sRGB;
           case GRAY -> VipsInterpretation.INTERPRETATION_GREY16;
           case BITONAL -> VipsInterpretation.INTERPRETATION_B_W;
-        });
+        };
+    // FIXME: There should be high-level API in vips-ffm for this, but there isn't yet
+    int sourceInterpretation = VipsHelper.image_get_interpretation(image.getUnsafeStructAddress());
+    if (outputInterpretation.getRawValue() != sourceInterpretation) {
+      return rotated.colourspace(outputInterpretation);
+    } else {
+      return rotated;
+    }
   }
 
   /// Encode an image to a target format.
