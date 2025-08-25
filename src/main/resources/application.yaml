@@ -22,6 +22,7 @@ wolpi:
         by-width: true
         by-percent: true
         allow-upscaling: false
+        by-arbitrary-dimensions: true
       region:
         by-percent: true
         by-pixels: true

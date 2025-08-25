@@ -64,13 +64,10 @@ public class ImageProcessor {
     // Crop and Scale
     if (parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
       // Fast path: No cropping, only downscaling, we can make use of libvips' "shrink-on-load"
-      // feature
-      // for supported image formats like JP2 and TIFF.
+      // feature for supported image formats like JP2 and TIFF.
       // Benchmarks showed that this is the only case among the common IIIF use cases, where
-      // shrink-on-load
-      // actually gives a performance benefit. For use cases involving cropping, shrink-on-load
-      // actually
-      // resulted in worse performance.
+      // shrink-on-load actually gives a performance benefit. For use cases involving cropping,
+      // shrink-on-load actually resulted in worse performance.
       image =
           loader.loadImage(
               imageSource, parser.parseSize(request.version(), request.sizeSpec(), sourceSize));

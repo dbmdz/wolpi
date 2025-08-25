@@ -55,6 +55,7 @@ public class Wolpi implements WebMvcConfigurer {
     // Need to enable untrusted loaders, since OpenJPEG is categorized as untrusted
     // due to a lack of fuzz-testing
     Vips.init(true, false);
+    Vips.disableOperationCache();
     SpringApplication.run(Wolpi.class, args);
   }
 }

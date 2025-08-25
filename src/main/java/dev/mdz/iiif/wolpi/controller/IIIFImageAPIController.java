@@ -12,10 +12,12 @@ import dev.mdz.iiif.wolpi.model.image.ImageSource;
 import dev.mdz.iiif.wolpi.model.params.IIIFVersion;
 import dev.mdz.iiif.wolpi.model.params.ImageRequest;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -26,6 +28,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @Controller
 public class IIIFImageAPIController {
+
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   private final WolpiConfig config;
   private final ImageLoader loader;
@@ -93,9 +97,17 @@ public class IIIFImageAPIController {
       @PathVariable("rotation") String rotationSpec,
       @PathVariable("color") String colorSpec,
       @PathVariable("format") String formatSpec,
-      HttpServletResponse response)
+      HttpServletRequest servletRequest,
+      HttpHeaders requestHeaders)
       throws IOException, InterruptedException {
-    // See if the identifier actually resolved to something
+
+    // Check permissions first
+    if (!loader.authorize(identifier, requestHeaders, servletRequest.getRemoteAddr())) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+          .body(null);
+    }
+
+    // See if the identifier actually resolves to something
     ImageSource source = loader.resolve(identifier);
     if (source == null) {
       return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -120,17 +132,19 @@ public class IIIFImageAPIController {
           .contentType(MediaType.TEXT_PLAIN)
           .body(ByteBuffer.wrap(e.getMessage().getBytes()));
     } catch (VipsError e) {
+      log.error("Error processing image request {} due to error in libvips", request.toRequestPath(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .contentType(MediaType.TEXT_PLAIN)
           .body(null);
     }
 
+    // Build response headers based on configuration
     HttpHeaders outHeaders = new HttpHeaders();
     if (config.iiif().features().cors()) {
       outHeaders.setAccessControlAllowOrigin("*");
     }
     if (config.iiif().features().profileLinkHeader()) {
-      outHeaders.set(
+      outHeaders.add(
           "Link",
           "<http://iiif.io/api/image/%d/level2.json>; rel=\"profile\""
               .formatted(version == IIIFVersion.V2 ? 2 : 3));

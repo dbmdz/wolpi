@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component;
 /// Parser for IIIF Image API Requests (v2 and v3).
 ///
 /// Intended to be used from [dev.mdz.iiif.wolpi.image.ImageProcessor] to parse parts of the request
-/// as they are needed. We do not do any pre-parsing, since we want to give extensions a chance
-/// to handle custom syntax, so the parsing (and validation) is done on-demand when we know that no
+/// as they are needed. We do not do any pre-parsing, since we want to give extensions a chance to
+/// handle custom syntax, so the parsing (and validation) is done on-demand when we know that no
 /// extension is handling the syntax for the part of the request.
 @Component
 public class ImageRequestParser {
@@ -81,8 +81,8 @@ public class ImageRequestParser {
   /// - `gray`
   /// - `bitonal`
   ///
-  /// The spec permits `default` as well, but this should be handled by callers and mapped to one
-  /// of the above values.
+  /// The spec permits `default` as well, but this should be handled by callers and mapped to one of
+  /// the above values.
   ///
   /// The spec also permits custom qualities, these are not mapped here, instead extensions should
   /// take the raw quality string and handle it as needed.
@@ -99,17 +99,16 @@ public class ImageRequestParser {
   ///              and `w` and `h` are the width and height of the crop, expressed in absolute,
   ///              non-fractional pixels.
   ///  - `pct:x,y,w,h`: A percent-based crop, where `x` and `y` are the top-left coordinates of the
-  // crop
-  ///                   expressed as a percentage of the image size, and `w` and `h` are the width
-  ///                   and height of the crop expressed as a percentage of the image size.
+  ///                   crop expressed as a percentage of the image size, and `w` and `h` are the
+  ///                   width and height of the crop expressed as a percentage of the image size.
   ///                   Percentages can be integral or floating point values between 0 and 100.
   ///
   /// @param cropSpec   The crop specification as a string, formatted according to the IIIF Image
-  //                    API v2 or v3 specification.
+  ///                   API v2 or v3 specification.
   /// @param sourceSize The source image size to use as the reference coordinate system for the
   ///                   crop.
-  /// @return A [CropRectangle] object representing the cropped region in relation to the
-  /// source image size.
+  /// @return A [CropRectangle] object representing the cropped region in relation to the source
+  ///         image size.
   /// @throws IllegalArgumentException if the crop specification is invalid or unsupported.
   public CropRectangle parseRegion(String cropSpec, ImageSize sourceSize) {
     int nativeWidth = sourceSize.width();
@@ -199,26 +198,26 @@ public class ImageRequestParser {
   /// The size can be expressed in several ways:
   /// - `full`: Only for IIIF v2, the full image, no scaling
   /// - `max`: The maximum size of the image, scaled down to fit within the limits defined in the
-  ///          IIIF configuration. This is the native size of the image if no limits are defined
-  ///          in the configuration.
+  /// IIIF configuration. This is the native size of the image if no limits are defined in the
+  /// configuration.
   /// - `^max`: Same as `max`, but upscales the image to fit within the limits defined in the
-  ///           configuration if its native size is smaller than the limits.
+  /// configuration if its native size is smaller than the limits.
   /// - `w,`:   Scale to the given width, maintaining the aspect ratio.
   /// - `^w,`:  Scale to the given width, maintaining the aspect ratio, but upscaling the image if
-  ///           its native size is smaller than the given width.
+  /// its native size is smaller than the given width.
   /// - `,h`:   Scale to the given height, maintaining the aspect ratio.
   /// - `^,h`:  Scale to the given height, maintaining the aspect ratio, but upscaling the image if
-  ///           its native size is smaller than the given
+  /// its native size is smaller than the given
   /// - `pct:n`: Scale the image by the given percentage, where `n` is a floating point number
-  ///            between 0 and 100.
+  /// between 0 and 100.
   /// - `^pct:n`: Same as `pct:n`, but allows values greater than 100 to upscale the image
   /// - `w,h`:  Scale the image to the given width and height, ignoring the aspect ratio.
   /// - `^w,h`: Same as `w,h`, but allows upscaling the image if its native size is smaller than the
-  ///           given width and height.
+  /// given width and height.
   /// - `!w,h`:  Scale the image to the given width and height, but confine the scaling to the
-  ///            specified width and height, maintaining the aspect ratio.
+  /// specified width and height, maintaining the aspect ratio.
   /// - `^!w,h`: Same as `!w,h`, but allows upscaling the image if its native size is smaller than
-  ///            the given given width and height.
+  /// the given given width and height.
   ///
   /// @param iiifVersion The IIIF version to use for parsing the size specification, v2 and v3
   ///                    differ in a few points
@@ -228,6 +227,7 @@ public class ImageRequestParser {
   /// @return A [ImageSize] object representing the parsed size.
   /// @throws IllegalArgumentException if the size specification is invalid or unsupported in the
   ///                                  selected IIIF Image API version.
+  /// @throws NotImplementedException  if upscaling is requested, but not supported in the configuration
   public ImageSize parseSize(IIIFVersion iiifVersion, String sizeSpec, ImageSize sourceSize)
       throws NotImplementedException {
     IIIFConfig.ScalingFeature supported = iiifConfig.features().scaling();

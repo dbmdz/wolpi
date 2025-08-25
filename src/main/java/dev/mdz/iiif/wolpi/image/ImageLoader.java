@@ -117,7 +117,7 @@ public class ImageLoader {
               targetSize.width(),
               VipsOption.Int("height", targetSize.height()),
               VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-      case BinaryResolvedImage(byte[] data, String mimeType) ->
+      case BinaryResolvedImage(byte[] data) ->
           VImage.thumbnailBuffer(
               arena,
               VBlob.newFromBytes(arena, data),
@@ -138,7 +138,7 @@ public class ImageLoader {
               @Nullable Boolean supportsByteRange) ->
           loadFromHttp(uri, headers, null, supportsByteRange);
       case CustomSourceResolvedImage(VCustomSource src) -> VImage.newFromSource(arena, src);
-      case BinaryResolvedImage(byte[] data, String mimeType) -> VImage.newFromBytes(arena, data);
+      case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
     };
   }
 

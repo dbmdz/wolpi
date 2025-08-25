@@ -15,4 +15,8 @@ public record ImageInfo(
   public Map<String, Object> toIIIF(IIIFVersion version) {
     return Map.of();
   }
+
+  public ImageSize nativeSize() {
+    return new ImageSize(nativeWidth, nativeHeight);
+  }
 }
