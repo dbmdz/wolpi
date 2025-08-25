@@ -31,6 +31,7 @@
 		<jspecify.version>1.0.0</jspecify.version>
 		<guava.version>33.4.8-jre</guava.version>
 		<vips-ffm.version>1.9.0</vips-ffm.version>
+		<reflections.version>0.9.12</reflections.version>
 		<fmt-maven-plugin.version>2.27</fmt-maven-plugin.version>
 	</properties>
 	<dependencies>
@@ -71,6 +72,11 @@
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
 			<version>${guava.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.reflections</groupId>
+			<artifactId>reflections</artifactId>
+			<version>${reflections.version}</version>
 		</dependency>
 
 		<dependency>
