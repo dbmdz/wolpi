@@ -23,10 +23,8 @@ module wolpi {
   exports dev.mdz.iiif.wolpi;
   exports dev.mdz.iiif.wolpi.config;
   exports dev.mdz.iiif.wolpi.controller;
-  exports dev.mdz.iiif.wolpi.extension;
   exports dev.mdz.iiif.wolpi.iiif;
   exports dev.mdz.iiif.wolpi.image;
-  exports dev.mdz.iiif.wolpi.model.extensions;
   exports dev.mdz.iiif.wolpi.model.image;
   exports dev.mdz.iiif.wolpi.model.params;
 

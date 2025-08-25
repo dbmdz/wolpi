@@ -103,8 +103,7 @@ public class IIIFImageAPIController {
 
     // Check permissions first
     if (!loader.authorize(identifier, requestHeaders, servletRequest.getRemoteAddr())) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-          .body(null);
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
     }
 
     // See if the identifier actually resolves to something
@@ -132,7 +131,8 @@ public class IIIFImageAPIController {
           .contentType(MediaType.TEXT_PLAIN)
           .body(ByteBuffer.wrap(e.getMessage().getBytes()));
     } catch (VipsError e) {
-      log.error("Error processing image request {} due to error in libvips", request.toRequestPath(), e);
+      log.error(
+          "Error processing image request {} due to error in libvips", request.toRequestPath(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .contentType(MediaType.TEXT_PLAIN)
           .body(null);

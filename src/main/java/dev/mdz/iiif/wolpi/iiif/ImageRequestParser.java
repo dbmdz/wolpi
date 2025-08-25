@@ -227,7 +227,8 @@ public class ImageRequestParser {
   /// @return A [ImageSize] object representing the parsed size.
   /// @throws IllegalArgumentException if the size specification is invalid or unsupported in the
   ///                                  selected IIIF Image API version.
-  /// @throws NotImplementedException  if upscaling is requested, but not supported in the configuration
+  /// @throws NotImplementedException  if upscaling is requested, but not supported in the
+  ///                                  configuration
   public ImageSize parseSize(IIIFVersion iiifVersion, String sizeSpec, ImageSize sourceSize)
       throws NotImplementedException {
     IIIFConfig.ScalingFeature supported = iiifConfig.features().scaling();

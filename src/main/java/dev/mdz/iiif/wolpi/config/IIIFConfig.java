@@ -53,10 +53,10 @@ public record IIIFConfig(
   /// @param byHeight              Whether to allow scaling by height with `,h`
   /// @param byWidth               Whether to allow scaling by width with `w,`
   /// @param byPercent             Whether to allow scaling by percent with `pct:`
-  /// @param byArbitraryDimensions Whether to allow scaling by arbitrary (non-aspect-ratio preserving)
-  ///                              dimensions with `w,h`
+  /// @param byArbitraryDimensions Whether to allow scaling by arbitrary (non-aspect-ratio
+  ///                              preserving) dimensions with `w,h`
   /// @param allowUpscaling        Allow upscaling of images, i.e. scaling to larger sizes than the
-  //                               original
+  ///                              original
   public record ScalingFeature(
       boolean byConfinedWidthHeight,
       boolean byHeight,

@@ -30,8 +30,7 @@ public sealed interface ResolvedImage
               : null,
           polyglotValue.getMember("supportsByteRanges").asBoolean());
     } else if (polyglotValue.hasMember("rawData") && polyglotValue.hasMember("mimeType")) {
-      return new BinaryResolvedImage(
-          polyglotValue.getMember("rawData").as(byte[].class));
+      return new BinaryResolvedImage(polyglotValue.getMember("rawData").as(byte[].class));
     } else if (polyglotValue.hasMember("onRead") && polyglotValue.hasMember("onWrite")) {
       ReadCallback readCb =
           (memorySegment, length) -> {
