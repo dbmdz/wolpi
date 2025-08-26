@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.web.context.annotation.RequestScope;
@@ -21,6 +22,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @SpringBootApplication
 @EnableConfigurationProperties(WolpiConfig.class)
 @EnableWebMvc
+@Configuration(proxyBeanMethods = false)
 public class Wolpi implements WebMvcConfigurer {
 
   /// Creates a new FFM Memory [Arena] for use by libvips
@@ -36,7 +38,7 @@ public class Wolpi implements WebMvcConfigurer {
 
   /// Create a new HttpClient using HTTP/2 for the application.
   @Bean
-  HttpClient httpClient() {
+  public HttpClient httpClient() {
     return HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
   }
 

@@ -27,7 +27,4 @@ module wolpi {
   exports dev.mdz.iiif.wolpi.image;
   exports dev.mdz.iiif.wolpi.model.image;
   exports dev.mdz.iiif.wolpi.model.params;
-
-  opens dev.mdz.iiif.wolpi;
-  opens dev.mdz.iiif.wolpi.controller;
 }

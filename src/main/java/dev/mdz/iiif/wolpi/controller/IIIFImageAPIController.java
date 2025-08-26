@@ -44,7 +44,7 @@ public class IIIFImageAPIController {
   /// Return the IIIF Image Information for the given image identifier, using the specified version
   /// format.
   @GetMapping(value = "/{version}/{identifier}/info.json", produces = "application/json")
-  ResponseEntity<Map<String, Object>> getImageInfo(
+  public ResponseEntity<Map<String, Object>> getImageInfo(
       @PathVariable IIIFVersion version,
       @PathVariable String identifier,
       HttpHeaders headers,
@@ -89,7 +89,7 @@ public class IIIFImageAPIController {
 
   /// Process the image according to the IIIF Image API request in the URL.
   @GetMapping(value = "/{version}/{identifier}/{scale}/{size}/{rotation}/{color}.{format}")
-  ResponseEntity<ByteBuffer> getImage(
+  public ResponseEntity<ByteBuffer> getImage(
       @PathVariable String identifier,
       @PathVariable IIIFVersion version,
       @PathVariable("scale") String regionSpec,
