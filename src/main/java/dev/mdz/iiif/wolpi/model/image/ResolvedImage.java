@@ -34,7 +34,7 @@ public sealed interface ResolvedImage
     } else if (polyglotValue.hasMember("onRead") && polyglotValue.hasMember("onWrite")) {
       ReadCallback readCb =
           (memorySegment, length) -> {
-            // TODO: Call read on on the polyglot value
+            // TODO: Call read on the polyglot value
             // TODO: Write returned data to the memory segment
             throw new UnsupportedOperationException();
           };
