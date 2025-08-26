@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: "wolpi"
+logging:
+    level:
+        org.springframework.web.servlet: ERROR
+server:
+  forward-headers-strategy: framework
+
+wolpi:
+  image-base-dir: "./images"
+  cache-control-headers:
+    images: "public, max-age=604800, must-revalidate"
+    info-json: "public, max-age=604800, must-revalidate"
+  encoding-options: {}
+  iiif:
+    restrict-to-sizes: false
+    features:
+      scaling:
+        by-confined-width-height: true
+        by-height: true
+        by-width: true
+        by-percent: true
+        allow-upscaling: false
+        by-arbitrary-dimensions: true
+      region:
+        by-percent: true
+        by-pixels: true
+        square: true
+      rotation:
+        mirroring: true
+        by90-degree-rotation: true
+        arbitrary: true
+      profile-link-header: true
+      json-ld-media-type: true
+      cors: true
+      canonical-link-header: true
+      canonical-redirect: true
+      base-uri-redirect: true
+    qualities:
+      allowed:
+        - color
+        - gray
+        - bitonal
+      default-quality: color
+    formats:
+      allowed:
+        - jpg
+        - tiff
+        - png
+        - gif
+        - jp2
+        - pdf
+        - webp
+      preferred:
+        - jpg
+        - webp
+        - png
+    limits:
+      max-width: 0
+      max-height: 0
+      max-area: 0

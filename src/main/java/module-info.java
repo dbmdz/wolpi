@@ -1,0 +1,30 @@
+import org.jspecify.annotations.NullMarked;
+
+// Declare all classes in this module as null-marked, i.e. all parameters, return types and field
+// values are non-null by default unless annotated with @Nullable.
+@NullMarked
+module wolpi {
+  requires app.photofox.vipsffm;
+  requires com.fasterxml.jackson.databind;
+  requires com.google.common;
+  requires java.net.http;
+  requires org.apache.tomcat.embed.core;
+  requires org.graalvm.polyglot;
+  requires org.jspecify;
+  requires org.yaml.snakeyaml;
+  requires spring.boot;
+  requires spring.boot.autoconfigure;
+  requires spring.context;
+  requires spring.web;
+  requires spring.webmvc;
+  requires spring.core;
+  requires org.slf4j;
+
+  exports dev.mdz.iiif.wolpi;
+  exports dev.mdz.iiif.wolpi.config;
+  exports dev.mdz.iiif.wolpi.controller;
+  exports dev.mdz.iiif.wolpi.iiif;
+  exports dev.mdz.iiif.wolpi.image;
+  exports dev.mdz.iiif.wolpi.model.image;
+  exports dev.mdz.iiif.wolpi.model.params;
+}
