@@ -19,6 +19,7 @@ module wolpi {
   requires spring.webmvc;
   requires spring.core;
   requires org.slf4j;
+  requires reflections;
 
   exports dev.mdz.iiif.wolpi;
   exports dev.mdz.iiif.wolpi.config;

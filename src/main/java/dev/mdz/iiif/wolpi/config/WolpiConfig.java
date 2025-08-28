@@ -10,10 +10,13 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 /// @param iiif IIIF-specific configuration
 /// @param cacheControlHeaders Cache-Control header values for info.json and image responses
 /// @param encodingOptions Encoding options for image processing, such as JPEG quality and PNG
-///                        compression level, will be passed directly to the VIPS *save functions,
-///                        see their respective documentation at in the
-///                        [VIPS API docs](https://www.libvips.org/API/current/).
-///                        Make sure the YAML value types match the expected types in the VIPS API.
+/// compression level, will be passed directly to the VIPS *save functions,
+/// see their respective documentation in the [VIPS API](https://www.libvips.org/API/current/).
+/// The object is keyed by the IIIF name for the image format (see
+/// [table 4.5 "Format" in the spec](https://iiif.io/api/image/3.0/#45-format))
+/// For primitive values, make sure the YAML value types match the expected types in the VIPS API,
+/// for enum values use the exact value name as in the VIPS API documentation for the enum, e.g.
+/// `VIPS_FOREIGN_SUBSAMPLE_ON`.
 @ConfigurationProperties(prefix = "wolpi")
 public record WolpiConfig(
     Path imageBaseDir,

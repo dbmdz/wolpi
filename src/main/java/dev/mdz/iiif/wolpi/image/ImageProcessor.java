@@ -1,6 +1,7 @@
 package dev.mdz.iiif.wolpi.image;
 
 import app.photofox.vipsffm.VImage;
+import app.photofox.vipsffm.VNamedEnum;
 import app.photofox.vipsffm.VTarget;
 import app.photofox.vipsffm.VipsHelper;
 import app.photofox.vipsffm.VipsOption;
@@ -21,7 +22,11 @@ import java.lang.foreign.Arena;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.reflections.Reflections;
 import org.springframework.stereotype.Component;
 
 /// ImageProcessor is responsible for processing images according to IIIF Image API requests.
@@ -30,11 +35,14 @@ import org.springframework.stereotype.Component;
 /// encoding via libvips in an efficient way.
 @Component
 public class ImageProcessor {
+
   private final Arena vipsArena;
   private final WolpiConfig wolpiConfig;
 
   private final ImageRequestParser parser;
   private final ImageLoader loader;
+
+  private final Map<String, List<VipsOption>> formatEncodingOptions;
 
   public ImageProcessor(
       Arena vipsArena, WolpiConfig wolpiConfig, ImageLoader loader, ImageRequestParser parser) {
@@ -42,11 +50,91 @@ public class ImageProcessor {
     this.wolpiConfig = wolpiConfig;
     this.loader = loader;
     this.parser = parser;
+    this.formatEncodingOptions = determineEncodingOptions(wolpiConfig.encodingOptions());
+  }
+
+  /// Convert the encoding options from the config into VipsOption lists for each format.
+  private static Map<String, List<VipsOption>> determineEncodingOptions(
+      Map<String, Map<String, Object>> options) {
+    // Build a cache for all possible Vips enum values so we can lookup enum values
+    Map<String, VNamedEnum> vipsEnumCache = new HashMap<>();
+    var ref = new Reflections("app.photofox.vipsffm.enums");
+    var subTypes = ref.getSubTypesOf(VNamedEnum.class);
+    for (Class<? extends VNamedEnum> enumClass : subTypes) {
+      for (var constant : enumClass.getEnumConstants()) {
+        vipsEnumCache.put(constant.getName(), constant);
+      }
+    }
+
+    // Now map the options for each format
+    return options.entrySet().stream()
+        .collect(
+            Collectors.toMap(
+                Map.Entry::getKey,
+                e ->
+                    e.getValue().entrySet().stream()
+                        .map(ie -> mapToOption(vipsEnumCache, ie.getKey(), ie.getValue()))
+                        .toList()));
+  }
+
+  /// Map a single encoding option key-value pair to a VipsOption, using the enum cache to resolve
+  /// enum values.
+  /// @param enumCache Cache of Vips enum values by name
+  /// @param key       Option key
+  /// @param value     Option value, can be [Integer], [Boolean], [Double], [String],
+  ///                  [List<Double>], [List<Float>] or [List<Integer>]
+  /// @return VipsOption representing the key-value pair with the proper type
+  private static VipsOption mapToOption(
+      Map<String, VNamedEnum> enumCache, String key, Object value) {
+    return switch (value) {
+      // Primitive types
+      case Integer intValue -> VipsOption.Int(key, intValue);
+      case Boolean boolValue -> VipsOption.Boolean(key, boolValue);
+      case Double doubleValue -> VipsOption.Double(key, doubleValue);
+      case Float floatValue -> VipsOption.Double(key, Double.valueOf(floatValue));
+      // String values can be either enum values or just strings
+      case String strValue -> {
+        var enumValue = enumCache.get(strValue);
+        if (enumValue != null) {
+          yield VipsOption.Enum(key, enumValue);
+        } else {
+          yield VipsOption.String(key, strValue);
+        }
+      }
+      // Multivalued options - only support lists of integers or doubles
+      case List<?> listValue -> {
+        if (listValue.isEmpty()) {
+          throw new IllegalArgumentException(
+              "Cannot use empty list as encoding option value for key: %s".formatted(key));
+        }
+        var first = listValue.getFirst();
+        if (!listValue.stream().allMatch(v -> v.getClass() == first.getClass())) {
+          throw new IllegalArgumentException(
+              "All values in the list must be of the same type for key: %s".formatted(key));
+        }
+        yield switch (first) {
+          case Integer _ ->
+              VipsOption.ArrayInt(key, listValue.stream().map(Integer.class::cast).toList());
+          case Double _ ->
+              VipsOption.ArrayDouble(key, listValue.stream().map(Double.class::cast).toList());
+          case Float _ ->
+              VipsOption.ArrayDouble(
+                  key, listValue.stream().map(v -> Double.valueOf((Float) v)).toList());
+          default ->
+              throw new IllegalArgumentException(
+                  "Unsupported list value type: %s for key: %s".formatted(first.getClass(), key));
+        };
+      }
+      default ->
+          throw new IllegalArgumentException(
+              "Unsupported encoding option type: %s for key: %s".formatted(value.getClass(), key));
+    };
   }
 
   /// Process the image from the given ImageSource according to the provided ImageRequest.
+  ///
   /// @param imageSource Source to load the image from
-  /// @param request unparsed IIIF Image API request
+  /// @param request     unparsed IIIF Image API request
   public VImage processImage(ImageSource imageSource, ImageRequest request)
       throws IOException, InterruptedException, NotImplementedException {
     // Pre-load the image (just the header) if neccessary to determine the native dimensiosn
@@ -139,7 +227,7 @@ public class ImageProcessor {
 
   /// Encode an image to a target format.
   public EncodedImage encodeImage(VImage image, String suffix) throws IOException {
-    List<VipsOption> options = new ArrayList<>();
+    List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
 
     // Force 1bit output for bitonal images in PNG and GIF formats
     if (image.getInt("interpretation") == VipsInterpretation.INTERPRETATION_B_W.getRawValue()) {

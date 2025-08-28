@@ -12,7 +12,23 @@ wolpi:
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"
     info-json: "public, max-age=604800, must-revalidate"
-  encoding-options: {}
+  encoding-options:
+    jpg:
+      Q: 80
+      optimize_coding: true
+      interlace: false
+      # overshoot_deringing: true # only available with mozjpeg
+      # quant_table: 3 # mozjpeg default table
+    tif:
+      Q: 80
+      compression: "VIPS_FOREIGN_TIFF_COMPRESSION_JPEG"
+      tile: true
+      tile_width: 512
+      tile_height: 512
+    webp:
+      Q: 80
+      preset: VIPS_FOREIGN_WEBP_PRESET_TEXT
+      effort: 3
   iiif:
     restrict-to-sizes: false
     features:
