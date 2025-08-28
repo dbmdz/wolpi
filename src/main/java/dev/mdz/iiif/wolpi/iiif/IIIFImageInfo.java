@@ -25,9 +25,9 @@ public class IIIFImageInfo {
   public IIIFImageInfo(ImageInfo sourceImageInfo, IIIFConfig iiifConfig) {
     this.sourceImageInfo = sourceImageInfo;
     this.config = iiifConfig;
-    IIIFComplianceLevel complianceLevelV2 = getHighestFullySupportedV2Profile(config);
+    IIIFComplianceLevel complianceLevelV2 = getHighestFullySupportedLevel(config, IIIFVersion.V2);
     this.v2Profiles = getV2Profiles(config, complianceLevelV2);
-    this.complianceLevelV3 = getHighestFullySupportedV3Profile(config);
+    this.complianceLevelV3 = getHighestFullySupportedLevel(config, IIIFVersion.V3);
     this.v3ExtraFeatures = getV3ExtraFeatures(config, complianceLevelV3);
     this.v3ExtraFormats = getV3ExtraFormats(config, complianceLevelV3);
     this.v3ExtraQualities = getV3ExtraQualities(config, complianceLevelV3);
@@ -112,72 +112,45 @@ public class IIIFImageInfo {
     return builder.obj();
   }
 
-  private static IIIFComplianceLevel getHighestFullySupportedV3Profile(IIIFConfig config) {
+  private static boolean isLevel2Compliant(IIIFConfig config, IIIFVersion version) {
     var regionFeats = config.features().region();
     var sizeFeats = config.features().scaling();
     var supportedQualities = config.qualities().allowed();
     var supportedFormats = config.formats().allowed();
-    var supportsRequiredHttpFeatures =
-        config.features().cors()
-            && config.features().baseUriRedirect()
-            && config.features().jsonLdMediaType();
-    IIIFComplianceLevel level = IIIFComplianceLevel.LEVEL_2;
-    if (regionFeats.square()
+    return isLevel1Compliant(config, version)
         && regionFeats.byPercent()
-        && regionFeats.byPixels()
-        && sizeFeats.byWidth()
-        && sizeFeats.byHeight()
-        && sizeFeats.byPercent()
         && sizeFeats.byConfinedWidthHeight()
-        && sizeFeats.byArbitraryDimensions()
         && config.features().rotation().by90DegreeRotation()
         && supportedQualities.contains("color")
         && supportedQualities.contains("gray")
         && supportedFormats.contains("jpg")
         && supportedFormats.contains("png")
-        && supportsRequiredHttpFeatures) {
-      return IIIFComplianceLevel.LEVEL_2;
-    } else if (regionFeats.byPixels()
-        && regionFeats.square()
-        && sizeFeats.byWidth()
-        && sizeFeats.byHeight()
-        && sizeFeats.byArbitraryDimensions()
-        && supportsRequiredHttpFeatures) {
-      return IIIFComplianceLevel.LEVEL_1;
-    } else {
-      return IIIFComplianceLevel.LEVEL_0;
-    }
+        && (version == IIIFVersion.V3
+            ? sizeFeats.byPercent()
+            : (sizeFeats.byArbitraryDimensions() && supportedQualities.contains("bitonal")));
   }
 
-  private static IIIFComplianceLevel getHighestFullySupportedV2Profile(IIIFConfig config) {
+  private static boolean isLevel1Compliant(IIIFConfig config, IIIFVersion version) {
     var regionFeats = config.features().region();
     var sizeFeats = config.features().scaling();
-    var supportedQualities = config.qualities().allowed();
-    var supportedFormats = config.formats().allowed();
     var supportsRequiredHttpFeatures =
         config.features().cors()
             && config.features().baseUriRedirect()
             && config.features().jsonLdMediaType();
-    if (regionFeats.byPercent()
+    return supportsRequiredHttpFeatures
         && regionFeats.byPixels()
         && sizeFeats.byWidth()
         && sizeFeats.byHeight()
-        && sizeFeats.byPercent()
-        && sizeFeats.byConfinedWidthHeight()
-        && sizeFeats.byArbitraryDimensions()
-        && config.features().rotation().by90DegreeRotation()
-        && supportedQualities.contains("color")
-        && supportedQualities.contains("gray")
-        && supportedQualities.contains("bitonal")
-        && supportedFormats.contains("jpg")
-        && supportedFormats.contains("png")
-        && supportsRequiredHttpFeatures) {
+        && (version == IIIFVersion.V2
+            ? sizeFeats.byPercent()
+            : (sizeFeats.byArbitraryDimensions() && regionFeats.square()));
+  }
+
+  private static IIIFComplianceLevel getHighestFullySupportedLevel(
+      IIIFConfig config, IIIFVersion version) {
+    if (isLevel2Compliant(config, version)) {
       return IIIFComplianceLevel.LEVEL_2;
-    } else if (regionFeats.byPixels()
-        && sizeFeats.byWidth()
-        && sizeFeats.byHeight()
-        && sizeFeats.byPercent()
-        && supportsRequiredHttpFeatures) {
+    } else if (isLevel1Compliant(config, version)) {
       return IIIFComplianceLevel.LEVEL_1;
     } else {
       return IIIFComplianceLevel.LEVEL_0;
