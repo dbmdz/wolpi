@@ -20,6 +20,7 @@ public sealed interface ResolvedImage
     if (polyglotValue == null) {
       return null;
     }
+
     if (polyglotValue.hasMember("httpUrl")) {
       //noinspection unchecked
       return new HttpResolvedImage(

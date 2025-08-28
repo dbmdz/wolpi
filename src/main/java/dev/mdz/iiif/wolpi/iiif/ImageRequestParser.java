@@ -7,7 +7,10 @@ import dev.mdz.iiif.wolpi.model.image.ImageSize;
 import dev.mdz.iiif.wolpi.model.params.CropRectangle;
 import dev.mdz.iiif.wolpi.model.params.IIIFQuality;
 import dev.mdz.iiif.wolpi.model.params.IIIFVersion;
+import dev.mdz.iiif.wolpi.model.params.ImageRequest;
 import dev.mdz.iiif.wolpi.model.params.Rotation;
+import java.math.BigDecimal;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /// Parser for IIIF Image API Requests (v2 and v3).
@@ -380,5 +383,77 @@ public class ImageRequestParser {
   public boolean isRequestForUncroppedAndDownScaledImage(String regionSpec, String sizeSpec) {
     return "full".equals(regionSpec)
         && !("full".equals(sizeSpec) || "max".equals(sizeSpec) || sizeSpec.startsWith("^"));
+  }
+
+  /// Converts a given image request to its canonical form, based on the source image size.
+  ///
+  /// This can be used to determine if two different requests would result in the same image, and to
+  /// generate canonical URLs for images.
+  ///
+  /// @param request    The original [ImageRequest].
+  /// @param sourceSize The size of the source image.
+  /// @return A new ImageRequest representing the canonical form of the request, or `null` if the
+  ///     the request cannot be canonicalized (e.g. due to non-standard parameters).
+  public @Nullable ImageRequest toCanonicalForm(ImageRequest request, ImageSize sourceSize) {
+    boolean isV2 = request.version() == IIIFVersion.V2;
+    try {
+      ImageSize parsedSize = this.parseSize(request.version(), request.sizeSpec(), sourceSize);
+      CropRectangle parsedRegion = this.parseRegion(request.cropSpec(), sourceSize);
+      String canonicalRegion =
+          parsedRegion.x() == 0
+                  && parsedRegion.y() == 0
+                  && new ImageSize(parsedRegion.width(), parsedRegion.height()).equals(sourceSize)
+              ? "full"
+              : "%d,%d,%d,%d"
+                  .formatted(
+                      parsedRegion.x(),
+                      parsedRegion.y(),
+                      parsedRegion.width(),
+                      parsedRegion.height());
+      String canonicalSize;
+      boolean sizeIsMax =
+          parsedSize.width() == iiifConfig.limits().maxWidth()
+              || parsedSize.height() == iiifConfig.limits().maxHeight()
+              || (long) parsedSize.width() * parsedSize.height() == iiifConfig.limits().maxArea();
+      if (parsedSize.equals(sourceSize)
+          || (parsedSize.width() < sourceSize.width()
+              && parsedSize.height() < sourceSize.height()
+              && sizeIsMax)) {
+        canonicalSize = isV2 ? "full" : "max";
+      } else if (!isV2
+          && (parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height())
+          && sizeIsMax) {
+        canonicalSize = "^max";
+      } else if (isV2 && (parsedSize.aspectRatio() == sourceSize.aspectRatio())) {
+        canonicalSize = "%d,".formatted(parsedSize.width());
+      } else if (!isV2 && parsedSize.width() > sourceSize.width()
+          || parsedSize.height() > sourceSize.height()) {
+        canonicalSize = "^%d,%d".formatted(parsedSize.width(), parsedSize.height());
+      } else {
+        canonicalSize = "%d,%d".formatted(parsedSize.width(), parsedSize.height());
+      }
+      Rotation parsedRotation = this.parseRotation(request.rotationSpec());
+      String canonicalRotation =
+          "%s%s"
+              .formatted(
+                  parsedRotation.mirror() ? "!" : "",
+                  BigDecimal.valueOf(parsedRotation.degrees())
+                      .stripTrailingZeros()
+                      .toPlainString());
+      String canonicalQuality =
+          request.qualitySpec().equals(iiifConfig.qualities().defaultQuality())
+              ? "default"
+              : request.qualitySpec();
+      return new ImageRequest(
+          request.identifier(),
+          request.version(),
+          canonicalRegion,
+          canonicalSize,
+          canonicalRotation,
+          canonicalQuality,
+          request.formatSpec());
+    } catch (IllegalArgumentException | NotImplementedException e) {
+      return null;
+    }
   }
 }

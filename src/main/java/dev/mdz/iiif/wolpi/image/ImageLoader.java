@@ -9,6 +9,7 @@ import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
 import dev.mdz.iiif.wolpi.model.image.BinaryResolvedImage;
+import dev.mdz.iiif.wolpi.model.image.CacheInfo;
 import dev.mdz.iiif.wolpi.model.image.CustomSourceResolvedImage;
 import dev.mdz.iiif.wolpi.model.image.FilesystemResolvedImage;
 import dev.mdz.iiif.wolpi.model.image.HttpResolvedImage;
@@ -19,6 +20,7 @@ import dev.mdz.iiif.wolpi.model.image.TileSize;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.foreign.Arena;
+import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -29,11 +31,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /// ImageLoader is responsible for resolving and loading images from various sources.
 @Component
 public class ImageLoader {
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   /// Memory [Arena] for libvips
   private final Arena arena;
@@ -72,25 +77,32 @@ public class ImageLoader {
   private @Nullable ImageSource resolveFromFilesystem(String identifier) {
     Path imagePath = imageBaseDirectory.resolve(identifier);
     if (imagePath.toFile().exists()) {
-      return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null);
+      CacheInfo cacheInfo =
+          new CacheInfo(
+              null,
+              imagePath.toFile().lastModified() > 0
+                  ? java.time.Instant.ofEpochMilli(imagePath.toFile().lastModified())
+                  : null);
+      return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null, cacheInfo);
     }
     return null;
   }
 
-  /// Get the image information for the given identifier.
-  /// This will resolve the image source, and if the image source does not already provide image
-  /// information, it will load the image and extract the information from it.
-  public @Nullable ImageInfo getImageInfo(String identifier)
-      throws IOException, InterruptedException {
-    ImageSource source = resolve(identifier);
-    if (source == null) {
-      return null;
-    }
+  /// Get the image information for the given source.
+  /// If the image source does not already provide image information, this will load the image and
+  /// extract the information from it.
+  public @Nullable ImageInfo getImageInfo(ImageSource source) {
     if (source.imageInfo() != null) {
       return source.imageInfo();
     }
-    VImage image = loadImage(source);
-    return getImageInfo(image);
+    try {
+      var image = loadImage(source);
+      return getImageInfo(image);
+    } catch (IOException | InterruptedException e) {
+      log.warn(
+          "Failed to load image to obtain image information for id={}", source.identifier(), e);
+      return null;
+    }
   }
 
   /// Load an image from a source, applying shrink-on-load according to the target size.
