@@ -18,6 +18,10 @@ export default {
     name: 'hello-world',
     description: 'just a simple resolving proof-of-concept'
   }),
+  cleanup: () => {
+    // No cleanup needed in this example, since we don't keep any state between
+    // hook calls
+  },
   // The resolve function is called when an identifier needs to be resolved to an image source
   resolve: (identifier) => {
     if (!identifier.startsWith('js-')) {

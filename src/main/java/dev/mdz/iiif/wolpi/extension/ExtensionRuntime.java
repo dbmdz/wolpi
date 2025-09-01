@@ -10,11 +10,15 @@ import dev.mdz.iiif.wolpi.model.image.ImageSource;
 import dev.mdz.iiif.wolpi.model.image.ResolvedImage;
 import dev.mdz.iiif.wolpi.util.PolyglotHelpers;
 import java.lang.foreign.Arena;
+import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.pool2.KeyedObjectPool;
 import org.graalvm.polyglot.Value;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /// Request-scoped runtime context extensions are executed in.
 ///
@@ -24,23 +28,42 @@ import org.jspecify.annotations.Nullable;
 ///
 /// How multiple extensions interact depends on the hook, see the individual methods for details.
 public class ExtensionRuntime {
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+  // Used for discovery of extensions
   private final ExtensionRegistry registry;
 
-  ///  Used for mapping Polyglot [Value]s to Java objects.
+  /// Used for mapping Polyglot [Value]s to Java objects.
   private final ObjectMapper objectMapper;
 
-  /// Every extension has  their own isolated runtime context.
-  private final Map<LoadedExtension, RuntimeContext> runtimeContexts;
+  // Pool to borrow [RuntimeContext]s for each [LoadedExtension] for
+  private final KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool;
 
-  public ExtensionRuntime(ExtensionRegistry registry, ObjectMapper objectMapper) {
+  // Keeps track of which [RuntimeContext]s have been borrowed from the pool
+  // for which [LoadedExtension]s, so we only return them at the end of the request.
+  private final Map<LoadedExtension, RuntimeContext> borrowedContexts = new HashMap<>();
+
+  public ExtensionRuntime(
+      ExtensionRegistry registry,
+      KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
+      ObjectMapper objectMapper) {
     this.registry = registry;
+    this.contextPool = ctxPool;
     this.objectMapper = objectMapper;
-    this.runtimeContexts = new HashMap<>();
   }
 
-  /// Create a new [RuntimeContext] for a [LoadedExtension] if it doesn't already exist.
+  /// Borrow a [RuntimeContext] for a [LoadedExtension] from the pool if it doesn't already exist.
   private RuntimeContext ensureRuntimeContext(LoadedExtension ext) {
-    return runtimeContexts.computeIfAbsent(ext, LoadedExtension::createRuntimeContext);
+    return borrowedContexts.computeIfAbsent(
+        ext,
+        key -> {
+          try {
+            return contextPool.borrowObject(key);
+          } catch (Exception e) {
+            throw new RuntimeException(
+                "Failed to borrow runtime context for extension: " + key.extensionInfo().name(), e);
+          }
+        });
   }
 
   /// Check if the request with the given identifier, headers and client IP is authorized
@@ -124,7 +147,17 @@ public class ExtensionRuntime {
     return null;
   }
 
+  /// Close this [ExtensionRuntime], returning all borrowed [RuntimeContext]s to the pool.
   public void close() {
-    this.runtimeContexts.values().forEach(ctx -> ctx.langContext().close());
+    for (var entry : this.borrowedContexts.entrySet()) {
+      try {
+        this.contextPool.returnObject(entry.getKey(), entry.getValue());
+      } catch (Exception e) {
+        log.error(
+            "Failed to return runtime context for extension: {}",
+            entry.getKey().extensionInfo().name(),
+            e);
+      }
+    }
   }
 }

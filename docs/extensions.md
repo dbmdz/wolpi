@@ -37,6 +37,12 @@ fields:
 - `name`: The name of the extension.
 - `description`: A brief description of what the extension does.
 
+### The `cleanup` Hook
+
+Every extension **must** implement the `cleanup` hook, even if it does nothing. This hook is called
+after the response has been sent to the client and must be used to clean up any state that was
+accumulated during the processing of a request and should not persist between requests.
+
 ### The `wolpi` Global
 
 Extensions have access to a `wolpi` global object, which provides access to the Wolpi context. This
@@ -55,10 +61,19 @@ interface WolpiContext {
 
 ### Extension Lifecycle
 
-At the moment, the lifetime of an extension is limited to the duration of a single request-response
-cycle, i.e. the extension is loaded upon receiving a request and unloaded after the response has been
-sent. This means that extensions should not rely on any state being preserved between requests and
-that they should avoid expensive initialization operations.
+Extensions in Wolpi are kept in a pool after they have been loaded, so that they can be reused for
+multiple subsequent requests without having to run expensive initialization code for each request.
+Wolpi ensures that only one requests is processed by any one extension instance at a time, so that
+extensions do not need to worry about concurrency issues and can keep state in memory between
+hook invocations and requests without having to secure it with locks or other synchronization
+mechanisms.
+
+However, this makes it easy to shoot yourself in the foot by not clearing up request-specific state
+after a request has been processed. To avoid this, Wolpi requires that every extension implements
+a `cleanup` hook, which is called after the response has been sent to the client. Use this hook
+to clear up any state that should not persist between requests. It's perfectly fine to have the
+hook do nothing if your extension does not accumulate any state, but we mandate it anyway to avoid
+accidental state leaks.
 
 
 ## Configuration

@@ -33,5 +33,6 @@ def resolve(identifier):
 def extension():
     return {
         'info': info,
-        'resolve': resolve
+        'resolve': resolve,
+        'cleanup': lambda: None  # No cleanup necessary
     }
