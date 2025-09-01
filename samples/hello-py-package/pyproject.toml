@@ -1,0 +1,10 @@
+[project]
+name = "hello-py-package"
+version = "1.0.0"
+description = "A package-based Python extension for Wolpi."
+dependencies = [
+    "requests"
+]
+
+[project.entry-points.wolpi]
+extension = "hello_py_pkg.extension:extension"

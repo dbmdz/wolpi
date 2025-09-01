@@ -1,0 +1,6 @@
+{
+  "name": "hello-js-package",
+  "version": "1.0.0",
+  "description": "A package-based JavaScript extension for Wolpi.",
+  "exports": "./index.js"
+}

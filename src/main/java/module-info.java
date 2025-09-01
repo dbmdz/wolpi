@@ -19,13 +19,18 @@ module wolpi {
   requires spring.webmvc;
   requires spring.core;
   requires org.slf4j;
-  requires reflections;
+  requires com.fasterxml.jackson.dataformat.toml;
 
   exports dev.mdz.iiif.wolpi;
   exports dev.mdz.iiif.wolpi.config;
   exports dev.mdz.iiif.wolpi.controller;
+  exports dev.mdz.iiif.wolpi.extension;
   exports dev.mdz.iiif.wolpi.iiif;
   exports dev.mdz.iiif.wolpi.image;
+  exports dev.mdz.iiif.wolpi.model.extensions;
   exports dev.mdz.iiif.wolpi.model.image;
   exports dev.mdz.iiif.wolpi.model.params;
+
+  // Needed to allow proxying of RuntimeContext by Spring AOP for request-scoped bean
+  opens dev.mdz.iiif.wolpi.extension;
 }

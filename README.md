@@ -16,6 +16,10 @@ $ curl -v http://localhost:8080/v3/wolpi.png/info.json
 
 You should be able to open http://localhost:8080/v3/wolpi.png/full/max/0/default.webp in your browser.
 
+## Extensions
+
+Wolpi can be extended with custom logic written in JavaScript or Python. To learn more about how to create extensions, see the [extension documentation](./docs/extensions.md).
+
 
 ## Troubleshooting
 

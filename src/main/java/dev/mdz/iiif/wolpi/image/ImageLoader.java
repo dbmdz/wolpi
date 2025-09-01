@@ -8,6 +8,7 @@ import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.extension.ExtensionRuntime;
 import dev.mdz.iiif.wolpi.model.image.BinaryResolvedImage;
 import dev.mdz.iiif.wolpi.model.image.CacheInfo;
 import dev.mdz.iiif.wolpi.model.image.CustomSourceResolvedImage;
@@ -40,6 +41,9 @@ import org.springframework.stereotype.Component;
 public class ImageLoader {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+  ///  Request-scoped runtime for executing extension code.
+  private final ExtensionRuntime extensionRuntime;
+
   /// Memory [Arena] for libvips
   private final Arena arena;
 
@@ -50,26 +54,37 @@ public class ImageLoader {
   /// extension can handle the request.
   private final Path imageBaseDirectory;
 
-  public ImageLoader(WolpiConfig cfg, Arena arena, HttpClient httpClient) {
+  public ImageLoader(
+      WolpiConfig cfg, Arena arena, HttpClient httpClient, ExtensionRuntime extensionRuntime) {
     this.arena = arena;
     this.httpClient = httpClient;
     this.imageBaseDirectory = cfg.imageBaseDir();
+    this.extensionRuntime = extensionRuntime;
   }
 
-  ///  Check if access to the image is authorized.
+  /// Check if access to the image is authorized.
   /// @param identifier The identifier of the image to authorize access to.
   /// @param headers The HTTP headers of the request, which may contain authorization information.
   /// @param clientIp The IP address of the client making the request, after resolving any
   ///                 X-Forwarded-* headers.
+  /// @return True if access is authorized, false otherwise.
   public boolean authorize(String identifier, Map<String, List<String>> headers, String clientIp) {
-    // TODO: Call into extensions to authorize access to the image
-    return true;
+    return extensionRuntime.authorize(identifier, headers, clientIp);
   }
 
   /// Resolve an image source by its identifier.
+  ///
+  /// If no extension can resolve the identifier, it will be resolved
+  /// against the filesystem base directory from the configuration.
+  ///
+  /// @param identifier The identifier of the image to resolve.
+  /// @return The resolved image source, or null if it could not be resolved.
   public @Nullable ImageSource resolve(String identifier) {
-    // TODO: Call into extensions to resolve the image source
-    return this.resolveFromFilesystem(identifier);
+    ImageSource source = extensionRuntime.resolve(identifier, arena);
+    if (source == null) {
+      source = this.resolveFromFilesystem(identifier);
+    }
+    return source;
   }
 
   /// Fallback implementation for resolving that resolves against the image base directory from
@@ -109,7 +124,8 @@ public class ImageLoader {
   ///
   /// This can be much faster than loading the full image and then scaling it down, as it allows
   /// vips to exploit characteristics of the image format to load an already scaled-down version
-  /// without applying any scaling itself.
+  /// without applying any scaling itself. The performance edge disappears when only requesting
+  /// regions of an image, so in those cases the other overload of this method should be used.
   public VImage loadImage(ImageSource source, ImageSize targetSize)
       throws IOException, InterruptedException {
     return switch (source.resolvedImage()) {
@@ -158,22 +174,24 @@ public class ImageLoader {
       URI uri,
       @Nullable Map<String, String> headers,
       @Nullable ImageSize targetSize,
-      @Nullable Boolean supportsByteRange)
+      @Nullable Boolean supportsByteRanges)
       throws IOException, InterruptedException {
     // TODO: If the endpoint supports byte ranges, use a custom VSource implementation that
     //       leverages partial reads via byte-range requests
-    HttpRequest req =
-        HttpRequest.newBuilder()
-            .uri(uri)
-            .headers(
-                headers != null
-                    ? headers.entrySet().stream()
-                        .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                        .toArray(String[]::new)
-                    : new String[0])
-            .build();
+    var reqBuilder = HttpRequest.newBuilder().uri(uri);
+    if (headers != null) {
+      reqBuilder =
+          reqBuilder.headers(
+              headers.entrySet().stream()
+                  .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                  .toArray(String[]::new));
+    }
     HttpResponse<InputStream> response =
-        httpClient.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
+    if (response.statusCode() >= 400) {
+      throw new IOException(
+          "Failed to load image from %s: %d".formatted(uri, response.statusCode()));
+    }
     if (targetSize == null) {
       return VImage.newFromStream(arena, response.body());
     } else {

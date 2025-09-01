@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.MediaType;
@@ -21,7 +22,7 @@ public class ByteBufferHttpMessageConverter extends AbstractHttpMessageConverter
   }
 
   @Override
-  public boolean canRead(Class<?> clazz, MediaType mediaType) {
+  public boolean canRead(Class<?> clazz, @Nullable MediaType mediaType) {
     return false;
   }
 

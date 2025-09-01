@@ -1,7 +1,10 @@
 package dev.mdz.iiif.wolpi;
 
 import app.photofox.vipsffm.Vips;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.extension.ExtensionRegistry;
+import dev.mdz.iiif.wolpi.extension.ExtensionRuntime;
 import dev.mdz.iiif.wolpi.util.ByteBufferHttpMessageConverter;
 import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
@@ -34,6 +37,12 @@ public class Wolpi implements WebMvcConfigurer {
   @RequestScope
   public Arena vipsArena() {
     return Arena.ofConfined();
+  }
+
+  @Bean(destroyMethod = "close")
+  @RequestScope
+  public ExtensionRuntime extensionRuntime(ObjectMapper objectMapper, ExtensionRegistry registry) {
+    return new ExtensionRuntime(registry, objectMapper);
   }
 
   /// Create a new HttpClient using HTTP/2 for the application.
