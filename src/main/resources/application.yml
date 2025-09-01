@@ -8,7 +8,20 @@ server:
   forward-headers-strategy: framework
 
 wolpi:
+  data-directory: "./data"
   image-base-dir: "./images"
+  extensions:
+    - path: "./samples/helloworld.js"
+      config:
+        baseDirectory: "./images"
+    - path: "./samples/helloworld.py"
+      config:
+        baseDirectory: "./images"
+    - path: "./samples/hello-js-package"
+    - path: "./samples/hello-py-package"
+  packaging:
+    install-timeout: 30s
+    npm-executable: "/home/jbaiter/.volta/bin/npm"
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"
     info-json: "public, max-age=604800, must-revalidate"

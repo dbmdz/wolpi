@@ -7,7 +7,7 @@
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>3.5.4</version>
 	</parent>
-	<groupId>dev.mdz.iiif</groupId>
+	<groupId>dev.mdz</groupId>
 	<artifactId>wolpi</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
 	<name>wolpi</name>
@@ -31,7 +31,6 @@
 		<jspecify.version>1.0.0</jspecify.version>
 		<guava.version>33.4.8-jre</guava.version>
 		<vips-ffm.version>1.9.0</vips-ffm.version>
-		<reflections.version>0.9.12</reflections.version>
 		<fmt-maven-plugin.version>2.27</fmt-maven-plugin.version>
 	</properties>
 	<dependencies>
@@ -74,11 +73,9 @@
 			<version>${guava.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>org.reflections</groupId>
-			<artifactId>reflections</artifactId>
-			<version>${reflections.version}</version>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-toml</artifactId>
 		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -87,6 +84,16 @@
 	</dependencies>
 
 	<build>
+		<resources>
+			<resource>
+				<directory>${project.basedir}/src/main/resources</directory>
+				<filtering>false</filtering>
+			</resource>
+			<resource>
+				<directory>${project.basedir}/src/main/js</directory>
+				<targetPath>js</targetPath>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -101,6 +108,13 @@
 				<configuration>
 					<jvmArguments>--add-reads wolpi=ALL-UNNAMED --enable-native-access=app.photofox.vipsffm</jvmArguments>
 				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>build-info</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>com.spotify.fmt</groupId>

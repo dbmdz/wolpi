@@ -220,7 +220,7 @@ public class ImageRequestParser {
   /// - `!w,h`:  Scale the image to the given width and height, but confine the scaling to the
   /// specified width and height, maintaining the aspect ratio.
   /// - `^!w,h`: Same as `!w,h`, but allows upscaling the image if its native size is smaller than
-  /// the given given width and height.
+  /// the given width and height.
   ///
   /// @param iiifVersion The IIIF version to use for parsing the size specification, v2 and v3
   ///                    differ in a few points
@@ -393,7 +393,7 @@ public class ImageRequestParser {
   /// @param request    The original [ImageRequest].
   /// @param sourceSize The size of the source image.
   /// @return A new ImageRequest representing the canonical form of the request, or `null` if the
-  ///     the request cannot be canonicalized (e.g. due to non-standard parameters).
+  ///         request cannot be canonicalized (e.g. due to non-standard parameters).
   public @Nullable ImageRequest toCanonicalForm(ImageRequest request, ImageSize sourceSize) {
     boolean isV2 = request.version() == IIIFVersion.V2;
     try {

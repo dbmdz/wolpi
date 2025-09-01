@@ -9,6 +9,7 @@ import app.photofox.vipsffm.enums.VipsDirection;
 import app.photofox.vipsffm.enums.VipsInterpretation;
 import app.photofox.vipsffm.enums.VipsOperationRelational;
 import app.photofox.vipsffm.enums.VipsSize;
+import com.google.common.reflect.ClassPath;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
 import dev.mdz.iiif.wolpi.iiif.ImageRequestParser;
 import dev.mdz.iiif.wolpi.iiif.NotImplementedException;
@@ -25,8 +26,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
-import org.reflections.Reflections;
 import org.springframework.stereotype.Component;
 
 /// ImageProcessor is responsible for processing images according to IIIF Image API requests.
@@ -56,10 +57,24 @@ public class ImageProcessor {
   /// Convert the encoding options from the config into VipsOption lists for each format.
   private static Map<String, List<VipsOption>> determineEncodingOptions(
       Map<String, Map<String, Object>> options) {
-    // Build a cache for all possible Vips enum values so we can lookup enum values
+    // Build a cache for all possible Vips enum values so we can look up enum values
     Map<String, VNamedEnum> vipsEnumCache = new HashMap<>();
-    var ref = new Reflections("app.photofox.vipsffm.enums");
-    var subTypes = ref.getSubTypesOf(VNamedEnum.class);
+    ClassLoader cl = Thread.currentThread().getContextClassLoader();
+    Set<Class<? extends VNamedEnum>> subTypes;
+    try {
+      //noinspection unchecked
+      subTypes =
+          ClassPath.from(cl).getTopLevelClassesRecursive("app.photofx.vipsffm.enums").stream()
+              .map(ClassPath.ClassInfo::load)
+              .filter(
+                  c ->
+                      !c.isInterface() && !c.isAnnotation() && VNamedEnum.class.isAssignableFrom(c))
+              .map(c -> (Class<? extends VNamedEnum>) c)
+              .collect(Collectors.toSet());
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to load Vips enum classes for encoding option parsing", e);
+    }
+
     for (Class<? extends VNamedEnum> enumClass : subTypes) {
       for (var constant : enumClass.getEnumConstants()) {
         vipsEnumCache.put(constant.getName(), constant);
@@ -137,7 +152,7 @@ public class ImageProcessor {
   /// @param request     unparsed IIIF Image API request
   public VImage processImage(ImageSource imageSource, ImageRequest request)
       throws IOException, InterruptedException, NotImplementedException {
-    // Pre-load the image (just the header) if neccessary to determine the native dimensiosn
+    // Preload the image (just the header) if neccessary to determine the native dimensiosn
     VImage image = null;
     ImageSize sourceSize;
     if (imageSource.imageInfo() != null) {
