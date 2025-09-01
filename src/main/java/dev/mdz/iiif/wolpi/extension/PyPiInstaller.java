@@ -113,7 +113,7 @@ public class PyPiInstaller {
     try {
       entryPointsLines = Files.readString(entryPointsFile).split("\n");
     } catch (IOException e) {
-      throw new ExtensionLoadException("Failed to read " + entryPointsFile,  e);
+      throw new ExtensionLoadException("Failed to read " + entryPointsFile, e);
     }
     String entryPointSpec = null;
     boolean inWolpiSection = false;

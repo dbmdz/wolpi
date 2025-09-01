@@ -43,8 +43,12 @@ public class CommandRunner {
     Process p = pb.start();
 
     try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-      Future<String> stdoutFut = executor.submit(() -> StreamUtils.copyToString(p.getInputStream(), StandardCharsets.UTF_8));
-      Future<String> stderrFut = executor.submit(() -> StreamUtils.copyToString(p.getErrorStream(), StandardCharsets.UTF_8));
+      Future<String> stdoutFut =
+          executor.submit(
+              () -> StreamUtils.copyToString(p.getInputStream(), StandardCharsets.UTF_8));
+      Future<String> stderrFut =
+          executor.submit(
+              () -> StreamUtils.copyToString(p.getErrorStream(), StandardCharsets.UTF_8));
       if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
         p.destroyForcibly();
         throw new IOException(

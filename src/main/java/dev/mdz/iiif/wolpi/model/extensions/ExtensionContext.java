@@ -11,7 +11,8 @@ import org.jspecify.annotations.Nullable;
 /// @param pluginVersion The version of the extension currently running.
 /// @param httpClient A shared [HttpClient] instance that can be used to make HTTP requests
 ///                   from language runtimes that do not provide a built-in HTTP client.
-/// @param config The configuration object for the extension, as provided in the Wolpi configuration.
+/// @param config The configuration object for the extension, as provided in the Wolpi
+///               configuration.
 public record ExtensionContext(
     String wolpiVersion,
     String pluginVersion,

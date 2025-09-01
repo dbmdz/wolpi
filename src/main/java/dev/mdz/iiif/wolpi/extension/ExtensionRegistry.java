@@ -10,6 +10,7 @@ import dev.mdz.iiif.wolpi.model.extensions.ExtensionInfo;
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension;
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension.Language;
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension.RuntimeContext;
+import dev.mdz.iiif.wolpi.util.PolyglotHelpers;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
@@ -23,6 +24,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Source;
@@ -30,6 +32,8 @@ import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.stereotype.Component;
 
@@ -54,6 +58,7 @@ import org.springframework.stereotype.Component;
 public class ExtensionRegistry {
 
   private static final TypeLiteral<Map<String, Object>> JSON_LIKE_OBJECT = new TypeLiteral<>() {};
+  private static final Logger log = LoggerFactory.getLogger(ExtensionRegistry.class);
 
   private final Engine jsEngine;
   private final Engine pythonEngine;
@@ -84,9 +89,7 @@ public class ExtensionRegistry {
     for (ExtensionConfig extension : cfg.extensions()) {
       LoadedExtension loadedExtension = loadExtension(extension);
       for (ExtensionHooks hook : loadedExtension.implementedHooks()) {
-        implementedHooks
-            .computeIfAbsent(hook, (k) -> new ArrayList<>())
-            .add(loadedExtension);
+        implementedHooks.computeIfAbsent(hook, (k) -> new ArrayList<>()).add(loadedExtension);
       }
     }
   }
@@ -120,12 +123,46 @@ public class ExtensionRegistry {
   /// The lifetime of this context should be bound to a single request-response cycle.
   ///
   /// @param engine the shared GraalVM Python engine
-  private static Context getPythonContext(Engine engine) {
-    return Context.newBuilder("python")
-        .allowAllAccess(true)
-        .option("python.IsolateNativeModules", "true")
-        .engine(engine)
-        .build();
+  private static Context getPythonContext(Engine engine, @Nullable Path venvPath) {
+    var builder =
+        Context.newBuilder("python")
+            .engine(engine)
+            .allowAllAccess(true)
+            .option("python.IsolateNativeModules", "true");
+    if (venvPath != null) {
+      Path pythonExecutable =
+          Stream.of("graalpy", "python3", "python")
+              .map(cmd -> venvPath.resolve("bin", cmd))
+              .filter(p -> Files.exists(p) && Files.isExecutable(p))
+              .findFirst()
+              .orElseThrow(
+                  () ->
+                      new IllegalStateException(
+                          "Unable to find python executable in virtual environment: "
+                              + venvPath.toAbsolutePath()));
+      builder
+          .option("python.Executable", pythonExecutable.toAbsolutePath().toString())
+          .option("python.ForceImportSite", "true");
+
+      // FIXME: It **should** be enough to specify the above two options for GraalPy to pick up the
+      //        virtual environment correctly, but it doesn't. As a workaround, we manually set
+      //        the PythonPath to the "pythonX.Y" directory in the "lib" directory of the venv.
+      //        This is a bit hacky, but it works for now. It seems there will be changes in GraalPy
+      //        25 that change how venvs work, revisit this then.
+      try (var ds = Files.newDirectoryStream(venvPath.resolve("lib"))) {
+        for (Path p : ds) {
+          if (Files.isDirectory(p) && p.getFileName().toString().startsWith("python")) {
+            builder.option(
+                "python.PythonPath", p.resolve("site-packages").toAbsolutePath().toString());
+            break;
+          }
+        }
+      } catch (IOException e) {
+        throw new IllegalStateException(
+            "Unable to read lib directory of virtual environment: " + venvPath.toAbsolutePath(), e);
+      }
+    }
+    return builder.build();
   }
 
   ///  Load an extension based on its definition in the configuration
@@ -192,7 +229,7 @@ public class ExtensionRegistry {
     ExtensionInfo extensionInfo = objectMapper.convertValue(infoJson, ExtensionInfo.class);
 
     Set<ExtensionHooks> implementedHooks =
-        hooks.getMemberKeys().stream()
+        PolyglotHelpers.dictOrMemberKeys(hooks).stream()
             .map(
                 k ->
                     switch (k) {
@@ -266,25 +303,21 @@ public class ExtensionRegistry {
       throw new IllegalArgumentException("Invalid Python extension configuration.");
     }
 
+    Path venvPath;
     try {
       if (entryPoint != null) {
         // For packages, we have to import the function returning the implementation
         // from the entrypoint module.
-        Path venvPath = sitePackagesPath.getParent().getParent().getParent();
+        venvPath = sitePackagesPath.getParent().getParent().getParent();
         source =
             Source.newBuilder(
                     "python",
-                    """
-                    import sys
-                    sys.prefix = "%s"
-                    sys.path.append("%s")
-                    from %s import %s
-                    """
-                        .formatted(venvPath, sitePackagesPath, entryPoint.module(), entryPoint.function()),
+                    "from %s import %s\n".formatted(entryPoint.module(), entryPoint.function()),
                     "%s.py".formatted(packageName))
                 .build();
       } else {
         // Simple python files can be loaded directly.
+        venvPath = null;
         assert config.path() != null;
         source = Source.newBuilder("python", config.path().toFile()).build();
       }
@@ -293,15 +326,14 @@ public class ExtensionRegistry {
     }
 
     // Context is needed for loading to enumerate the hooks and call the info hook
-    try (Context ctx = getPythonContext(this.pythonEngine)) {
-      ctx.eval(source);
+    try (Context ctx = getPythonContext(this.pythonEngine, venvPath)) {
       var hooks = getPythonHooks(ctx, source, entryPoint);
       return extensionFromPolyglotValue(
           Language.PYTHON,
           hooks,
           config,
           extensionVersion == null ? "unknown" : extensionVersion,
-          () -> ExtensionRegistry.getPythonContext(pythonEngine),
+          () -> ExtensionRegistry.getPythonContext(pythonEngine, venvPath),
           c -> {
             try {
               return getPythonHooks(c, source, entryPoint);
@@ -355,9 +387,9 @@ public class ExtensionRegistry {
     }
 
     var functions =
-          hooks.getMemberKeys().stream()
-              .filter(key -> !key.startsWith("_") && hooks.getMember(key).canExecute())
-              .toList();
+        hooks.getMemberKeys().stream()
+            .filter(key -> !key.startsWith("_") && hooks.getMember(key).canExecute())
+            .toList();
 
     if (functions.isEmpty()) {
       throw new ExtensionLoadException("Extension did not define any top-level functions.");
@@ -405,10 +437,7 @@ public class ExtensionRegistry {
           Source.newBuilder("js", entryPoint.toFile())
               .mimeType("application/javascript+module")
               .build();
-      Value exports = ctx.eval(source);
-      if (exports == null || exports.isNull()) {
-        throw new ExtensionLoadException("Extension did not export anything.");
-      }
+      Value exports = ExtensionRegistry.getJsHooks(ctx, source);
 
       // We support both named exports (where the hooks are individually exported) and default
       // exports (where a single object containing the hooks is exported as the default).
@@ -435,16 +464,34 @@ public class ExtensionRegistry {
           extensionVersion == null ? "unknown" : extensionVersion,
           () -> ExtensionRegistry.getJsContext(jsEngine),
           c -> {
-            var bindings = c.eval(source);
-            if (bindings.getMemberKeys().size() == 1 && bindings.hasMember("default")) {
-              return bindings.getMember("default");
-            } else {
-              return bindings;
+            Value hooks = null;
+            try {
+              return ExtensionRegistry.getJsHooks(c, source);
+            } catch (ExtensionLoadException e) {
+              // Should never happen, since we loaded it successfully during discovery.
+              throw new RuntimeException(e);
             }
           });
     } catch (IOException e) {
       throw new ExtensionLoadException(e);
     }
+  }
+
+  private static Value getJsHooks(Context ctx, Source source) throws ExtensionLoadException {
+    var exports = ctx.eval(source);
+
+    if (exports == null || exports.isNull()) {
+      throw new ExtensionLoadException("Extension did not export anything.");
+    }
+
+    // We support both named exports (where the hooks are individually exported) and default
+    // exports (where a single object containing the hooks is exported as the default).
+    // The default export is only used if it is the only export, otherwise we assume that the
+    // other exports are the hooks.
+    if (exports.getMemberKeys().size() == 1 && exports.hasMember("default")) {
+      exports = exports.getMember("default");
+    }
+    return exports;
   }
 
   ///  Check if there is at least one loaded extension that implements the given hook.

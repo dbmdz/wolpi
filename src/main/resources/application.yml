@@ -10,15 +10,16 @@ server:
 wolpi:
   data-directory: "./data"
   image-base-dir: "./images"
-  extensions:
-    - path: "./samples/helloworld.js"
-      config:
-        baseDirectory: "./images"
-    - path: "./samples/helloworld.py"
-      config:
-        baseDirectory: "./images"
-    - path: "./samples/hello-js-package"
-    - path: "./samples/hello-py-package"
+  extensions: []
+  #extensions:
+  #  - path: "./samples/helloworld.js"
+  #    config:
+  #      baseDirectory: "./images"
+  #  - path: "./samples/helloworld.py"
+  #    config:
+  #      baseDirectory: "./images"
+  #  - path: "./samples/hello-js-package"
+  #  - path: "./samples/hello-py-package"
   packaging:
     install-timeout: 30s
     npm-executable: "/home/jbaiter/.volta/bin/npm"

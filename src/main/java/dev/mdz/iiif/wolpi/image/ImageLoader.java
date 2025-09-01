@@ -180,15 +180,17 @@ public class ImageLoader {
     //       leverages partial reads via byte-range requests
     var reqBuilder = HttpRequest.newBuilder().uri(uri);
     if (headers != null) {
-      reqBuilder = reqBuilder.headers(
-          headers.entrySet().stream()
-              .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-              .toArray(String[]::new));
+      reqBuilder =
+          reqBuilder.headers(
+              headers.entrySet().stream()
+                  .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                  .toArray(String[]::new));
     }
     HttpResponse<InputStream> response =
         httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
     if (response.statusCode() >= 400) {
-      throw new IOException("Failed to load image from %s: %d".formatted(uri, response.statusCode()));
+      throw new IOException(
+          "Failed to load image from %s: %d".formatted(uri, response.statusCode()));
     }
     if (targetSize == null) {
       return VImage.newFromStream(arena, response.body());

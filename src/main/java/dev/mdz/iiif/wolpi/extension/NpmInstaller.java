@@ -104,7 +104,8 @@ public class NpmInstaller {
   public String installFromLocalDirectory(Path localPackageDir) throws ExtensionLoadException {
     localPackageDir = localPackageDir.toAbsolutePath().normalize();
     if (npmPath == null) {
-      throw new ExtensionLoadException("npm executable not found or configured, cannot install package in " + localPackageDir);
+      throw new ExtensionLoadException(
+          "npm executable not found or configured, cannot install package in " + localPackageDir);
     }
     if (!Files.isDirectory(localPackageDir)
         || !Files.isRegularFile(localPackageDir.resolve("package.json"))) {
