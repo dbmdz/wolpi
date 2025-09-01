@@ -6,6 +6,10 @@ export default {
     name: 'internet-archive-resolver-js',
     description: 'Resolves images from the Internet Archive.'
   }),
+  cleanup: () => {
+    // No cleanup needed in this example, since we don't keep any state between
+    // hook calls
+  },
   resolve: (identifier) => {
     const metadataUrl = `https://archive.org/metadata/${identifier}`;
     const response = fetchSync(metadataUrl);

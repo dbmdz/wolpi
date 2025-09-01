@@ -20,6 +20,9 @@ wolpi:
   #      baseDirectory: "./images"
   #  - path: "./samples/hello-js-package"
   #  - path: "./samples/hello-py-package"
+  extension-pool:
+    max-total: 16
+    max-idle: 4
   packaging:
     install-timeout: 30s
     npm-executable: "/home/jbaiter/.volta/bin/npm"

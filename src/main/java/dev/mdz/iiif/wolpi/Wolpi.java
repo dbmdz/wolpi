@@ -5,11 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
 import dev.mdz.iiif.wolpi.extension.ExtensionRegistry;
 import dev.mdz.iiif.wolpi.extension.ExtensionRuntime;
+import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension;
+import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension.RuntimeContext;
 import dev.mdz.iiif.wolpi.util.ByteBufferHttpMessageConverter;
+import dev.mdz.iiif.wolpi.util.RuntimeContextPooledObjectFactory;
 import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
 import java.util.List;
+import org.apache.commons.pool2.KeyedObjectPool;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -41,8 +48,23 @@ public class Wolpi implements WebMvcConfigurer {
 
   @Bean(destroyMethod = "close")
   @RequestScope
-  public ExtensionRuntime extensionRuntime(ObjectMapper objectMapper, ExtensionRegistry registry) {
-    return new ExtensionRuntime(registry, objectMapper);
+  public ExtensionRuntime extensionRuntime(
+      ObjectMapper objectMapper,
+      ExtensionRegistry registry,
+      @Qualifier("contextPool") KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool) {
+    return new ExtensionRuntime(registry, ctxPool, objectMapper);
+  }
+
+  /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
+  @Bean("contextPool")
+  public KeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool(
+      WolpiConfig wolpiConfig) {
+    var cfg = new GenericKeyedObjectPoolConfig<RuntimeContext>();
+    cfg.setMaxIdlePerKey(wolpiConfig.extensionPool().maxIdle());
+    cfg.setMaxTotalPerKey(wolpiConfig.extensionPool().maxTotal());
+    // Disable bean self-registration via JMX
+    cfg.setJmxEnabled(false);
+    return new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(), cfg);
   }
 
   /// Create a new HttpClient using HTTP/2 for the application.

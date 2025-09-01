@@ -17,10 +17,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -45,7 +53,7 @@ import org.springframework.stereotype.Component;
 /// - Must be a single .js file, a directory containing a `package.json` or a package from npm.
 /// - Must export an object with functions corresponding to the supported hooks.
 /// - For packages, they must provide an `exports` key in the `package.json` that points to the
-///   entry point that exports the hooks.
+/// entry point that exports the hooks.
 ///
 /// For Python extensions, these requirements apply:
 /// - Must be a single .py file, a directory containing a Python package or a package from PyPI.
@@ -53,7 +61,7 @@ import org.springframework.stereotype.Component;
 ///   - Define the hooks as top-level functions in the file.
 ///   - Define a `wolpi_extension()` function that returns an object with the hooks as methods.
 /// - Packages must define a `wolpi-ext` entry point in their `pyproject.toml` or `setup.py` that
-///   points to a callable that returns an object with the hooks as methods.
+/// points to a callable that returns an object with the hooks as methods.
 @Component
 public class ExtensionRegistry {
 
@@ -75,8 +83,7 @@ public class ExtensionRegistry {
       HttpClient httpClient,
       PyPiInstaller pyInstaller,
       NpmInstaller jsInstaller,
-      BuildProperties buildProps)
-      throws ExtensionLoadException {
+      BuildProperties buildProps) {
     this.objectMapper = objectMapper;
     this.httpClient = httpClient;
     this.jsEngine = buildJsEngine();
@@ -86,11 +93,43 @@ public class ExtensionRegistry {
     this.wolpiVersion = buildProps.getVersion();
 
     this.implementedHooks = new HashMap<>();
-    for (ExtensionConfig extension : cfg.extensions()) {
-      LoadedExtension loadedExtension = loadExtension(extension);
-      for (ExtensionHooks hook : loadedExtension.implementedHooks()) {
-        implementedHooks.computeIfAbsent(hook, (k) -> new ArrayList<>()).add(loadedExtension);
+    if (cfg.extensions().isEmpty()) {
+      return;
+    }
+    // Parallelize extension loading to speed up application startup time
+    try (ExecutorService pool = Executors.newFixedThreadPool(cfg.extensions().size())) {
+      CompletionService<LoadedExtension> completionService = new ExecutorCompletionService<>(pool);
+      for (ExtensionConfig extensionConfig : cfg.extensions()) {
+        completionService.submit(
+            () -> {
+              long start = System.nanoTime();
+              var loaded = loadExtension(extensionConfig);
+              log.info(
+                  "Extension '%s' loaded in %.2f ms"
+                      .formatted(
+                          loaded.extensionInfo().name(),
+                          (System.nanoTime() - start) / 1_000_000.0));
+              return loaded;
+            });
       }
+      Future<LoadedExtension> fut;
+      int numLoaded = 0;
+      while ((fut = completionService.poll(10, TimeUnit.MINUTES)) != null) {
+        try {
+          LoadedExtension ext = fut.get();
+          for (ExtensionHooks hook : ext.implementedHooks()) {
+            implementedHooks.computeIfAbsent(hook, (k) -> new ArrayList<>()).add(ext);
+          }
+          numLoaded++;
+          if (numLoaded >= cfg.extensions().size()) {
+            break;
+          }
+        } catch (InterruptedException | ExecutionException e) {
+          log.error("Failed to load extension", e);
+        }
+      }
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -211,21 +250,35 @@ public class ExtensionRegistry {
   /// Called by the language-specific loading methods after they have initialized a GraalVM context
   /// for retrieving the extension information and hooks.
   ///
-  /// @param lang the programming language of the extension
-  /// @param hooks the polyglot value containing the extension hooks as members
-  /// @param config the extension configuration
+  /// @param lang             the programming language of the extension
+  /// @param hooks            the polyglot value containing the extension hooks as members
+  /// @param config           the extension configuration
   /// @param extensionVersion the version of the extension
-  /// @param contextSupplier a supplier that creates a new GraalVM context for the extension
-  /// @param hooksSupplier a function that extracts the hooks from the context
+  /// @param contextSupplier  a supplier that creates a new GraalVM context for the extension
+  /// @param hooksSupplier    a function that extracts the hooks from the context
   /// @return the loaded extension
+  /// @throws ExtensionLoadException if the extension is invalid
   private LoadedExtension extensionFromPolyglotValue(
       Language lang,
       Value hooks,
       ExtensionConfig config,
       String extensionVersion,
       Supplier<Context> contextSupplier,
-      Function<Context, Value> hooksSupplier) {
-    Map<String, Object> infoJson = hooks.getMember("info").execute().as(JSON_LIKE_OBJECT);
+      Function<Context, Value> hooksSupplier)
+      throws ExtensionLoadException {
+    Value infoHook;
+    if ((infoHook = PolyglotHelpers.getDictOrObjectMember("info", hooks)) == null
+        || !infoHook.canExecute()) {
+      throw new ExtensionLoadException("Extension does not provide the 'info' hook, cannot load.");
+    }
+    Value cleanupHook;
+    if ((cleanupHook = PolyglotHelpers.getDictOrObjectMember("cleanup", hooks)) == null
+        || !cleanupHook.canExecute()) {
+      throw new ExtensionLoadException(
+          "Extension does not provide the 'cleanup' hook, cannot load.");
+    }
+
+    Map<String, Object> infoJson = infoHook.execute().as(JSON_LIKE_OBJECT);
     ExtensionInfo extensionInfo = objectMapper.convertValue(infoJson, ExtensionInfo.class);
 
     Set<ExtensionHooks> implementedHooks =
@@ -348,8 +401,8 @@ public class ExtensionRegistry {
 
   ///  Given a Python [Source] and a GraalPy [Context], load the extension hooks from it.
   ///
-  /// @param ctx the GraalPy context
-  /// @param source the source containing the extension code or importing it
+  /// @param ctx        the GraalPy context
+  /// @param source     the source containing the extension code or importing it
   /// @param entryPoint optional entry point definition, if the extension is a package
   /// @return a [Value] containing the extension hooks as members
   /// @throws ExtensionLoadException if loading the hooks fails
@@ -393,9 +446,6 @@ public class ExtensionRegistry {
 
     if (functions.isEmpty()) {
       throw new ExtensionLoadException("Extension did not define any top-level functions.");
-    }
-    if (!hooks.hasMember("info") || !hooks.getMember("info").canExecute()) {
-      throw new ExtensionLoadException("Extension does not provide the 'info' hook, cannot load.");
     }
     return hooks;
   }
@@ -499,8 +549,24 @@ public class ExtensionRegistry {
     return implementedHooks.containsKey(hook);
   }
 
-  /// Get the list of loaded extensions that implement the given hook.
-  List<LoadedExtension> getExtensions(ExtensionHooks hook) {
-    return implementedHooks.getOrDefault(hook, List.of());
+  /// Get the list of loaded extensions that implement all the given hooks.
+  ///
+  /// @param hooks the hook(s) to check for
+  /// @return the list of loaded extensions that implement all the given hooks, all extensions if no
+  /// ns if no hooks are given
+  List<LoadedExtension> getExtensions(ExtensionHooks... hooks) {
+    if (hooks.length == 0) {
+      // If no hooks are given, return all extensions
+      return implementedHooks.values().stream().flatMap(List::stream).distinct().toList();
+    }
+
+    Set<LoadedExtension> matchingExtensions = new HashSet<>(implementedHooks.get(hooks[0]));
+    for (int i = 1; i < hooks.length; i++) {
+      matchingExtensions.retainAll(implementedHooks.get(hooks[i]));
+      if (matchingExtensions.isEmpty()) {
+        break;
+      }
+    }
+    return new ArrayList<>(matchingExtensions);
   }
 }

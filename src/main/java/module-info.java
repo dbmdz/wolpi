@@ -6,20 +6,22 @@ import org.jspecify.annotations.NullMarked;
 module wolpi {
   requires app.photofox.vipsffm;
   requires com.fasterxml.jackson.databind;
+  requires com.fasterxml.jackson.dataformat.toml;
   requires com.google.common;
   requires java.net.http;
+  requires org.apache.commons.pool2;
   requires org.apache.tomcat.embed.core;
   requires org.graalvm.polyglot;
   requires org.jspecify;
+  requires org.slf4j;
   requires org.yaml.snakeyaml;
   requires spring.boot;
   requires spring.boot.autoconfigure;
+  requires spring.beans;
   requires spring.context;
+  requires spring.core;
   requires spring.web;
   requires spring.webmvc;
-  requires spring.core;
-  requires org.slf4j;
-  requires com.fasterxml.jackson.dataformat.toml;
 
   exports dev.mdz.iiif.wolpi;
   exports dev.mdz.iiif.wolpi.config;

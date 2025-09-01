@@ -16,6 +16,11 @@ def info():
         'description': 'just a simple resolving proof-of-concept'
     }
 
+def cleanup():
+    # No cleanup necessary for this simple extension, since we don't keep state
+    # between hook invocations
+    pass
+
 def resolve(identifier):
     if not identifier.startswith('py-'):
         return
