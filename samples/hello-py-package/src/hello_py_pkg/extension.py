@@ -11,10 +11,17 @@ def info():
         'description': 'Resolves images from Wikimedia Commons.'
     }
 
-def resolve(identifier):
+def resolve(identifier, etag, last_modified):
     api_url = f"https://commons.wikimedia.org/w/api.php?action=query&titles=File:{identifier}&prop=imageinfo&iiprop=url&format=json&formatversion=2"
-    resp = requests.get(api_url, headers=HEADERS)
-    if resp.status_code != 200:
+    headers = {**HEADERS}
+    if etag:
+        headers['If-None-Match'] = etag
+    if last_modified:
+        headers['If-Modified-Since'] = last_modified
+    resp = requests.get(api_url, headers=headers)
+    if resp.status_code == 304:
+        return {'notModified': True}
+    elif resp.status_code != 200:
         return
     data = resp.json()
     if 'query' not in data or 'pages' not in data['query'] or not len(data['query']['pages']):

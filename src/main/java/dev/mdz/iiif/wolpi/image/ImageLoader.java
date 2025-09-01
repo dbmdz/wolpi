@@ -8,6 +8,7 @@ import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.exceptions.SourceNotModified;
 import dev.mdz.iiif.wolpi.extension.ExtensionRuntime;
 import dev.mdz.iiif.wolpi.model.image.BinaryResolvedImage;
 import dev.mdz.iiif.wolpi.model.image.CacheInfo;
@@ -27,6 +28,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -78,9 +80,15 @@ public class ImageLoader {
   /// against the filesystem base directory from the configuration.
   ///
   /// @param identifier The identifier of the image to resolve.
+  /// @param eTag      The ETag of the cached image on the client, if any.
+  /// @param lastModified The last modified timestamp of the cached image on the client, if any.
   /// @return The resolved image source, or null if it could not be resolved.
-  public @Nullable ImageSource resolve(String identifier) {
-    ImageSource source = extensionRuntime.resolve(identifier, arena);
+  /// @throws SourceNotModified If the source has not been modified since the given `eTag` or
+  ///                           `lastModified` timestamp.
+  public @Nullable ImageSource resolve(
+      String identifier, @Nullable String eTag, @Nullable Instant lastModified)
+      throws SourceNotModified {
+    ImageSource source = extensionRuntime.resolve(identifier, eTag, lastModified, arena);
     if (source == null) {
       source = this.resolveFromFilesystem(identifier);
     }

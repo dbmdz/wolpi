@@ -3,6 +3,7 @@ package dev.mdz.iiif.wolpi.controller;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsError;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.exceptions.SourceNotModified;
 import dev.mdz.iiif.wolpi.iiif.IIIFImageInfo;
 import dev.mdz.iiif.wolpi.iiif.ImageRequestParser;
 import dev.mdz.iiif.wolpi.iiif.NotImplementedException;
@@ -16,7 +17,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -57,6 +60,9 @@ public class IIIFImageAPIController {
   public ResponseEntity<Map<String, Object>> getImageInfo(
       @PathVariable IIIFVersion version,
       @PathVariable String identifier,
+      @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
+      @Nullable @RequestHeader(value = "If-Modified-Since", required = false)
+          Instant ifModifiedSince,
       HttpHeaders headers,
       HttpServletRequest request,
       WebRequest webRequest) {
@@ -69,7 +75,14 @@ public class IIIFImageAPIController {
           .headers(outHeaders)
           .body(Map.of("error", "Unauthorized access to image"));
     }
-    ImageSource source = loader.resolve(identifier);
+
+    ImageSource source;
+    try {
+      source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
+    } catch (SourceNotModified ignored) {
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
+    }
+
     if (source == null) {
       return ResponseEntity.status(HttpStatus.NOT_FOUND)
           .headers(outHeaders)
@@ -124,6 +137,9 @@ public class IIIFImageAPIController {
       @PathVariable("rotation") String rotationSpec,
       @PathVariable("color") String colorSpec,
       @PathVariable("format") String formatSpec,
+      @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
+      @Nullable @RequestHeader(value = "If-Modified-Since", required = false)
+          Instant ifModifiedSince,
       @RequestHeader HttpHeaders requestHeaders,
       HttpServletRequest servletRequest,
       WebRequest webRequest)
@@ -141,7 +157,12 @@ public class IIIFImageAPIController {
     }
 
     // See if the identifier actually resolves to something
-    ImageSource source = loader.resolve(identifier);
+    ImageSource source = null;
+    try {
+      source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
+    } catch (SourceNotModified e) {
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
+    }
     if (source == null) {
       return ResponseEntity.status(HttpStatus.NOT_FOUND)
           .headers(outHeaders)

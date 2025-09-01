@@ -4,6 +4,7 @@ import app.photofox.vipsffm.VCustomSource;
 import app.photofox.vipsffm.VCustomSource.ReadCallback;
 import app.photofox.vipsffm.VCustomSource.SeekCallback;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mdz.iiif.wolpi.exceptions.SourceNotModified;
 import dev.mdz.iiif.wolpi.model.extensions.ExtensionHooks;
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension;
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension.RuntimeContext;
@@ -20,6 +21,9 @@ import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -119,21 +123,36 @@ public class ExtensionRuntime {
   /// If no extension returns a non-null [ImageSource], `null` is returned.
   ///
   /// @param identifier the identifier to resolve
+  /// @param eTag       optional ETag of a cached image
+  /// @param lastModified optional last modified timestamp of a cached image
   /// @param vipsArena  a [Arena] to use for defining vips-ffm sources
   /// @return the resolved [ImageSource], or `null` if no extension
-  public @Nullable ImageSource resolve(String identifier, Arena vipsArena) {
+  public @Nullable ImageSource resolve(
+      String identifier, @Nullable String eTag, @Nullable Instant lastModified, Arena vipsArena)
+      throws SourceNotModified {
     List<LoadedExtension> resolveExts = registry.getExtensions(ExtensionHooks.RESOLVE);
     if (resolveExts.isEmpty()) {
       return null;
     }
 
+    String lastModifiedStr =
+        lastModified != null
+            ? DateTimeFormatter.RFC_1123_DATE_TIME.format(lastModified.atZone(ZoneOffset.UTC))
+            : null;
     for (LoadedExtension ext : resolveExts) {
       RuntimeContext ctx = ensureRuntimeContext(ext);
       Value resolveFn = PolyglotHelpers.getDictOrObjectMember("resolve", ctx.extensionObject());
       assert resolveFn != null && resolveFn.canExecute();
-      Value source = resolveFn.execute(identifier);
+      Value source = resolveFn.execute(identifier, eTag, lastModifiedStr);
       if (source == null || source.isNull()) {
         continue;
+      }
+
+      Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source);
+      if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
+        // If the extension indicates that the source has not been modified, we throw
+        // SourceNotModified to short-circuit further processing.
+        throw new SourceNotModified();
       }
 
       CacheInfo cacheInfo = null;

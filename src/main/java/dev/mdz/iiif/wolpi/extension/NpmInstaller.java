@@ -3,6 +3,7 @@ package dev.mdz.iiif.wolpi.extension;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.exceptions.ExtensionLoadException;
 import dev.mdz.iiif.wolpi.util.CommandRunner;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;

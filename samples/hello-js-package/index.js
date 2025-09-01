@@ -10,9 +10,19 @@ export default {
     // No cleanup needed in this example, since we don't keep any state between
     // hook calls
   },
-  resolve: (identifier) => {
+  resolve: (identifier, eTag, lastModified) => {
     const metadataUrl = `https://archive.org/metadata/${identifier}`;
-    const response = fetchSync(metadataUrl);
+    const headers = {};
+    if (eTag) {
+      headers['If-None-Match'] = eTag;
+    }
+    if (lastModified) {
+      headers['If-Modified-Since'] = lastModified;
+    }
+    const response = fetchSync(metadataUrl, { headers });
+    if (response.status === 304) {
+      return { notModified: true };
+    }
     if (!response.ok) {
       return
     }

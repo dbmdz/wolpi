@@ -3,6 +3,7 @@ package dev.mdz.iiif.wolpi.extension;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.ExtensionConfig;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.exceptions.ExtensionLoadException;
 import dev.mdz.iiif.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.iiif.wolpi.model.extensions.ExtensionContext;
 import dev.mdz.iiif.wolpi.model.extensions.ExtensionHooks;
@@ -560,7 +561,8 @@ public class ExtensionRegistry {
       return implementedHooks.values().stream().flatMap(List::stream).distinct().toList();
     }
 
-    Set<LoadedExtension> matchingExtensions = new HashSet<>(implementedHooks.get(hooks[0]));
+    Set<LoadedExtension> matchingExtensions =
+        new HashSet<>(implementedHooks.getOrDefault(hooks[0], List.of()));
     for (int i = 1; i < hooks.length; i++) {
       matchingExtensions.retainAll(implementedHooks.get(hooks[i]));
       if (matchingExtensions.isEmpty()) {

@@ -23,7 +23,7 @@ export default {
     // hook calls
   },
   // The resolve function is called when an identifier needs to be resolved to an image source
-  resolve: (identifier) => {
+  resolve: (identifier, eTag, lastModified) => {
     if (!identifier.startsWith('js-')) {
       return;
     }

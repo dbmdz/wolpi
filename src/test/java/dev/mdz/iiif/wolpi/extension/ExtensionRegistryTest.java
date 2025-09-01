@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.ExtensionConfig;
 import dev.mdz.iiif.wolpi.config.ExtensionConfig.PkgSource;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.exceptions.ExtensionLoadException;
 import dev.mdz.iiif.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.iiif.wolpi.model.extensions.ExtensionHooks;
 import java.io.IOException;
