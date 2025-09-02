@@ -250,6 +250,9 @@ public class ImageRequestParser {
     }
 
     boolean doUpscale = sizeSpec.startsWith("^");
+    if (doUpscale) {
+      sizeSpec = sizeSpec.substring(1);
+    }
 
     ImageSize result = new ImageSize(sourceSize.width(), sourceSize.height());
     if ("full".equals(sizeSpec) || "max".equals(sizeSpec) || "^max".equals(sizeSpec)) {
@@ -287,7 +290,7 @@ public class ImageRequestParser {
         throw new IllegalArgumentException(
             "Width-based scaling is not supported in this configuration.");
       }
-      int width = Integer.parseInt(sizeSpec.substring(doUpscale ? 1 : 0, sizeSpec.length() - 1));
+      int width = Integer.parseInt(sizeSpec.substring(0, sizeSpec.length() - 1));
       if (width <= 0) {
         throw new IllegalArgumentException("Width must be > 0: " + sizeSpec);
       }
@@ -298,7 +301,7 @@ public class ImageRequestParser {
         throw new IllegalArgumentException(
             "Height-based scaling is not supported in this configuration.");
       }
-      int height = Integer.parseInt(sizeSpec.substring(doUpscale ? 2 : 1));
+      int height = Integer.parseInt(sizeSpec.substring(1));
       if (height <= 0) {
         throw new IllegalArgumentException("Height must be > 0: " + sizeSpec);
       }
@@ -309,7 +312,7 @@ public class ImageRequestParser {
         throw new IllegalArgumentException(
             "Percent-based scaling is not supported in this configuration.");
       }
-      double scale = Double.parseDouble(sizeSpec.substring(doUpscale ? 4 : 3)) / 100.0;
+      double scale = Double.parseDouble(sizeSpec.substring(4)) / 100.0;
       if (scale <= 0 || scale > 1) {
         throw new IllegalArgumentException("Scale must be >=0 and <=100: " + sizeSpec);
       }
@@ -322,7 +325,7 @@ public class ImageRequestParser {
         throw new IllegalArgumentException(
             "Confined width and height scaling is not supported in this configuration.");
       }
-      String[] parts = sizeSpec.substring(doUpscale ? 2 : 1).split(",");
+      String[] parts = sizeSpec.substring(1).split(",");
       if (parts.length != 2) {
         throw new IllegalArgumentException(
             "Invalid confined width and height specification: " + sizeSpec);
@@ -340,6 +343,10 @@ public class ImageRequestParser {
               (int) Math.max(1, Math.floor(result.width() * scale)),
               (int) Math.max(1, Math.floor(result.height() * scale)));
     } else {
+      if (!supported.byArbitraryDimensions()) {
+        throw new IllegalArgumentException(
+            "Arbitrary dimensions scaling is not supported in this configuration.");
+      }
       String[] parts = sizeSpec.split(",");
       if (parts.length != 2) {
         throw new IllegalArgumentException("Invalid size specification: " + sizeSpec);
