@@ -1,0 +1,6 @@
+[project]
+name = "py-extension"
+version = "1.0.0"
+
+[project.entry-points.wolpi]
+py_extension = "py_extension:wolpi_extension"
