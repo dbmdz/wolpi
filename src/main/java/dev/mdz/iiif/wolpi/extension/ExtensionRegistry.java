@@ -553,7 +553,7 @@ public class ExtensionRegistry {
   ///
   /// @param hooks the hook(s) to check for
   /// @return the list of loaded extensions that implement all the given hooks, all extensions if no
-  /// ns if no hooks are given
+  ///         hooks are given
   List<LoadedExtension> getExtensions(ExtensionHooks... hooks) {
     if (hooks.length == 0) {
       // If no hooks are given, return all extensions
