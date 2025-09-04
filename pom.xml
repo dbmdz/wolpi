@@ -30,7 +30,7 @@
 		<graalvm.version>24.2.2</graalvm.version>
 		<jspecify.version>1.0.0</jspecify.version>
 		<guava.version>33.4.8-jre</guava.version>
-		<vips-ffm.version>1.9.0</vips-ffm.version>
+		<vips-ffm.version>1.9.1</vips-ffm.version>
 		<fmt-maven-plugin.version>2.27</fmt-maven-plugin.version>
 	</properties>
 	<dependencies>
@@ -113,7 +113,12 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<argLine>--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED -Dpolyglot.engine.WarnInterpreterOnly=false --enable-native-access=app.photofx.vipsffm,org.graalvm.truffle -XX:+EnableDynamicAgentLoading</argLine>
+					<argLine>
+						--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED
+						-Dpolyglot.engine.WarnInterpreterOnly=false
+						--enable-native-access=app.photofox.vipsffm,org.graalvm.truffle
+						-XX:+EnableDynamicAgentLoading
+					</argLine>
 				</configuration>
 			</plugin>
 			<plugin>

@@ -94,7 +94,7 @@ public class PyPiInstaller {
           "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);
     }
     String packageName = parsePackageNameFromPyproject(localPackageDir);
-    Path venvPath = venvPath = ensureVenv(packageName);
+    Path venvPath = ensureVenv(packageName);
     runPip(venvPath, "install", localPackageDir.toAbsolutePath().toString());
     verifyInstalledPackage(packageName);
     return packageName;
@@ -207,7 +207,7 @@ public class PyPiInstaller {
   /// Create a new virtual environment for the given package if it does not already exist.
   ///
   /// @return the path to the created or existing virtual environment
-  private Path ensureVenv(String packageName) throws ExtensionLoadException {
+  Path ensureVenv(String packageName) throws ExtensionLoadException {
     if (pythonPath == null) {
       throw new ExtensionLoadException(
           "Python executable not configured or not found. Cannot install package '%s'."
