@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.info.BuildProperties;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("ExtensionRegistry")
 class ExtensionRegistryTest {
 
   @Mock private BuildProperties buildProperties;
@@ -38,16 +39,16 @@ class ExtensionRegistryTest {
 
   @TempDir private Path tempDir;
 
-  @DisplayName("Test that no extensions are loaded when config is empty")
+  @DisplayName("should not load extensions when config is empty")
   @Test
-  void testNoExtensions() {
+  void shouldNotLoadExtensionsWhenConfigIsEmpty() {
     var registry = buildRegistryWithExtension(null, null, null, null);
     assertThat(registry.getExtensions()).isEmpty();
   }
 
-  @DisplayName("Load a single JavaScript file")
+  @DisplayName("should load a single JavaScript file")
   @Test
-  void testLoadSingleJsFile() throws IOException {
+  void shouldLoadSingleJsFile() throws IOException {
     Path source = Path.of("src/test/resources/test.js");
     var registry = buildRegistryWithExtension(source, null, null, Map.of());
     assertThat(registry.getExtensions()).hasSize(1);
@@ -55,9 +56,9 @@ class ExtensionRegistryTest {
     assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS File Extension");
   }
 
-  @DisplayName("Load a single Python file")
+  @DisplayName("should load a single Python file")
   @Test
-  void testLoadSinglePyFile() throws IOException {
+  void shouldLoadSinglePyFile() throws IOException {
     Path source = Path.of("src/test/resources/test.py");
     var registry = buildRegistryWithExtension(source, null, null, Collections.emptyMap());
     assertThat(registry.getExtensions()).hasSize(1);
@@ -65,9 +66,9 @@ class ExtensionRegistryTest {
     assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY File Extension");
   }
 
-  @DisplayName("Load a JavaScript package")
+  @DisplayName("should load a JavaScript package")
   @Test
-  void testLoadJsPackage() throws IOException, ExtensionLoadException {
+  void shouldLoadJsPackage() throws IOException, ExtensionLoadException {
     Path source = Path.of("src/test/resources/js-extension");
     Path target = tempDir.resolve("js-extension");
     Files.createDirectories(target);
@@ -101,9 +102,9 @@ class ExtensionRegistryTest {
     assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS Extension");
   }
 
-  @DisplayName("Load a Python package")
+  @DisplayName("should load a Python package")
   @Test
-  void testLoadPyPackage() throws IOException, ExtensionLoadException {
+  void shouldLoadPyPackage() throws IOException, ExtensionLoadException {
     // Create venv structure
     Path venvPath = tempDir.resolve("venv");
     Path binPath = venvPath.resolve("bin");

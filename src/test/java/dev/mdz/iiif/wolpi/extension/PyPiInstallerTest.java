@@ -15,11 +15,13 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+@DisplayName("PyPiInstaller")
 class PyPiInstallerTest {
 
   private PyPiInstaller installer;
@@ -50,6 +52,7 @@ class PyPiInstallerTest {
   }
 
   @Test
+  @DisplayName("should install a package from PyPI")
   void install() throws Exception {
     Path distInfoLocation =
         pypiDir.resolve(
@@ -75,6 +78,7 @@ class PyPiInstallerTest {
   }
 
   @Test
+  @DisplayName("should install a package from a local directory")
   void installFromLocalDirectory() throws Exception {
     Path packageDir = tempDir.resolve("my-package");
     Files.createDirectories(packageDir);
@@ -105,6 +109,7 @@ class PyPiInstallerTest {
   }
 
   @Test
+  @DisplayName("should throw an exception if installation fails")
   void installFails() {
     assertThatThrownBy(
             () -> {
@@ -124,6 +129,7 @@ class PyPiInstallerTest {
   }
 
   @Test
+  @DisplayName("should throw an exception if python is not configured")
   void pythonNotFound() throws IOException {
     WolpiConfig config =
         new WolpiConfig(
@@ -150,6 +156,7 @@ class PyPiInstallerTest {
   }
 
   @Test
+  @DisplayName("should retrieve entry point from installed package")
   void getEntryPoint() throws Exception {
     Path distInfo =
         pypiDir.resolve(
@@ -177,6 +184,7 @@ class PyPiInstallerTest {
   }
 
   @Test
+  @DisplayName("should throw an exception when entry_points.txt is missing")
   void getEntryPoint_missingEntryPointsTxt_throws() throws Exception {
     Path distInfo =
         pypiDir.resolve(
@@ -201,7 +209,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getEntryPoint_noWolpiSection_throws() throws Exception {
+  @DisplayName("should throw an exception when wolpi entry points section is missing")
+  void shouldThrowWhenWolpiEntryPointsSectionIsMissing() throws Exception {
     Path distInfo =
         pypiDir.resolve(
             "test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
@@ -226,7 +235,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getEntryPoint_invalidSpec_throws() throws Exception {
+  @DisplayName("should throw an exception when wolpi entry point spec is invalid")
+  void shouldThrowWhenWolpiEntryPointSpecIsInvalid() throws Exception {
     Path distInfo =
         pypiDir.resolve(
             "test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
@@ -251,7 +261,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getEntryPoint_invalidInspectJson_throws() {
+  @DisplayName("should throw an exception when pip inspect output fails to parse")
+  void shouldThrowWhenPipInspectOutputFailsToParse() {
     var builder =
         ProcessBuilderMocks.builder()
             .matchCommandTokenContains("pip")
@@ -265,7 +276,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getEntryPoint_packageNotFoundInInspect_throws() throws Exception {
+  @DisplayName("should throw an exception when package not found in pip inspect output")
+  void shouldThrowWhenPackageNotFoundInPipInspectOutput() throws Exception {
     Path otherDist =
         pypiDir.resolve("other", "lib", "python3.11", "site-packages", "other-0.1.0.dist-info");
     Files.createDirectories(otherDist);
@@ -288,7 +300,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getVenvSitePackages() throws Exception {
+  @DisplayName("should retrieve the site-packages directory of a venv")
+  void shouldRetrieveSitePackagesDirectoryOfVenv() throws Exception {
     Path venvPath = pypiDir.resolve("test-package");
     Path sitePackages = venvPath.resolve("lib").resolve("python3.11").resolve("site-packages");
     Files.createDirectories(sitePackages);
@@ -301,19 +314,22 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getVenvSitePackages_returnsNullWhenVenvMissing() {
+  @DisplayName("should return null when venv is missing or incomplete")
+  void shouldReturnNullWhenVenvIsMissingOrIncomplete() {
     assertThat(installer.getVenvSitePackages("does-not-exist")).isNull();
   }
 
   @Test
-  void getVenvSitePackages_returnsNullWhenNoPythonLib() throws Exception {
+  @DisplayName("should return null when python lib dir is missing")
+  void shouldReturnNullWhenPythonLibDirIsMissing() throws Exception {
     Path venv = pypiDir.resolve("pkg");
     Files.createDirectories(venv.resolve("lib"));
     assertThat(installer.getVenvSitePackages("pkg")).isNull();
   }
 
   @Test
-  void getVersion() {
+  @DisplayName("should return null when site-packages dir is missing")
+  void shouldReturnNullWhenSitePackagesDirIsMissing() {
     var builder =
         ProcessBuilderMocks.builder()
             .matchCommandTokenContains("pip")
@@ -326,7 +342,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getVersion_returnsNullOnError() {
+  @DisplayName("should return null on pip error when getting version")
+  void shouldReturnNullOnPipErrorWhenGettingVersion() {
     var builder =
         ProcessBuilderMocks.builder()
             .matchCommandTokenContains("pip")
@@ -339,7 +356,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void getVersion_returnsNullWhenNoVersionLine() {
+  @DisplayName("should return null when no Version line in pip show output")
+  void shouldReturnNullWhenNoVersionLineInPipShowOutput() {
     var builder =
         ProcessBuilderMocks.builder()
             .matchCommandTokenContains("pip")
@@ -352,7 +370,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  void installFromLocalDirectory_missingPyproject_throws() {
+  @DisplayName("should throw an exception when pyproject.toml is missing when installing from local directory")
+  void shouldThrowWhenPyprojectTomlIsMissingWhenInstallingFromLocalDirectory() {
     Path dir = pypiDir.resolve("no-pyproject");
     assertThat(dir.toFile().mkdirs()).isTrue();
     assertThatThrownBy(() -> installer.installFromLocalDirectory(dir))
