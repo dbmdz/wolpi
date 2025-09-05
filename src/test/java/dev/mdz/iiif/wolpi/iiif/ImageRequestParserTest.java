@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import dev.mdz.iiif.wolpi.config.IIIFConfig;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
+import dev.mdz.iiif.wolpi.model.iiif.CropRectangle;
+import dev.mdz.iiif.wolpi.model.iiif.IIIFQuality;
+import dev.mdz.iiif.wolpi.model.iiif.IIIFVersion;
+import dev.mdz.iiif.wolpi.model.iiif.ImageRequest;
+import dev.mdz.iiif.wolpi.model.iiif.Rotation;
 import dev.mdz.iiif.wolpi.model.image.ImageSize;
-import dev.mdz.iiif.wolpi.model.params.CropRectangle;
-import dev.mdz.iiif.wolpi.model.params.IIIFQuality;
-import dev.mdz.iiif.wolpi.model.params.IIIFVersion;
-import dev.mdz.iiif.wolpi.model.params.ImageRequest;
-import dev.mdz.iiif.wolpi.model.params.Rotation;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

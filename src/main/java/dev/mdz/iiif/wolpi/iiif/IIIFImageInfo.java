@@ -3,9 +3,9 @@ package dev.mdz.iiif.wolpi.iiif;
 import static dev.mdz.iiif.wolpi.util.JSON.obj;
 
 import dev.mdz.iiif.wolpi.config.IIIFConfig;
-import dev.mdz.iiif.wolpi.model.IIIFComplianceLevel;
+import dev.mdz.iiif.wolpi.model.iiif.IIIFComplianceLevel;
+import dev.mdz.iiif.wolpi.model.iiif.IIIFVersion;
 import dev.mdz.iiif.wolpi.model.image.ImageInfo;
-import dev.mdz.iiif.wolpi.model.params.IIIFVersion;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

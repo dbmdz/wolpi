@@ -1,7 +1,8 @@
-package dev.mdz.iiif.wolpi.util;
+package dev.mdz.iiif.wolpi.extension;
 
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension;
 import dev.mdz.iiif.wolpi.model.extensions.LoadedExtension.RuntimeContext;
+import dev.mdz.iiif.wolpi.util.PolyglotHelpers;
 import org.apache.commons.pool2.BaseKeyedPooledObjectFactory;
 import org.apache.commons.pool2.DestroyMode;
 import org.apache.commons.pool2.PooledObject;

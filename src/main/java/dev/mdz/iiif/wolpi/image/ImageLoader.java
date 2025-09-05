@@ -239,6 +239,6 @@ public class ImageLoader {
                       .toList()));
     }
 
-    return new ImageInfo(image.getWidth(), image.getHeight(), sizes, tileSizes, null);
+    return new ImageInfo(image.getWidth(), image.getHeight(), sizes, tileSizes);
   }
 }

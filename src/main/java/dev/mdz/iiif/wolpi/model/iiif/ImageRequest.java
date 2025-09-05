@@ -1,4 +1,4 @@
-package dev.mdz.iiif.wolpi.model.params;
+package dev.mdz.iiif.wolpi.model.iiif;
 
 public record ImageRequest(
     String identifier,
