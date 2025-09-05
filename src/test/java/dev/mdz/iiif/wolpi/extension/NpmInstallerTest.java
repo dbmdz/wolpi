@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
 import dev.mdz.iiif.wolpi.config.WolpiConfig.PackagingConfig;
+import dev.mdz.iiif.wolpi.exceptions.ExtensionLoadException;
 import dev.mdz.iiif.wolpi.testutil.ProcessBuilderMocks;
 import dev.mdz.iiif.wolpi.util.CommandRunner;
 import java.io.IOException;
@@ -280,7 +281,8 @@ class NpmInstallerTest {
   }
 
   @Test
-  @DisplayName("should throw an exception if package.json has no version field when getting version")
+  @DisplayName(
+      "should throw an exception if package.json has no version field when getting version")
   void shouldThrowIfPackageJsonHasNoVersionFieldWhenGettingVersion() throws Exception {
     Path packageDir = nodeModulesDir.resolve("test-package");
     Files.createDirectories(packageDir);
@@ -298,7 +300,8 @@ class NpmInstallerTest {
   }
 
   @Test
-  @DisplayName("should throw an exception if directory has no package.json when installing from local directory")
+  @DisplayName(
+      "should throw an exception if directory has no package.json when installing from local directory")
   void shouldThrowIfDirectoryHasNoPackageJsonWhenInstallingFromLocalDirectory() {
     Path dir = tempDir.resolve("no-package-json");
     assertThat(dir.toFile().mkdirs()).isTrue();

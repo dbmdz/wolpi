@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.iiif.wolpi.config.WolpiConfig;
 import dev.mdz.iiif.wolpi.config.WolpiConfig.PackagingConfig;
+import dev.mdz.iiif.wolpi.exceptions.ExtensionLoadException;
 import dev.mdz.iiif.wolpi.testutil.ProcessBuilderMocks;
 import dev.mdz.iiif.wolpi.util.CommandRunner;
 import java.io.IOException;
@@ -370,7 +371,8 @@ class PyPiInstallerTest {
   }
 
   @Test
-  @DisplayName("should throw an exception when pyproject.toml is missing when installing from local directory")
+  @DisplayName(
+      "should throw an exception when pyproject.toml is missing when installing from local directory")
   void shouldThrowWhenPyprojectTomlIsMissingWhenInstallingFromLocalDirectory() {
     Path dir = pypiDir.resolve("no-pyproject");
     assertThat(dir.toFile().mkdirs()).isTrue();

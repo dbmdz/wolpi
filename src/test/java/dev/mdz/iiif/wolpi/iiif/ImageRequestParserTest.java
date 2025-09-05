@@ -546,8 +546,8 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'^500,400', 500, 400", "'^1000,800', 1000, 800"})
     @DisplayName("should scale by arbitrary dimensions with upscaling")
-    void shouldScaleByArbitraryDimensionsWithUpscaling(String spec, int expectedWidth, int expectedHeight)
-        throws NotImplementedException {
+    void shouldScaleByArbitraryDimensionsWithUpscaling(
+        String spec, int expectedWidth, int expectedHeight) throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
       assertThat(result.height()).isEqualTo(expectedHeight);
@@ -566,8 +566,8 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'^!500,400', 500, 400", "'^!1000,800', 1000, 800"})
     @DisplayName("should scale by confined dimensions with upscaling")
-    void shouldScaleByConfinedDimensionsWithUpscaling(String spec, int expectedWidth, int expectedHeight)
-        throws NotImplementedException {
+    void shouldScaleByConfinedDimensionsWithUpscaling(
+        String spec, int expectedWidth, int expectedHeight) throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
       assertThat(result.height()).isEqualTo(expectedHeight);
@@ -672,14 +672,16 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw an exception for scale out of range in percent-based scaling (too low)")
+    @DisplayName(
+        "should throw an exception for scale out of range in percent-based scaling (too low)")
     void shouldThrowForScaleOutOfRangeInPercentBasedScalingTooLow() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "pct:0", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw an exception for scale out of range in percent-based scaling (too high)")
+    @DisplayName(
+        "should throw an exception for scale out of range in percent-based scaling (too high)")
     void shouldThrowForScaleOutOfRangeInPercentBasedScalingTooHigh() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "pct:101", sourceSize));
@@ -748,7 +750,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw an exception for accidental upscaling when upscaling is not supported")
+    @DisplayName(
+        "should throw an exception for accidental upscaling when upscaling is not supported")
     void shouldThrowForAccidentalUpscalingWhenUpscalingIsNotSupported() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, true, true, true, false));
