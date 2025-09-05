@@ -78,7 +78,7 @@ public class CommandRunner {
   /// @param executableName name of the executable to find, e.g. "npm" or "python3"
   /// @return path to the executable, or null if not found
   public static @Nullable Path findOnSystemPath(String executableName) {
-    String systemPath = System.getenv("PATH");
+    String systemPath = getEnvVar("PATH");
     if (systemPath == null || systemPath.isBlank()) {
       return null;
     }
@@ -88,5 +88,10 @@ public class CommandRunner {
         .filter(np -> Files.isRegularFile(np) && Files.isExecutable(np))
         .findFirst()
         .orElse(null);
+  }
+
+  /// Wrapper around [System#getenv(String)] to make it mockable in tests.
+  public static @Nullable String getEnvVar(String name) {
+    return System.getenv(name);
   }
 }

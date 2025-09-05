@@ -138,17 +138,22 @@ public class NpmInstaller {
   }
 
   /// Returns the root directory for an installed package under node_modules. For scoped packages,
-  /// this returns `{baseDir}/node_modules/@{scope}/{name}``
-  public Path getPackageRoot(String packageName) {
+  /// this returns `{baseDir}/node_modules/@{scope}/{name}`.
+  public @Nullable Path getPackageRoot(String packageName) {
     Path nm = baseDir.resolve("node_modules");
+    Path root;
     if (packageName.startsWith("@")) {
       String[] parts = packageName.split("/", 2);
       if (parts.length != 2 || parts[1].isBlank()) {
         throw new IllegalArgumentException("Invalid scoped package name: " + packageName);
       }
-      return nm.resolve(parts[0]).resolve(parts[1]);
+      root = nm.resolve(parts[0]).resolve(parts[1]);
     }
-    return nm.resolve(packageName);
+    root = nm.resolve(packageName);
+    if (!Files.isDirectory(root)) {
+      return null;
+    }
+    return root;
   }
 
   /// Parse package.json using Jackson to extract name, version, and ESM entry point.
@@ -161,7 +166,8 @@ public class NpmInstaller {
     try {
       root = objectMapper.readValue(Files.readAllBytes(pkgJson), new TypeReference<>() {});
     } catch (IOException e) {
-      throw new ExtensionLoadException(e);
+      throw new ExtensionLoadException(
+          "Failed to parse package.json at '%s'".formatted(packageRoot), e);
     }
     String name;
     if (root.get("name") instanceof String nameStr) {
@@ -190,6 +196,9 @@ public class NpmInstaller {
   /// Get the path to the entry point for the package
   public @Nullable Path getEntryPoint(String packageName) throws ExtensionLoadException {
     Path pkg = getPackageRoot(packageName);
+    if (pkg == null) {
+      throw new ExtensionLoadException("Package not installed: " + packageName);
+    }
     PackageJsonInfo info = parsePackageJson(pkg);
     return info.esmEntryPoint;
   }
@@ -197,6 +206,9 @@ public class NpmInstaller {
   ///  Get the version of the installed package
   public String getVersion(String packageName) throws ExtensionLoadException {
     Path pkg = getPackageRoot(packageName);
+    if (pkg == null) {
+      throw new ExtensionLoadException("Package not installed: " + packageName);
+    }
     PackageJsonInfo info = parsePackageJson(pkg);
     return info.version();
   }

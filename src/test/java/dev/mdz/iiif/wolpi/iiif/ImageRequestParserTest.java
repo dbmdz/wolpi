@@ -20,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+@DisplayName("ImageRequestParser")
 class ImageRequestParserTest {
 
   private WolpiConfig wolpiConfig;
@@ -194,7 +195,7 @@ class ImageRequestParserTest {
   }
 
   @Nested
-  @DisplayName("parseRotation")
+  @DisplayName("when parsing rotation")
   class ParseRotation {
 
     @ParameterizedTest
@@ -219,14 +220,14 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception for invalid rotation spec")
+    @DisplayName("should throw an exception for an invalid rotation spec")
     void shouldThrowExceptionForInvalidRotationSpec() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseRotation("abc"));
     }
 
     @Test
-    @DisplayName("should throw exception when mirroring is not supported")
+    @DisplayName("should throw an exception when mirroring is not supported")
     void shouldThrowExceptionWhenMirroringNotSupported() {
       parser = parserWithRotation(new IIIFConfig.RotationFeature(false, true, true));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -234,7 +235,7 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception when rotation is not supported")
+    @DisplayName("should throw an exception when rotation is not supported")
     void shouldThrowExceptionWhenRotationNotSupported() {
       parser = parserWithRotation(new IIIFConfig.RotationFeature(true, false, false));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -245,7 +246,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName(
-        "should throw exception when arbitrary rotation is not supported for non-90 degree rotation")
+        "should throw an exception when arbitrary rotation is not supported for non-90 degree rotation")
     void shouldThrowExceptionWhenArbitraryRotationNotSupported() {
       parser = parserWithRotation(new IIIFConfig.RotationFeature(true, true, false));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -264,14 +265,14 @@ class ImageRequestParserTest {
   }
 
   @Nested
-  @DisplayName("parseRegion")
+  @DisplayName("when parsing region")
   class ParseRegion {
 
     private final ImageSize sourceSize = new ImageSize(1000, 800);
 
     @Test
     @DisplayName("should parse 'full' region")
-    void fullRegion() {
+    void shouldParseFullRegion() {
       CropRectangle result = parser.parseRegion("full", sourceSize);
       assertThat(result.x()).isZero();
       assertThat(result.y()).isZero();
@@ -281,7 +282,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should parse 'square' region")
-    void squareRegion() {
+    void shouldParseSquareRegion() {
       CropRectangle result = parser.parseRegion("square", sourceSize);
 
       assertThat(result.width()).isEqualTo(800);
@@ -293,7 +294,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'10,20,100,200', 10,20,100,200", "'0,0,1000,800', 0,0,1000,800"})
     @DisplayName("should parse pixel-based regions")
-    void pixelRegions(String spec, int x, int y, int w, int h) {
+    void shouldParsePixelRegions(String spec, int x, int y, int w, int h) {
       CropRectangle result = parser.parseRegion(spec, sourceSize);
 
       assertThat(result.x()).isEqualTo(x);
@@ -305,7 +306,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'pct:50,50,25,25', 500,400,250,200", "'pct:0,0,100,100', 0,0,1000,800"})
     @DisplayName("should parse percentage-based regions")
-    void percentageRegions(String spec, int x, int y, int w, int h) {
+    void shouldParsePercentageRegions(String spec, int x, int y, int w, int h) {
       CropRectangle result = parser.parseRegion(spec, sourceSize);
 
       assertThat(result.x()).isEqualTo(x);
@@ -333,15 +334,15 @@ class ImageRequestParserTest {
           "pct:10,10,20,-10",
           "pct:10,10,20,120"
         })
-    @DisplayName("should throw exception for invalid or out-of-bounds regions")
-    void invalidOrOutOfBoundsRegions(String spec) {
+    @DisplayName("should throw an exception for invalid or out-of-bounds regions")
+    void shouldThrowForInvalidOrOutOfBoundsRegions(String spec) {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseRegion(spec, sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception when pixel region is disabled")
-    void pixelRegionDisabled() {
+    @DisplayName("should throw an exception when pixel region is disabled")
+    void shouldThrowWhenPixelRegionDisabled() {
       parser = parserWithRegion(new IIIFConfig.RegionFeature(true, false, true));
 
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -351,8 +352,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception when percent region is disabled")
-    void percentRegionDisabled() {
+    @DisplayName("should throw an exception when percent region is disabled")
+    void shouldThrowWhenPercentRegionDisabled() {
       parser = parserWithRegion(new IIIFConfig.RegionFeature(false, true, true));
 
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -360,8 +361,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception when all region features are disabled")
-    void allRegionFeaturesDisabled() {
+    @DisplayName("should throw an exception when all region features are disabled")
+    void shouldThrowWhenAllRegionFeaturesDisabled() {
       parser = parserWithRegion(new IIIFConfig.RegionFeature(false, false, false));
 
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -373,8 +374,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception when square region is disabled")
-    void squareRegionDisabled() {
+    @DisplayName("should throw an exception when square region is disabled")
+    void shouldThrowWhenSquareRegionDisabled() {
       parser = parserWithRegion(new IIIFConfig.RegionFeature(true, true, false));
 
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -382,57 +383,57 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception for zero width in percent-based crop")
-    void zeroWidthPercentCrop() {
+    @DisplayName("should throw an exception for zero width in percent-based crop")
+    void shouldThrowForZeroWidthPercentCrop() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseRegion("pct:10,20,0,40", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero height in percent-based crop")
-    void zeroHeightPercentCrop() {
+    @DisplayName("should throw an exception for zero height in percent-based crop")
+    void shouldThrowForZeroHeightPercentCrop() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseRegion("pct:10,20,30,0", sourceSize));
     }
   }
 
   @Nested
-  @DisplayName("parseSize")
+  @DisplayName("when parsing size")
   class ParseSize {
 
     private final ImageSize sourceSize = new ImageSize(1000, 800);
 
     @Test
     @DisplayName("should parse 'max' for v3")
-    void maxV3() throws NotImplementedException {
+    void shouldParseMaxForV3() throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, "max", sourceSize);
       assertThat(result).isEqualTo(sourceSize);
     }
 
     @Test
-    @DisplayName("should throw exception for 'full' in v3")
-    void fullV3() {
+    @DisplayName("should throw an exception for 'full' in v3")
+    void shouldThrowForFullInV3() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "full", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for '^' in v2")
-    void caretV2() {
+    @DisplayName("should throw an exception for '^' in v2")
+    void shouldThrowForCaretInV2() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V2, "^max", sourceSize));
     }
 
     @Test
     @DisplayName("should parse 'full' for v2")
-    void fullV2() throws NotImplementedException {
+    void shouldParseFullForV2() throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V2, "full", sourceSize);
       assertThat(result).isEqualTo(sourceSize);
     }
 
     @Test
     @DisplayName("should apply maxWidth limit to 'max'")
-    void maxWidthLimit() throws NotImplementedException {
+    void shouldApplyMaxWidthLimit() throws NotImplementedException {
       parser = parserWithLimits(new IIIFConfig.Limits(500, 0, 0L));
       ImageSize result = parser.parseSize(IIIFVersion.V3, "max", sourceSize);
       assertThat(result.width()).isEqualTo(500);
@@ -441,7 +442,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should apply maxHeight limit to 'max'")
-    void maxHeightLimit() throws NotImplementedException {
+    void shouldApplyMaxHeightLimit() throws NotImplementedException {
       parser = parserWithLimits(new IIIFConfig.Limits(0, 300, 0L));
       ImageSize result = parser.parseSize(IIIFVersion.V3, "max", sourceSize);
       assertThat(result.width()).isEqualTo(375);
@@ -450,7 +451,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should apply maxArea limit to 'max'")
-    void maxAreaLimit() throws NotImplementedException {
+    void shouldApplyMaxAreaLimit() throws NotImplementedException {
       parser = parserWithLimits(new IIIFConfig.Limits(0, 0, 100000L));
       ImageSize result = parser.parseSize(IIIFVersion.V3, "max", sourceSize);
       assertThat(result.width()).isEqualTo(353);
@@ -460,7 +461,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'500,', 500, 400", "'1000,', 1000, 800"})
     @DisplayName("should scale by width")
-    void scaleByWidth(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByWidth(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -470,7 +471,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({" ',400', 500, 400", " ',800', 1000, 800"})
     @DisplayName("should scale by height")
-    void scaleByHeight(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByHeight(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -479,15 +480,15 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should scale by percent")
-    void scaleByPercent() throws NotImplementedException {
+    void shouldScaleByPercent() throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, "pct:50", sourceSize);
       assertThat(result.width()).isEqualTo(500);
       assertThat(result.height()).isEqualTo(400);
     }
 
     @Test
-    @DisplayName("should throw exception if upscaling is not allowed")
-    void upscaleNotAllowed() {
+    @DisplayName("should throw an exception if upscaling is not allowed")
+    void shouldThrowIfUpscalingNotAllowed() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, true, true, true, false));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -496,7 +497,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should allow upscaling with caret")
-    void upscaleAllowed() throws NotImplementedException {
+    void shouldAllowUpscalingWithCaret() throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, "^2000,", sourceSize);
       assertThat(result.width()).isEqualTo(2000);
       assertThat(result.height()).isEqualTo(1600);
@@ -505,7 +506,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'^500,', 500, 400", "'^1000,', 1000, 800"})
     @DisplayName("should scale by width with upscaling")
-    void scaleByWidthUpscaling(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByWidthWithUpscaling(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -515,7 +516,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({" '^,400', 500, 400", " '^,800', 1000, 800"})
     @DisplayName("should scale by height with upscaling")
-    void scaleByHeightUpscaling(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByHeightWithUpscaling(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -525,7 +526,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'^pct:50', 500, 400", "'^pct:100', 1000, 800"})
     @DisplayName("should scale by percent with upscaling")
-    void scaleByPercentUpscaling(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByPercentWithUpscaling(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -535,7 +536,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'500,400', 500, 400", "'1000,800', 1000, 800"})
     @DisplayName("should scale by arbitrary dimensions")
-    void scaleByArbitraryDimensions(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByArbitraryDimensions(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -545,7 +546,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'^500,400', 500, 400", "'^1000,800', 1000, 800"})
     @DisplayName("should scale by arbitrary dimensions with upscaling")
-    void scaleByArbitraryDimensionsUpscaling(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByArbitraryDimensionsWithUpscaling(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -555,7 +556,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'!500,400', 500, 400", "'!1000,800', 1000, 800"})
     @DisplayName("should scale by confined dimensions")
-    void scaleByConfinedDimensions(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByConfinedDimensions(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -565,7 +566,7 @@ class ImageRequestParserTest {
     @ParameterizedTest
     @CsvSource({"'^!500,400', 500, 400", "'^!1000,800', 1000, 800"})
     @DisplayName("should scale by confined dimensions with upscaling")
-    void scaleByConfinedDimensionsUpscaling(String spec, int expectedWidth, int expectedHeight)
+    void shouldScaleByConfinedDimensionsWithUpscaling(String spec, int expectedWidth, int expectedHeight)
         throws NotImplementedException {
       ImageSize result = parser.parseSize(IIIFVersion.V3, spec, sourceSize);
       assertThat(result.width()).isEqualTo(expectedWidth);
@@ -574,15 +575,15 @@ class ImageRequestParserTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"abc", "100", "100,abc", "0,0", "100,0", "0,100"})
-    @DisplayName("should throw exception for invalid size spec")
-    void invalidSizeSpec(String spec) {
+    @DisplayName("should throw an exception for invalid size spec")
+    void shouldThrowForInvalidSizeSpec(String spec) {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, spec, sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception if width scaling is disabled")
-    void widthScalingDisabled() {
+    @DisplayName("should throw an exception if width scaling is disabled")
+    void shouldThrowIfWidthScalingDisabled() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, false, true, true, true));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -590,8 +591,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception if height scaling is disabled")
-    void heightScalingDisabled() {
+    @DisplayName("should throw an exception if height scaling is disabled")
+    void shouldThrowIfHeightScalingDisabled() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, false, true, true, true, true));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -599,8 +600,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception if percent scaling is disabled")
-    void percentScalingDisabled() {
+    @DisplayName("should throw an exception if percent scaling is disabled")
+    void shouldThrowIfPercentScalingDisabled() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, true, false, true, true));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -608,8 +609,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception if arbitrary dimensions scaling is disabled")
-    void arbitraryDimensionsScalingDisabled() {
+    @DisplayName("should throw an exception if arbitrary dimensions scaling is disabled")
+    void shouldThrowIfArbitraryDimensionsScalingDisabled() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, true, true, false, true));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -617,8 +618,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception if confined width height scaling is disabled")
-    void confinedWidthHeightScalingDisabled() {
+    @DisplayName("should throw an exception if confined width height scaling is disabled")
+    void shouldThrowIfConfinedWidthHeightScalingDisabled() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(false, true, true, true, true, true));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -626,103 +627,102 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception if upscaling without caret is attempted")
-    void upscalingWithoutCaret() {
+    @DisplayName("should throw an exception if upscaling without caret is attempted")
+    void shouldThrowIfUpscalingWithoutCaret() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "2000,", new ImageSize(100, 100)));
     }
 
     @Test
-    @DisplayName("should throw exception if requested width exceeds max width limit")
-    void requestedWidthExceedsLimit() {
+    @DisplayName("should throw an exception if requested width exceeds max width limit")
+    void shouldThrowIfRequestedWidthExceedsLimit() {
       parser = parserWithLimits(new IIIFConfig.Limits(100, 0, 0L));
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "200,", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception if requested height exceeds max height limit")
-    void requestedHeightExceedsLimit() {
+    @DisplayName("should throw an exception if requested height exceeds max height limit")
+    void shouldThrowIfRequestedHeightExceedsLimit() {
       parser = parserWithLimits(new IIIFConfig.Limits(0, 100, 0L));
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, ",200", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception if requested area exceeds max area limit")
-    void requestedAreaExceedsLimit() {
+    @DisplayName("should throw an exception if requested area exceeds max area limit")
+    void shouldThrowIfRequestedAreaExceedsLimit() {
       parser = parserWithLimits(new IIIFConfig.Limits(0, 0, 10000L));
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "200,200", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero width in width-based scaling")
-    void zeroWidthWidthScaling() {
+    @DisplayName("should throw an exception for zero width in width-based scaling")
+    void shouldThrowForZeroWidthInWidthBasedScaling() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "0,", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero height in height-based scaling")
-    void zeroHeightHeightScaling() {
+    @DisplayName("should throw an exception for zero height in height-based scaling")
+    void shouldThrowForZeroHeightInHeightBasedScaling() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, ",0", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for scale out of range in percent-based scaling (too low)")
-    void scaleOutOfRangePercentScalingTooLow() {
+    @DisplayName("should throw an exception for scale out of range in percent-based scaling (too low)")
+    void shouldThrowForScaleOutOfRangeInPercentBasedScalingTooLow() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "pct:0", sourceSize));
     }
 
     @Test
-    @DisplayName(
-        "should throw exception for scale out of range in percent-based scaling (too high)")
-    void scaleOutOfRangePercentScalingTooHigh() {
+    @DisplayName("should throw an exception for scale out of range in percent-based scaling (too high)")
+    void shouldThrowForScaleOutOfRangeInPercentBasedScalingTooHigh() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "pct:101", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for invalid confined dimensions spec")
-    void invalidConfinedDimensionsSpec() {
+    @DisplayName("should throw an exception for invalid confined dimensions spec")
+    void shouldThrowForInvalidConfinedDimensionsSpec() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "!100", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero width in confined dimensions")
-    void zeroWidthConfinedDimensions() {
+    @DisplayName("should throw an exception for zero width in confined dimensions")
+    void shouldThrowForZeroWidthInConfinedDimensions() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "!0,100", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero height in confined dimensions")
-    void zeroHeightConfinedDimensions() {
+    @DisplayName("should throw an exception for zero height in confined dimensions")
+    void shouldThrowForZeroHeightInConfinedDimensions() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "!100,0", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero width in arbitrary dimensions")
-    void zeroWidthArbitraryDimensions() {
+    @DisplayName("should throw an exception for zero width in arbitrary dimensions")
+    void shouldThrowForZeroWidthInArbitraryDimensions() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "0,100", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception for zero height in arbitrary dimensions")
-    void zeroHeightArbitraryDimensions() {
+    @DisplayName("should throw an exception for zero height in arbitrary dimensions")
+    void shouldThrowForZeroHeightInArbitraryDimensions() {
       assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseSize(IIIFVersion.V3, "100,0", sourceSize));
     }
 
     @Test
-    @DisplayName("should throw exception if upscaling is not supported and no caret is used")
-    void upscalingNotSupportedNoCaret() {
+    @DisplayName("should throw an exception if upscaling is not supported and no caret is used")
+    void shouldThrowIfUpscalingNotSupportedAndNoCaretIsUsed() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, true, true, true, false));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -731,7 +731,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should apply maxWidth limit to '^max' when original is smaller")
-    void caretMaxWithMaxWidthLimitAndSmallerOriginal() throws NotImplementedException {
+    void shouldApplyMaxWidthLimitToCaretMaxWhenOriginalIsSmaller() throws NotImplementedException {
       parser = parserWithLimits(new IIIFConfig.Limits(1200, 0, 0L));
       ImageSize result = parser.parseSize(IIIFVersion.V3, "^max", new ImageSize(1000, 800));
       assertThat(result.width()).isEqualTo(1200);
@@ -740,7 +740,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should apply maxHeight limit to '^max' when original is smaller")
-    void caretMaxWithMaxHeightLimitAndSmallerOriginal() throws NotImplementedException {
+    void shouldApplyMaxHeightLimitToCaretMaxWhenOriginalIsSmaller() throws NotImplementedException {
       parser = parserWithLimits(new IIIFConfig.Limits(0, 1000, 0L));
       ImageSize result = parser.parseSize(IIIFVersion.V3, "^max", new ImageSize(1000, 800));
       assertThat(result.width()).isEqualTo(1250);
@@ -748,8 +748,8 @@ class ImageRequestParserTest {
     }
 
     @Test
-    @DisplayName("should throw exception for accidental upscaling when upscaling is not supported")
-    void accidentalUpscalingNotSupported() {
+    @DisplayName("should throw an exception for accidental upscaling when upscaling is not supported")
+    void shouldThrowForAccidentalUpscalingWhenUpscalingIsNotSupported() {
       parser =
           parserWithScaling(new IIIFConfig.ScalingFeature(true, true, true, true, true, false));
       assertThatExceptionOfType(IllegalArgumentException.class)
@@ -759,27 +759,27 @@ class ImageRequestParserTest {
   }
 
   @Nested
-  @DisplayName("parseQuality")
+  @DisplayName("when parsing quality")
   class ParseQuality {
 
     @ParameterizedTest
     @ValueSource(strings = {"color", "gray", "bitonal"})
     @DisplayName("should parse valid qualities")
-    void validQualities(String qualityStr) {
+    void shouldParseValidQualities(String qualityStr) {
       IIIFQuality quality = parser.parseQuality(qualityStr);
       assertThat(quality.name().toLowerCase()).isEqualTo(qualityStr);
     }
 
     @Test
-    @DisplayName("should throw exception for invalid quality spec")
-    void invalidQualitySpec() {
+    @DisplayName("should throw an exception for invalid quality spec")
+    void shouldThrowForInvalidQualitySpec() {
       assertThatExceptionOfType(IllegalStateException.class)
           .isThrownBy(() -> parser.parseQuality("invalid"));
     }
   }
 
   @Nested
-  @DisplayName("isRequestForUncroppedAndDownScaledImage")
+  @DisplayName("when checking for uncropped and downscaled image requests")
   class IsRequestForUncroppedAndDownScaledImage {
 
     @ParameterizedTest
@@ -798,14 +798,14 @@ class ImageRequestParserTest {
   }
 
   @Nested
-  @DisplayName("toCanonicalForm")
+  @DisplayName("when converting to canonical form")
   class ToCanonicalForm {
 
     private final ImageSize sourceSize = new ImageSize(1000, 800);
 
     @Test
     @DisplayName("should canonicalize full region and max size")
-    void canonicalizeFullRegionMaxSize() {
+    void shouldCanonicalizeFullRegionAndMaxSize() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "0,0,1000,800", "1000,800", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -815,7 +815,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize pixel region to full if it matches source size")
-    void canonicalizePixelRegionToFull() {
+    void shouldCanonicalizePixelRegionToFullIfMatchesSourceSize() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "0,0,1000,800", "max", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -824,7 +824,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize size to full for v2 if it matches source size")
-    void canonicalizeSizeToFullV2() {
+    void shouldCanonicalizeSizeToFullForV2IfMatchesSourceSize() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V2, "full", "1000,800", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -833,7 +833,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should return null for invalid request parts")
-    void returnNullForInvalidRequest() {
+    void shouldReturnNullForInvalidRequestParts() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "invalid", "max", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -842,7 +842,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize pixel region")
-    void canonicalizePixelRegion() {
+    void shouldCanonicalizePixelRegion() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "10,20,300,400", "max", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -851,7 +851,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize size to ^max for v3 when upscaling and max limits apply")
-    void canonicalizeSizeToCaretMaxV3() {
+    void shouldCanonicalizeSizeToCaretMaxForV3WhenUpscalingAndMaxLimitsApply() {
       parser = parserWithLimits(new IIIFConfig.Limits(2000, 1600, 0L));
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "full", "^max", "0", "default", "jpg");
@@ -861,7 +861,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize size to width-only for v2 when aspect ratio matches")
-    void canonicalizeSizeToWidthOnlyV2() {
+    void shouldCanonicalizeSizeToWidthOnlyForV2WhenAspectRatioMatches() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V2, "full", "500,", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -870,7 +870,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize size to ^w,h for v3 when upscaling")
-    void canonicalizeSizeToCaretWHV3() {
+    void shouldCanonicalizeSizeToCaretWHForV3WhenUpscaling() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "full", "^2000,1600", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -879,7 +879,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize size to w,h")
-    void canonicalizeSizeToWH() {
+    void shouldCanonicalizeSizeToWH() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "full", "500,400", "0", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -888,7 +888,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize mirrored rotation")
-    void canonicalizeMirroredRotation() {
+    void shouldCanonicalizeMirroredRotation() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "full", "max", "!450", "default", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -897,7 +897,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize default quality")
-    void canonicalizeDefaultQuality() {
+    void shouldCanonicalizeDefaultQuality() {
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "full", "max", "0", "color", "jpg");
       ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
@@ -906,7 +906,7 @@ class ImageRequestParserTest {
 
     @Test
     @DisplayName("should canonicalize non-default quality")
-    void canonicalizeNonDefaultQuality() {
+    void shouldCanonicalizeNonDefaultQuality() {
       parser = parserWithQualities(new IIIFConfig.Qualities("color", List.of("color", "gray")));
       ImageRequest request =
           new ImageRequest("id", IIIFVersion.V3, "full", "max", "0", "gray", "jpg");
