@@ -31,7 +31,7 @@ module wolpi {
   exports dev.mdz.iiif.wolpi.image;
   exports dev.mdz.iiif.wolpi.model.extensions;
   exports dev.mdz.iiif.wolpi.model.image;
-  exports dev.mdz.iiif.wolpi.model.params;
+  exports dev.mdz.iiif.wolpi.model.iiif;
 
   // Needed to allow proxying of RuntimeContext by Spring AOP for request-scoped bean
   opens dev.mdz.iiif.wolpi.extension;

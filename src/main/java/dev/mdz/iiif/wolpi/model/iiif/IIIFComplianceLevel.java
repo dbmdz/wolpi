@@ -1,6 +1,5 @@
-package dev.mdz.iiif.wolpi.model;
+package dev.mdz.iiif.wolpi.model.iiif;
 
-import dev.mdz.iiif.wolpi.model.params.IIIFVersion;
 import java.net.URI;
 
 public enum IIIFComplianceLevel {
