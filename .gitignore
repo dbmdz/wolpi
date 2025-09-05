@@ -3,3 +3,7 @@ target/
 *.iws
 *.iml
 *.ipr
+data
+images
+samples/**/build
+*.egg-info

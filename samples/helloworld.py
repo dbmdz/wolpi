@@ -21,7 +21,7 @@ def cleanup():
     # between hook invocations
     pass
 
-def resolve(identifier):
+def resolve(identifier, etag=None, last_modified=None):
     if not identifier.startswith('py-'):
         return
     identifier = identifier[3:]  # Remove 'py-' prefix
