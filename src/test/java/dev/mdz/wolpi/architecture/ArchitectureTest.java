@@ -40,7 +40,7 @@ public class ArchitectureTest {
           .layer("Config")
           .definedBy("dev.mdz.wolpi.config")
           .layer("Utility") // Maybe better in a separate rule?
-          .definedBy("..util..")
+          .definedBy("..extension.util..", "..iiif.util..")
           .layer("Exceptions")// Maybe better in a separate rule?
           .definedBy("..exceptions..")
 
