@@ -81,7 +81,7 @@ public class ArchitectureTest {
   static final ArchRule noGraalVMLeaks =
       noClasses()
           .that()
-          .resideOutsideOfPackages("..util..", "..model.extensions", "..extension..")
+          .resideOutsideOfPackages("..wolpi.extension..")
           .should()
           .accessClassesThat(resideInAPackage("..graalvm.."));
 
