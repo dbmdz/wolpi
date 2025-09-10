@@ -4,7 +4,7 @@ import app.photofox.vipsffm.VCustomSource;
 import app.photofox.vipsffm.VCustomSource.ReadCallback;
 import app.photofox.vipsffm.VCustomSource.SeekCallback;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mdz.wolpi.exceptions.SourceNotModified;
+import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.LoadedExtension.RuntimeContext;
@@ -129,7 +129,7 @@ public class ExtensionRuntime {
   /// @return the resolved [ImageSource], or `null` if no extension
   public @Nullable ImageSource resolve(
       String identifier, @Nullable String eTag, @Nullable Instant lastModified, Arena vipsArena)
-      throws SourceNotModified {
+      throws SourceNotModifiedException {
     List<LoadedExtension> resolveExts = registry.getExtensions(ExtensionHooks.RESOLVE);
     if (resolveExts.isEmpty()) {
       return null;
@@ -151,8 +151,8 @@ public class ExtensionRuntime {
       Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source);
       if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
         // If the extension indicates that the source has not been modified, we throw
-        // SourceNotModified to short-circuit further processing.
-        throw new SourceNotModified();
+        // SourceNotModifiedException to short-circuit further processing.
+        throw new SourceNotModifiedException();
       }
 
       CacheInfo cacheInfo = null;

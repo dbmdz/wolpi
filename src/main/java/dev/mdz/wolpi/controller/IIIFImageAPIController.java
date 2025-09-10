@@ -3,11 +3,11 @@ package dev.mdz.wolpi.controller;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsError;
 import dev.mdz.wolpi.config.WolpiConfig;
-import dev.mdz.wolpi.exceptions.SourceNotModified;
+import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
 import dev.mdz.wolpi.iiif.IIIFImageInfo;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
-import dev.mdz.wolpi.iiif.NotImplementedException;
+import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.image.ImageLoader;
@@ -83,7 +83,7 @@ public class IIIFImageAPIController {
     ImageSource source;
     try {
       source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
-    } catch (SourceNotModified ignored) {
+    } catch (SourceNotModifiedException ignored) {
       return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
     }
 
@@ -164,7 +164,7 @@ public class IIIFImageAPIController {
     ImageSource source = null;
     try {
       source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
-    } catch (SourceNotModified e) {
+    } catch (SourceNotModifiedException e) {
       return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
     }
     if (source == null) {

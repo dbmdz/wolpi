@@ -1,4 +1,4 @@
-package dev.mdz.wolpi.extension;
+package dev.mdz.wolpi.extension.exceptions;
 
 /// Thrown when loading an extension fails
 public class ExtensionLoadException extends Exception {
