@@ -12,4 +12,7 @@ import org.graalvm.polyglot.Value;
 ///                        extension to interact with Wolpi
 /// @param extensionObject The main extension object, containing the extension hooks as members
 public record RuntimeContext(
-    Language lang, Context langContext, ExtensionContext wolpiContext, Value extensionObject) {}
+    Language lang,
+    Context langContext,
+    ExtensionGuestContext wolpiContext,
+    Value extensionObject) {}

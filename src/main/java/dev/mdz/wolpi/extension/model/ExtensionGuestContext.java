@@ -10,32 +10,32 @@ import org.jspecify.annotations.Nullable;
 /// configuration, as well as a shared [HttpClient] instance.
 ///
 /// @param wolpiVersion  The version of Wolpi currently running.
-/// @param pluginVersion The version of the extension currently running.
+/// @param extensionVersion The version of the extension currently running.
 /// @param httpClient    A shared [HttpClient] instance that can be used to make HTTP requests from
 ///                      language runtimes that do not provide a built-in HTTP client.
 /// @param config        The configuration object for the extension, as provided in the Wolpi
 ///                      configuration.
-public record ExtensionContext(
+public record ExtensionGuestContext(
     String wolpiVersion,
-    String pluginVersion,
+    String extensionVersion,
     HttpClient httpClient,
     @Nullable Map<String, Object> config) {
 
-  public JSExtensionContext forJS() {
-    return new JSExtensionContext(this);
+  public JSExtensionGuestContext forJS() {
+    return new JSExtensionGuestContext(this);
   }
 
   /// Variant for GraalJS interop, where [Map] objects are not exposed as `object` values.
-  public record JSExtensionContext(
+  public record JSExtensionGuestContext(
       String wolpiVersion,
       String pluginVersion,
       HttpClient httpClient,
       @Nullable ProxyObject config) {
 
-    public JSExtensionContext(ExtensionContext ctx) {
+    public JSExtensionGuestContext(ExtensionGuestContext ctx) {
       this(
           ctx.wolpiVersion,
-          ctx.pluginVersion,
+          ctx.extensionVersion,
           ctx.httpClient,
           ctx.config == null ? null : (ProxyObject) PolyglotHelpers.toGuest(ctx.config));
     }

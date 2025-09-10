@@ -6,7 +6,7 @@ import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
-import dev.mdz.wolpi.extension.model.ExtensionContext;
+import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.Language;
@@ -161,7 +161,7 @@ public class ExtensionRegistry {
   /// for retrieving the extension information and hooks.
   ///
   /// @param lang             the programming language of the extension
-  /// @param wolpiContext     Wolpi context for the extension
+  /// @param guestContext     Wolpi guest context for use by the extension
   /// @param extensionVersion the version of the extension
   /// @param contextSupplier  a supplier that creates a new GraalVM context for the extension
   /// @param hooksSupplier    a function that extracts the hooks from the context
@@ -169,14 +169,14 @@ public class ExtensionRegistry {
   /// @throws ExtensionLoadException if the extension is invalid
   private LoadedExtension extensionFromPolyglotValue(
       Language lang,
-      ExtensionContext wolpiContext,
+      ExtensionGuestContext guestContext,
       String extensionVersion,
-      Function<@Nullable ExtensionContext, Context> contextSupplier,
+      Function<@Nullable ExtensionGuestContext, Context> contextSupplier,
       Function<Context, Value> hooksSupplier)
       throws ExtensionLoadException {
     ExtensionInfo extensionInfo;
     Set<ExtensionHooks> providedHooks;
-    try (Context ctx = contextSupplier.apply(wolpiContext)) {
+    try (Context ctx = contextSupplier.apply(guestContext)) {
       Value hooks = hooksSupplier.apply(ctx);
       Value infoHook;
       if ((infoHook = PolyglotHelpers.getDictOrObjectMember("info", hooks)) == null
@@ -205,9 +205,9 @@ public class ExtensionRegistry {
         extensionInfo,
         extensionVersion,
         () -> {
-          var graalCtx = contextSupplier.apply(wolpiContext);
+          var graalCtx = contextSupplier.apply(guestContext);
           var bindings = hooksSupplier.apply(graalCtx);
-          return new RuntimeContext(lang, graalCtx, wolpiContext, bindings);
+          return new RuntimeContext(lang, graalCtx, guestContext, bindings);
         },
         providedHooks);
   }
@@ -281,13 +281,13 @@ public class ExtensionRegistry {
       extensionVersion = "unknown";
     }
 
-    var wolpiCtx =
-        new ExtensionContext(wolpiVersion, extensionVersion, httpClient, config.config());
+    var guestCtx =
+        new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
     return extensionFromPolyglotValue(
         Language.PYTHON,
-        wolpiCtx,
+        guestCtx,
         extensionVersion,
-        (@Nullable ExtensionContext c) -> getPythonContext(venvPath, c),
+        (@Nullable ExtensionGuestContext c) -> getPythonContext(venvPath, c),
         c -> {
           try {
             return getPythonHooks(c, source, entryPoint);
@@ -403,11 +403,11 @@ public class ExtensionRegistry {
       extensionVersion = "unknown";
     }
 
-    var wolpiCtx =
-        new ExtensionContext(wolpiVersion, extensionVersion, httpClient, config.config());
+    var guestCtx =
+        new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
     return extensionFromPolyglotValue(
         Language.JAVASCRIPT,
-        wolpiCtx,
+        guestCtx,
         extensionVersion,
         GraalContextSupplier::getJsContext,
         c -> {

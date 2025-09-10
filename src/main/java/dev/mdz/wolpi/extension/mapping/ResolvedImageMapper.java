@@ -46,13 +46,11 @@ public class ResolvedImageMapper {
             }
             byte[] data = readResult.as(byte[].class);
             VarHandle byteArrayHandle =
-                MethodHandles.byteArrayViewVarHandle(
-                    byte.class, java.nio.ByteOrder.nativeOrder());
+                MethodHandles.byteArrayViewVarHandle(byte.class, java.nio.ByteOrder.nativeOrder());
             byteArrayHandle.set(memorySegment, data);
             return data.length;
           };
-      SeekCallback seekCb =
-          (offset, whence) -> seekFn.execute(offset, whence.getValue()).asLong();
+      SeekCallback seekCb = (offset, whence) -> seekFn.execute(offset, whence.getValue()).asLong();
       return new CustomSourceResolvedImage(
           vipsArena -> new VCustomSource(vipsArena, readCb, seekCb));
     } else if (PolyglotHelpers.hasDictOrObjectMember("path", val)) {
@@ -66,5 +64,4 @@ public class ResolvedImageMapper {
           "Cannot map polyglot value [%s] to ResolvedImage".formatted(val.toString()));
     }
   }
-
 }

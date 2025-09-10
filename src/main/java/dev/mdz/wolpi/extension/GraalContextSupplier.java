@@ -1,16 +1,11 @@
 package dev.mdz.wolpi.extension;
 
-import app.photofox.vipsffm.VCustomSource;
-import app.photofox.vipsffm.VCustomSource.ReadCallback;
-import app.photofox.vipsffm.VCustomSource.SeekCallback;
 import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
-import dev.mdz.wolpi.extension.model.ExtensionContext;
+import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
-import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import dev.mdz.wolpi.extension.util.RecordValueMapper;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
-import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -18,14 +13,11 @@ import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ResolvedImage;
 import dev.mdz.wolpi.model.TileSize;
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -67,10 +59,7 @@ public class GraalContextSupplier {
       builder.targetTypeMapping(Value.class, recordClass, converter::accepts, converter::convert);
     }
     builder.targetTypeMapping(
-        Value.class,
-        ResolvedImage.class,
-        ResolvedImageMapper::canMap,
-        ResolvedImageMapper::map);
+        Value.class, ResolvedImage.class, ResolvedImageMapper::canMap, ResolvedImageMapper::map);
     builder.targetTypeMapping(
         Value.class, URI.class, Value::isString, v -> URI.create(v.asString()));
     builder.targetTypeMapping(
@@ -91,7 +80,7 @@ public class GraalContextSupplier {
   /// @param wolpiCtx optional Wolpi context to make available to the extension as a global variable
   ///                 `wolpi`, or `null` if it is not available for this context
   /// @return the new GraalVM polyglot context, initialized for use by Wolpi extensions
-  public static Context getJsContext(@Nullable ExtensionContext wolpiCtx) {
+  public static Context getJsContext(@Nullable ExtensionGuestContext wolpiCtx) {
     var ctx =
         Context.newBuilder("js")
             .allowHostAccess(hostAccess)
@@ -113,7 +102,7 @@ public class GraalContextSupplier {
   ///                   variable `wolpi`, or `null` if it is not available for this context
   /// @return the new GraalVM polyglot context, initialized for use by Wolpi extensions
   public static Context getPythonContext(
-      @Nullable Path venvPath, @Nullable ExtensionContext wolpiCtx) {
+      @Nullable Path venvPath, @Nullable ExtensionGuestContext wolpiCtx) {
     var builder =
         Context.newBuilder("python")
             .engine(graalEngine)
