@@ -8,6 +8,7 @@ import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.ExtensionConfig.PkgSource;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
+import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import java.io.IOException;
 import java.net.http.HttpClient;

@@ -12,7 +12,7 @@ import app.photofox.vipsffm.enums.VipsSize;
 import com.google.common.reflect.ClassPath;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
-import dev.mdz.wolpi.iiif.NotImplementedException;
+import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.EncodedImage;
