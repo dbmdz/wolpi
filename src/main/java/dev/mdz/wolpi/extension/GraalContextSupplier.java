@@ -3,6 +3,7 @@ package dev.mdz.wolpi.extension;
 import app.photofox.vipsffm.VCustomSource;
 import app.photofox.vipsffm.VCustomSource.ReadCallback;
 import app.photofox.vipsffm.VCustomSource.SeekCallback;
+import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
 import dev.mdz.wolpi.extension.model.ExtensionContext;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
@@ -46,7 +47,6 @@ public class GraalContextSupplier {
           FilesystemResolvedImage.class,
           HttpResolvedImage.class,
           BinaryResolvedImage.class);
-  private static final Set<String> RESOLVED_IMAGE_MEMBERS = Set.of("url", "rawData", "path");
 
   private static final Engine graalEngine = Engine.newBuilder("python", "js").build();
   private static final HostAccess hostAccess = buildHostAccess();
@@ -69,56 +69,15 @@ public class GraalContextSupplier {
     builder.targetTypeMapping(
         Value.class,
         ResolvedImage.class,
-        v ->
-            RESOLVED_IMAGE_MEMBERS.stream()
-                .anyMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, v, true)),
-        v -> {
-          if (PolyglotHelpers.hasDictOrObjectMember("onRead", v, true)
-              && PolyglotHelpers.hasDictOrObjectMember("onSeek", v, true)) {
-            var seekFn = PolyglotHelpers.getDictOrObjectMember("onSeek", v, true);
-            if (seekFn == null || !seekFn.canExecute()) {
-              throw new IllegalArgumentException(
-                  "Invalid onSeek member in custom source, is not executable");
-            }
-            var readFn = PolyglotHelpers.getDictOrObjectMember("onRead", v, true);
-            if (readFn == null || !readFn.canExecute()) {
-              throw new IllegalArgumentException(
-                  "Invalid onRead member in custom source, is not executable");
-            }
-
-            ReadCallback readCb =
-                (memorySegment, length) -> {
-                  var readResult = readFn.execute((int) length);
-                  if (readResult == null || readResult.isNull()) {
-                    return 0;
-                  }
-                  byte[] data = readResult.as(byte[].class);
-                  VarHandle byteArrayHandle =
-                      MethodHandles.byteArrayViewVarHandle(
-                          byte.class, java.nio.ByteOrder.nativeOrder());
-                  byteArrayHandle.set(memorySegment, data);
-                  return data.length;
-                };
-            SeekCallback seekCb =
-                (offset, whence) -> seekFn.execute(offset, whence.getValue()).asLong();
-            return new CustomSourceResolvedImage(
-                vipsArena -> new VCustomSource(vipsArena, readCb, seekCb));
-          } else if (PolyglotHelpers.hasDictOrObjectMember("path", v)) {
-            return v.as(FilesystemResolvedImage.class);
-          } else if (PolyglotHelpers.hasDictOrObjectMember("rawData", v, true)) {
-            return v.as(BinaryResolvedImage.class);
-          } else if (PolyglotHelpers.hasDictOrObjectMember("url", v)) {
-            return v.as(HttpResolvedImage.class);
-          } else {
-            throw new IllegalArgumentException(
-                "Cannot map polyglot value [%s] to ResolvedImage".formatted(v.toString()));
-          }
-        });
+        ResolvedImageMapper::canMap,
+        ResolvedImageMapper::map);
     builder.targetTypeMapping(
         Value.class, URI.class, Value::isString, v -> URI.create(v.asString()));
     builder.targetTypeMapping(
         Value.class, Instant.class, Value::isString, v -> Instant.parse(v.asString()));
     builder.targetTypeMapping(Value.class, Path.class, Value::isString, v -> Path.of(v.asString()));
+    // For `TypedArray` objects in JS we need to access the `ArrayBuffer` inside the `TypedArray` to
+    // get the actual bytes
     builder.targetTypeMapping(
         Value.class,
         byte[].class,

@@ -30,6 +30,7 @@ module wolpi {
   exports dev.mdz.wolpi.extension.exceptions;
   exports dev.mdz.wolpi.extension.util;
   exports dev.mdz.wolpi.extension.model;
+  exports dev.mdz.wolpi.extension.mapping;
   exports dev.mdz.wolpi.iiif;
   exports dev.mdz.wolpi.iiif.exceptions;
   exports dev.mdz.wolpi.iiif.model;
