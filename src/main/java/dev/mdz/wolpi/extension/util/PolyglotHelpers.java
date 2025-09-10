@@ -1,5 +1,7 @@
 package dev.mdz.wolpi.extension.util;
 
+import com.google.common.base.CaseFormat;
+import com.google.common.base.Converter;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -12,6 +14,9 @@ import org.jspecify.annotations.Nullable;
 /// Currently only used to provide a unifying API for acessing members of objects and
 /// dictionary-like values, to make it easier for extensions.
 public class PolyglotHelpers {
+  ///  Converter to convert camelCase to snake_case
+  private static final Converter<String, String> camelToSnake =
+      CaseFormat.LOWER_CAMEL.converterTo(CaseFormat.LOWER_UNDERSCORE);
 
   /// Check if a Value has either a dictionary entry or an object member with the given name
   ///
@@ -20,6 +25,24 @@ public class PolyglotHelpers {
   /// @return if the Value has either a dictionary entry or an object member with the
   public static boolean hasDictOrObjectMember(String name, Value source) {
     return (source.hasHashEntries() && source.hasHashEntry(name)) || source.hasMember(name);
+  }
+
+  /// Like [#hasDictOrObjectMember], but allows for flexible casing by also checking for the
+  /// snake_case version of the name if the original name is not found.
+  ///
+  /// @param name            The name of the member or dictionary entry to check for, in camelCase
+  /// @param source          The Value to check, should be either an object or a dictionary-like
+  ///                        value
+  /// @param flexibleCasing  If true, also checks for the snake_case version of the name if the
+  ///                        original (assumed camelCase) name is not found
+  /// @return if the Value has either a dictionary entry or an object member with the
+  ///         given name or its snake_case variant (if `flexibleCasing` is true)
+  public static boolean hasDictOrObjectMember(String name, Value source, boolean flexibleCasing) {
+    var has = hasDictOrObjectMember(name, source);
+    if (!has && flexibleCasing) {
+      has = hasDictOrObjectMember(camelToSnake.convert(name), source);
+    }
+    return has;
   }
 
   /// Get a Value's dictionary entry or object member with the given name, or null if neither
@@ -36,6 +59,23 @@ public class PolyglotHelpers {
     } else {
       return null;
     }
+  }
+
+  /// Like [#getDictOrObjectMember], but allows for flexible casing by also checking for the
+  /// snake_case version of the name if the original name is not found.
+  ///
+  /// @param name            The name of the member or dictionary entry to get, in camelCase
+  /// @param source          The Value to get from, should be either an object or a
+  ///                        dictionary-like value
+  /// @param flexibleCasing  If true, also checks for the snake_case version of the name if the
+  ///                        original (assumed camelCase) name is not found
+  public static @Nullable Value getDictOrObjectMember(
+      String name, Value source, boolean flexibleCasing) {
+    var val = getDictOrObjectMember(name, source);
+    if (val == null && flexibleCasing) {
+      val = getDictOrObjectMember(camelToSnake.convert(name), source);
+    }
+    return val;
   }
 
   /// Iterate over the keys of a Value, which can be either a dictionary-like value, an object or

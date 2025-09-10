@@ -27,7 +27,8 @@ public class RecordValueMapper<T extends Record> {
   ///
   /// @param value The polyglot value to check.
   public boolean accepts(Value value) {
-    return requiredMembers.stream().allMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, value));
+    return requiredMembers.stream()
+        .allMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, value, true));
   }
 
   /// Converts the given polyglot [Value] to an instance of the target record type.
@@ -42,7 +43,8 @@ public class RecordValueMapper<T extends Record> {
         Arrays.stream(cls.getRecordComponents())
             .map(
                 member -> {
-                  var graalMember = PolyglotHelpers.getDictOrObjectMember(member.getName(), value);
+                  var graalMember =
+                      PolyglotHelpers.getDictOrObjectMember(member.getName(), value, true);
                   if (graalMember == null || graalMember.isNull()) {
                     if (!member.getAnnotatedType().isAnnotationPresent(Nullable.class)) {
                       throw new IllegalArgumentException(

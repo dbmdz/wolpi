@@ -71,16 +71,16 @@ public class GraalContextSupplier {
         ResolvedImage.class,
         v ->
             RESOLVED_IMAGE_MEMBERS.stream()
-                .anyMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, v)),
+                .anyMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, v, true)),
         v -> {
-          if (PolyglotHelpers.hasDictOrObjectMember("onRead", v)
-              && PolyglotHelpers.hasDictOrObjectMember("onSeek", v)) {
-            var seekFn = PolyglotHelpers.getDictOrObjectMember("onSeek", v);
+          if (PolyglotHelpers.hasDictOrObjectMember("onRead", v, true)
+              && PolyglotHelpers.hasDictOrObjectMember("onSeek", v, true)) {
+            var seekFn = PolyglotHelpers.getDictOrObjectMember("onSeek", v, true);
             if (seekFn == null || !seekFn.canExecute()) {
               throw new IllegalArgumentException(
                   "Invalid onSeek member in custom source, is not executable");
             }
-            var readFn = PolyglotHelpers.getDictOrObjectMember("onRead", v);
+            var readFn = PolyglotHelpers.getDictOrObjectMember("onRead", v, true);
             if (readFn == null || !readFn.canExecute()) {
               throw new IllegalArgumentException(
                   "Invalid onRead member in custom source, is not executable");
@@ -105,7 +105,7 @@ public class GraalContextSupplier {
                 vipsArena -> new VCustomSource(vipsArena, readCb, seekCb));
           } else if (PolyglotHelpers.hasDictOrObjectMember("path", v)) {
             return v.as(FilesystemResolvedImage.class);
-          } else if (PolyglotHelpers.hasDictOrObjectMember("rawData", v)) {
+          } else if (PolyglotHelpers.hasDictOrObjectMember("rawData", v, true)) {
             return v.as(BinaryResolvedImage.class);
           } else if (PolyglotHelpers.hasDictOrObjectMember("url", v)) {
             return v.as(HttpResolvedImage.class);

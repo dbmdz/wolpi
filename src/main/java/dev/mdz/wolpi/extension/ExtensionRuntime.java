@@ -133,7 +133,7 @@ public class ExtensionRuntime implements AutoCloseable {
         continue;
       }
 
-      Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source);
+      Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source, true);
       if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
         // If the extension indicates that the source has not been modified, we throw
         // SourceNotModifiedException to short-circuit further processing.
@@ -141,13 +141,13 @@ public class ExtensionRuntime implements AutoCloseable {
       }
 
       CacheInfo cacheInfo = null;
-      Value cacheInfoValue = PolyglotHelpers.getDictOrObjectMember("cacheInfo", source);
+      Value cacheInfoValue = PolyglotHelpers.getDictOrObjectMember("cacheInfo", source, true);
       if (cacheInfoValue != null && !cacheInfoValue.isNull()) {
         cacheInfo = cacheInfoValue.as(CacheInfo.class);
       }
 
       ImageInfo imageInfo = null;
-      Value imageInfoValue = PolyglotHelpers.getDictOrObjectMember("imageInfo", source);
+      Value imageInfoValue = PolyglotHelpers.getDictOrObjectMember("imageInfo", source, true);
       if (imageInfoValue != null && !imageInfoValue.isNull()) {
         imageInfo = imageInfoValue.as(ImageInfo.class);
       }
