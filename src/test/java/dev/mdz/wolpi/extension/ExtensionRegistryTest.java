@@ -3,7 +3,6 @@ package dev.mdz.wolpi.extension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.ExtensionConfig.PkgSource;
 import dev.mdz.wolpi.config.WolpiConfig;
@@ -157,6 +156,6 @@ class ExtensionRegistryTest {
     WolpiConfig wolpiConfig =
         new WolpiConfig(Path.of("/data"), null, null, null, exts, null, null, null);
     return new ExtensionRegistry(
-        wolpiConfig, new ObjectMapper(), httpClient, pyPiInstaller, npmInstaller, buildProperties);
+        wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties);
   }
 }

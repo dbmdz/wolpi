@@ -1,7 +1,10 @@
 package dev.mdz.wolpi.extension.util;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jspecify.annotations.Nullable;
 
 /// Helper functions for working with GraalVM Polyglot Values.
@@ -54,5 +57,30 @@ public class PolyglotHelpers {
       throw new IllegalArgumentException(
           "Polyglot Value is not a hash/dict and does not support members!");
     }
+  }
+
+  /// Convert value to a Polyglot guest object, converting `Map<?, ?>` values to [ProxyObject]s
+  ///
+  /// This method is mainly intended to pass Java [Map] and [List] values with [Map] members to
+  /// the guest in a way that is easy to consume from JavaScript or Python.
+  ///
+  /// If `obj` is a `Map`, it is converted to a `ProxyObject` with all keys converted to `String`s
+  /// and all values recursively converted using this method.
+  ///
+  /// If `obj` is a `List`, all elements are recursively converted using this method.
+  ///
+  /// All other values are returned as-is.
+  public static Object toGuest(Object obj) {
+    return switch (obj) {
+      case Map<?, ?> map -> {
+        var guestMap = new java.util.HashMap<String, Object>();
+        for (var entry : map.entrySet()) {
+          guestMap.put(entry.getKey().toString(), toGuest(entry.getValue()));
+        }
+        yield ProxyObject.fromMap(guestMap);
+      }
+      case List<?> list -> list.stream().map(PolyglotHelpers::toGuest).toList();
+      default -> obj;
+    };
   }
 }

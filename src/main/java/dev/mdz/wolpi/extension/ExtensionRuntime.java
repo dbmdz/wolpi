@@ -1,30 +1,19 @@
 package dev.mdz.wolpi.extension;
 
-import app.photofox.vipsffm.VCustomSource;
-import app.photofox.vipsffm.VCustomSource.ReadCallback;
-import app.photofox.vipsffm.VCustomSource.SeekCallback;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
-import dev.mdz.wolpi.extension.model.LoadedExtension.RuntimeContext;
+import dev.mdz.wolpi.extension.model.RuntimeContext;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
-import dev.mdz.wolpi.model.BinaryResolvedImage;
+import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.model.CacheInfo;
-import dev.mdz.wolpi.model.CustomSourceResolvedImage;
-import dev.mdz.wolpi.model.FilesystemResolvedImage;
-import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.ResolvedImage;
 import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
-import java.net.URI;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,14 +30,13 @@ import org.slf4j.LoggerFactory;
 /// extension functions in the order of their associated extensions in the configuration.
 ///
 /// How multiple extensions interact depends on the hook, see the individual methods for details.
-public class ExtensionRuntime {
+public class ExtensionRuntime implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   // Used for discovery of extensions
   private final ExtensionRegistry registry;
 
   /// Used for mapping Polyglot [Value]s to Java objects.
-  private final ObjectMapper objectMapper;
 
   // Pool to borrow [RuntimeContext]s for each [LoadedExtension] for
   private final KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool;
@@ -58,12 +46,9 @@ public class ExtensionRuntime {
   private final Map<LoadedExtension, RuntimeContext> borrowedContexts = new HashMap<>();
 
   public ExtensionRuntime(
-      ExtensionRegistry registry,
-      KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
-      ObjectMapper objectMapper) {
+      ExtensionRegistry registry, KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool) {
     this.registry = registry;
     this.contextPool = ctxPool;
-    this.objectMapper = objectMapper;
   }
 
   /// Borrow a [RuntimeContext] for a [LoadedExtension] from the pool if it doesn't already exist.
@@ -158,25 +143,30 @@ public class ExtensionRuntime {
       CacheInfo cacheInfo = null;
       Value cacheInfoValue = PolyglotHelpers.getDictOrObjectMember("cacheInfo", source);
       if (cacheInfoValue != null && !cacheInfoValue.isNull()) {
-        cacheInfo = objectMapper.convertValue(cacheInfoValue, CacheInfo.class);
+        cacheInfo = cacheInfoValue.as(CacheInfo.class);
       }
 
       ImageInfo imageInfo = null;
       Value imageInfoValue = PolyglotHelpers.getDictOrObjectMember("imageInfo", source);
       if (imageInfoValue != null && !imageInfoValue.isNull()) {
-        imageInfo = objectMapper.convertValue(imageInfoValue.as(Map.class), ImageInfo.class);
+        imageInfo = imageInfoValue.as(ImageInfo.class);
       }
 
-      var img = imageFromResolveHook(vipsArena, source);
-      if (img == null) {
-        continue;
+      try {
+        var img = source.as(ResolvedImage.class);
+        return new ImageSource(identifier, img, imageInfo, cacheInfo);
+      } catch (ClassCastException e) {
+        log.warn(
+            "Extension returned invalid value {} from resolve hook, cannot convert to ResolvedImage",
+            source,
+            e);
       }
-      return new ImageSource(identifier, img, imageInfo, cacheInfo);
     }
     return null;
   }
 
   /// Close this [ExtensionRuntime], returning all borrowed [RuntimeContext]s to the pool.
+  @Override
   public void close() {
     for (var entry : this.borrowedContexts.entrySet()) {
       try {
@@ -187,61 +177,6 @@ public class ExtensionRuntime {
             entry.getKey().extensionInfo().name(),
             e);
       }
-    }
-  }
-
-  ///  Given the return value of a `resolve` hook, convert it to a [ResolvedImage].
-  ///
-  /// @param vipsArena a [Arena] to use for defining custom vips-ffm sources
-  /// @param polyglotValue the value returned by the `resolve` hook
-  /// @return the corresponding [ResolvedImage], or `null` if the value is invalid
-  static @Nullable ResolvedImage imageFromResolveHook(
-      Arena vipsArena, @Nullable Value polyglotValue) {
-    if (polyglotValue == null) {
-      return null;
-    }
-
-    if (PolyglotHelpers.hasDictOrObjectMember("url", polyglotValue)) {
-      var url = PolyglotHelpers.getDictOrObjectMember("url", polyglotValue);
-      assert url != null && !url.isNull();
-      var supportsByteRanges =
-          PolyglotHelpers.getDictOrObjectMember("supportsByteRanges", polyglotValue);
-
-      //noinspection unchecked
-      return new HttpResolvedImage(
-          URI.create(url.asString()),
-          PolyglotHelpers.hasDictOrObjectMember("headers", polyglotValue)
-              ? Collections.unmodifiableMap(
-                  (Map<String, String>)
-                      PolyglotHelpers.getDictOrObjectMember("headers", polyglotValue).as(Map.class))
-              : null,
-          supportsByteRanges != null && !supportsByteRanges.isNull()
-              ? supportsByteRanges.asBoolean()
-              : null);
-    } else if (PolyglotHelpers.hasDictOrObjectMember("rawData", polyglotValue)
-        && PolyglotHelpers.hasDictOrObjectMember("mimeType", polyglotValue)) {
-      return new BinaryResolvedImage(
-          PolyglotHelpers.getDictOrObjectMember("rawData", polyglotValue).as(byte[].class));
-    } else if (PolyglotHelpers.hasDictOrObjectMember("onRead", polyglotValue)
-        && PolyglotHelpers.hasDictOrObjectMember("onWrite", polyglotValue)) {
-      ReadCallback readCb =
-          (memorySegment, length) -> {
-            // TODO: Call read on the polyglot value
-            // TODO: Write returned data to the memory segment
-            throw new UnsupportedOperationException();
-          };
-      SeekCallback seekCb =
-          (offset, whence) -> {
-            // TODO: Call seek on the polyglot value
-            throw new UnsupportedOperationException();
-          };
-      return new CustomSourceResolvedImage(new VCustomSource(vipsArena, readCb, seekCb));
-    } else if (PolyglotHelpers.hasDictOrObjectMember("path", polyglotValue)) {
-      var pathValue = PolyglotHelpers.getDictOrObjectMember("path", polyglotValue);
-      assert pathValue != null;
-      return new FilesystemResolvedImage(Path.of(pathValue.asString()));
-    } else {
-      return null;
     }
   }
 }

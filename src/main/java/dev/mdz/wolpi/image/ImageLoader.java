@@ -8,8 +8,8 @@ import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.WolpiConfig;
-import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -104,7 +105,7 @@ public class ImageLoader {
           new CacheInfo(
               null,
               imagePath.toFile().lastModified() > 0
-                  ? java.time.Instant.ofEpochMilli(imagePath.toFile().lastModified())
+                  ? Instant.ofEpochMilli(imagePath.toFile().lastModified())
                   : null);
       return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null, cacheInfo);
     }
@@ -146,10 +147,10 @@ public class ImageLoader {
               VipsOption.Enum("size", VipsSize.SIZE_FORCE));
       case HttpResolvedImage(URI uri, Map<String, String> headers, Boolean supportsByteRange) ->
           loadFromHttp(uri, headers, targetSize, supportsByteRange);
-      case CustomSourceResolvedImage(VCustomSource src) ->
+      case CustomSourceResolvedImage(Function<Arena, VCustomSource> srcSupplier) ->
           VImage.thumbnailSource(
               arena,
-              src,
+              srcSupplier.apply(arena),
               targetSize.width(),
               VipsOption.Int("height", targetSize.height()),
               VipsOption.Enum("size", VipsSize.SIZE_FORCE));
@@ -173,7 +174,8 @@ public class ImageLoader {
               Map<String, String> headers,
               @Nullable Boolean supportsByteRange) ->
           loadFromHttp(uri, headers, null, supportsByteRange);
-      case CustomSourceResolvedImage(VCustomSource src) -> VImage.newFromSource(arena, src);
+      case CustomSourceResolvedImage(Function<Arena, VCustomSource> srcSupplier) ->
+          VImage.newFromSource(arena, srcSupplier.apply(arena));
       case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
     };
   }

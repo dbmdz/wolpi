@@ -6,4 +6,4 @@ package dev.mdz.wolpi.extension.model;
 ///                   to ensure backwards compatibility in case of future changes to the API.
 /// @param name Human-readable name of the extension.
 /// @param description Short description of the extension.
-public record ExtensionInfo(String apiVersion, String name, String description) {}
+public record ExtensionInfo(int apiVersion, String name, String description) {}
