@@ -11,6 +11,7 @@ import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ResolvedImage;
+import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.model.TileSize;
 import java.io.IOException;
 import java.net.URI;
@@ -38,7 +39,8 @@ public class GraalContextSupplier {
           TileSize.class,
           FilesystemResolvedImage.class,
           HttpResolvedImage.class,
-          BinaryResolvedImage.class);
+          BinaryResolvedImage.class,
+          SourceNotModified.class);
 
   private static final Engine graalEngine = Engine.newBuilder("python", "js").build();
   private static final HostAccess hostAccess = buildHostAccess();

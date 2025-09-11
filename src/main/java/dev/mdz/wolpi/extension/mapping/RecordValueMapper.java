@@ -28,8 +28,9 @@ public class RecordValueMapper<T extends Record> {
   ///
   /// @param value The polyglot value to check.
   public boolean accepts(Value value) {
-    return requiredMembers.stream()
-        .allMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, value, true));
+    return requiredMembers.isEmpty()
+        || requiredMembers.stream()
+            .allMatch(m -> PolyglotHelpers.hasDictOrObjectMember(m, value, true));
   }
 
   /// Converts the given polyglot [Value] to an instance of the target record type.
