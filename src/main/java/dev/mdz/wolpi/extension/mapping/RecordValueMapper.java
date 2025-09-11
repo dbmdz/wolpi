@@ -1,5 +1,6 @@
-package dev.mdz.wolpi.extension.util;
+package dev.mdz.wolpi.extension.mapping;
 
+import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;

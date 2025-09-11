@@ -3,7 +3,7 @@ package dev.mdz.wolpi.extension;
 import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
-import dev.mdz.wolpi.extension.util.RecordValueMapper;
+import dev.mdz.wolpi.extension.mapping.RecordValueMapper;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
