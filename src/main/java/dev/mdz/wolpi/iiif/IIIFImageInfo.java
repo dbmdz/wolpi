@@ -70,10 +70,10 @@ public class IIIFImageInfo {
               .toList());
     }
 
-    if (!sourceImageInfo.getTileSizes().isEmpty()) {
+    if (!sourceImageInfo.tileSizes().isEmpty()) {
       builder.kv(
           "tiles",
-          sourceImageInfo.getTileSizes().stream()
+          sourceImageInfo.tileSizes().stream()
               .map(
                   tile ->
                       obj()

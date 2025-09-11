@@ -1,13 +1,13 @@
 package dev.mdz.wolpi;
 
 import app.photofox.vipsffm.Vips;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
-import dev.mdz.wolpi.extension.model.LoadedExtension.RuntimeContext;
+import dev.mdz.wolpi.extension.model.RuntimeContext;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.foreign.Arena;
@@ -36,6 +36,7 @@ import org.springframework.http.converter.AbstractHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.web.context.annotation.RequestScope;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -60,10 +61,9 @@ public class Wolpi implements WebMvcConfigurer {
   @Bean(destroyMethod = "close")
   @RequestScope
   public ExtensionRuntime extensionRuntime(
-      ObjectMapper objectMapper,
       ExtensionRegistry registry,
       @Qualifier("contextPool") KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool) {
-    return new ExtensionRuntime(registry, ctxPool, objectMapper);
+    return new ExtensionRuntime(registry, ctxPool);
   }
 
   /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
@@ -82,6 +82,11 @@ public class Wolpi implements WebMvcConfigurer {
   @Bean
   public HttpClient httpClient() {
     return HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
+  }
+
+  @Bean
+  public Jackson2ObjectMapperBuilder jacksonBuilder() {
+    return new Jackson2ObjectMapperBuilder().serializationInclusion(JsonInclude.Include.NON_NULL);
   }
 
   /// Register the conversion service needed for case-insensitive enum conversion
