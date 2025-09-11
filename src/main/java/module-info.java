@@ -41,5 +41,4 @@ module wolpi {
 
   // Needed to allow proxying of RuntimeContext by Spring AOP for request-scoped bean
   opens dev.mdz.wolpi.extension;
-  opens dev.mdz.wolpi.extension.util;
 }

@@ -1,8 +1,8 @@
 package dev.mdz.wolpi.extension;
 
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
+import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
-import dev.mdz.wolpi.extension.model.RuntimeContext;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.model.CacheInfo;
@@ -14,23 +14,31 @@ import java.lang.invoke.MethodHandles;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// Request-scoped runtime context extensions are executed in.
 ///
-/// This is what actually executes the extension code during request processing.
-/// It exposes methods for each extension hook that Wolpi supports, and calls the appropriate
-/// extension functions in the order of their associated extensions in the configuration.
+/// This is what actually executes the extension code during request processing. It exposes methods
+/// for each extension hook that Wolpi supports, and calls the appropriate extension functions in
+/// the order of their associated extensions in the configuration.
 ///
 /// How multiple extensions interact depends on the hook, see the individual methods for details.
 public class ExtensionRuntime implements AutoCloseable {
+
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   // Used for discovery of extensions
@@ -43,12 +51,19 @@ public class ExtensionRuntime implements AutoCloseable {
 
   // Keeps track of which [RuntimeContext]s have been borrowed from the pool
   // for which [LoadedExtension]s, so we only return them at the end of the request.
-  private final Map<LoadedExtension, RuntimeContext> borrowedContexts = new HashMap<>();
+  private final Map<LoadedExtension, RuntimeContext> borrowedContexts = new ConcurrentHashMap<>();
+
+  // Thread pool to use for executing extension code in parallel, used to speed up
+  // auth and resolving if multiple extensions are configured.
+  private final ExecutorService threadPool;
 
   public ExtensionRuntime(
-      ExtensionRegistry registry, KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool) {
+      ExtensionRegistry registry,
+      KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
+      ExecutorService threadPool) {
     this.registry = registry;
     this.contextPool = ctxPool;
+    this.threadPool = threadPool;
   }
 
   /// Borrow a [RuntimeContext] for a [LoadedExtension] from the pool if it doesn't already exist.
@@ -65,18 +80,19 @@ public class ExtensionRuntime implements AutoCloseable {
         });
   }
 
-  /// Check if the request with the given identifier, headers and client IP is authorized
-  /// to access the image with the given identifier.
+  /// Check if the request with the given identifier, headers and client IP is authorized to access
+  /// the image with the given identifier.
   ///
-  /// If there are multiple extensions implementing this hook, all of them must authorize access
-  /// for it to be granted. If any extension denies access, access is denied.
+  /// If there are multiple extensions implementing this hook, all of them must authorize access for
+  /// it to be granted. If any extension denies access, access is denied.
   ///
   /// If no extensions implement the hook, access is allowed by default.
   ///
   /// @param identifier The identifier of the image to authorize access to.
-  /// @param headers The HTTP headers of the request, which may contain authorization information.
-  /// @param clientIp The IP address of the client making the request, after resolving any
-  ///                 proxies.
+  /// @param headers    The HTTP headers of the request, which may contain authorization
+  ///                   information.
+  /// @param clientIp   The IP address of the client making the request, after resolving any
+  ///                   proxies.
   /// @return whether access is authorized
   public boolean authorize(String identifier, Map<String, List<String>> headers, String clientIp) {
     List<LoadedExtension> authExts = registry.getExtensions(ExtensionHooks.AUTHORIZE);
@@ -85,32 +101,90 @@ public class ExtensionRuntime implements AutoCloseable {
       return true;
     }
 
-    for (LoadedExtension ext : authExts) {
-      RuntimeContext ctx = ensureRuntimeContext(ext);
-      Value authorizeFn = PolyglotHelpers.getDictOrObjectMember("authorize", ctx.extensionObject());
-      assert authorizeFn != null && authorizeFn.canExecute();
-      boolean authorized =
-          authorizeFn.execute(identifier, new HashMap<>(headers), clientIp).asBoolean();
-      // If any extension denies access, we deny it
-      if (!authorized) {
-        return false;
+    // No need for parallelism if there's only one extension
+    if (authExts.size() == 1) {
+      var ctx = ensureRuntimeContext(authExts.get(0));
+      try (var lease = ctx.enter()) {
+        return runAuthExtension(ctx.getLang(), lease.extension(), identifier, headers, clientIp);
       }
     }
-    return true;
+
+    // Multiple extensions: All must authorize access, run in parallel and cancel on first failure
+    var completionService = new ExecutorCompletionService<Boolean>(threadPool);
+    var futs =
+        authExts.stream()
+            .map(
+                e ->
+                    completionService.submit(
+                        () -> {
+                          RuntimeContext ctx = ensureRuntimeContext(e);
+                          return ctx.run(
+                              ext ->
+                                  runAuthExtension(
+                                      ctx.getLang(), ext, identifier, headers, clientIp));
+                        }))
+            .toList();
+    boolean authorized = false;
+    int completed = 0;
+    while (completed < authExts.size()) {
+      try {
+        var future = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
+        if (future == null) {
+          log.warn("Timeout waiting for extension authorization, denying access");
+          authorized = false;
+          break;
+        }
+        authorized = future.get();
+        completed++;
+        if (!authorized) {
+          // One extension denied access, no need to wait for the others
+          break;
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } catch (ExecutionException e) {
+        log.error("Error while running extension authorization, denying access", e);
+        authorized = false;
+        break;
+      }
+    }
+
+    // Cancel all remaining futures if we didn't complete them all
+    futs.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
+
+    return authorized;
+  }
+
+  private boolean runAuthExtension(
+      Language lang,
+      Value ext,
+      String identifier,
+      Map<String, List<String>> headers,
+      String clientIp) {
+    Value authorizeFn = PolyglotHelpers.getDictOrObjectMember("authorize", ext);
+    assert authorizeFn != null && authorizeFn.canExecute();
+    return switch (lang) {
+      case PYTHON -> authorizeFn.execute(identifier, headers, clientIp).asBoolean();
+      // JS needs a ProxyObject to be able to access the headers as a proper JS object
+      case JAVASCRIPT ->
+          authorizeFn
+              .execute(identifier, ProxyObject.fromMap(new HashMap<>(headers)), clientIp)
+              .asBoolean();
+    };
   }
 
   /// Resolve an identifier to an [ImageSource] using the registered extensions.
   ///
   /// If multiple extensions implement this hook, they are called in the order they were registered
-  /// (i.e. the order in the configuration). The first extension to return a non-null
-  /// [ImageSource] wins, and no further extensions are called.
+  /// (i.e. the order in the configuration). The first extension to return a non-null [ImageSource]
+  /// wins, and no further extensions are called.
   ///
   /// If no extension returns a non-null [ImageSource], `null` is returned.
   ///
-  /// @param identifier the identifier to resolve
-  /// @param eTag       optional ETag of a cached image
+  /// @param identifier   the identifier to resolve
+  /// @param eTag         optional ETag of a cached image
   /// @param lastModified optional last modified timestamp of a cached image
-  /// @param vipsArena  a [Arena] to use for defining vips-ffm sources
+  /// @param vipsArena    a [Arena] to use for defining vips-ffm sources
   /// @return the resolved [ImageSource], or `null` if no extension
   public @Nullable ImageSource resolve(
       String identifier, @Nullable String eTag, @Nullable Instant lastModified, Arena vipsArena)
@@ -124,45 +198,98 @@ public class ExtensionRuntime implements AutoCloseable {
         lastModified != null
             ? DateTimeFormatter.RFC_1123_DATE_TIME.format(lastModified.atZone(ZoneOffset.UTC))
             : null;
-    for (LoadedExtension ext : resolveExts) {
-      RuntimeContext ctx = ensureRuntimeContext(ext);
-      Value resolveFn = PolyglotHelpers.getDictOrObjectMember("resolve", ctx.extensionObject());
-      assert resolveFn != null && resolveFn.canExecute();
-      Value source = resolveFn.execute(identifier, eTag, lastModifiedStr);
-      if (source == null || source.isNull()) {
-        continue;
-      }
 
-      Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source, true);
-      if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
-        // If the extension indicates that the source has not been modified, we throw
-        // SourceNotModifiedException to short-circuit further processing.
-        throw new SourceNotModifiedException();
-      }
-
-      CacheInfo cacheInfo = null;
-      Value cacheInfoValue = PolyglotHelpers.getDictOrObjectMember("cacheInfo", source, true);
-      if (cacheInfoValue != null && !cacheInfoValue.isNull()) {
-        cacheInfo = cacheInfoValue.as(CacheInfo.class);
-      }
-
-      ImageInfo imageInfo = null;
-      Value imageInfoValue = PolyglotHelpers.getDictOrObjectMember("imageInfo", source, true);
-      if (imageInfoValue != null && !imageInfoValue.isNull()) {
-        imageInfo = imageInfoValue.as(ImageInfo.class);
-      }
-
-      try {
-        var img = source.as(ResolvedImage.class);
-        return new ImageSource(identifier, img, imageInfo, cacheInfo);
-      } catch (ClassCastException e) {
-        log.warn(
-            "Extension returned invalid value {} from resolve hook, cannot convert to ResolvedImage",
-            source,
-            e);
+    // No need for parallelism if there's only one extension
+    if (resolveExts.size() == 1) {
+      RuntimeContext ctx = ensureRuntimeContext(resolveExts.get(0));
+      try (var lease = ctx.enter()) {
+        return runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
       }
     }
-    return null;
+
+    // Run the resolving extensions in parallel and return the first valid result
+    var completionService = new ExecutorCompletionService<@Nullable ImageSource>(threadPool);
+    List<Future<ImageSource>> futures = new ArrayList<>();
+    for (LoadedExtension resolveExt : resolveExts) {
+      futures.add(
+          completionService.submit(
+              () -> {
+                RuntimeContext ctx = ensureRuntimeContext(resolveExt);
+                try (var lease = ctx.enter()) {
+                  return runResolvingExtension(
+                      lease.extension(), identifier, eTag, lastModifiedStr);
+                }
+              }));
+    }
+
+    ImageSource resolved = null;
+    int completed = 0;
+    while (completed < resolveExts.size()) {
+      try {
+        var fut = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
+        if (fut == null) {
+          log.warn("Timeout waiting for extension resolving, returning null");
+          break;
+        }
+        resolved = fut.get();
+        completed++;
+        if (resolved != null) {
+          // One extension resolved the source, no need to wait for the others
+          break;
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } catch (ExecutionException e) {
+        log.error("Error while running resolving hook, ignoring.", e);
+        completed++;
+      }
+    }
+
+    // Cancel all remaining futures if we didn't complete them all
+    futures.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
+
+    return resolved;
+  }
+
+  private @Nullable ImageSource runResolvingExtension(
+      Value extObj, String identifier, @Nullable String eTag, @Nullable String lastModifiedStr)
+      throws SourceNotModifiedException {
+    Value resolveFn = PolyglotHelpers.getDictOrObjectMember("resolve", extObj);
+    assert resolveFn != null && resolveFn.canExecute();
+    Value source = resolveFn.execute(identifier, eTag, lastModifiedStr);
+    if (source == null || source.isNull()) {
+      return null;
+    }
+
+    Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source, true);
+    if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
+      // If the extension indicates that the source has not been modified, we throw
+      // SourceNotModified to short-circuit further processing.
+      throw new SourceNotModifiedException();
+    }
+
+    CacheInfo cacheInfo = null;
+    Value cacheInfoValue = PolyglotHelpers.getDictOrObjectMember("cacheInfo", source, true);
+    if (cacheInfoValue != null && !cacheInfoValue.isNull()) {
+      cacheInfo = cacheInfoValue.as(CacheInfo.class);
+    }
+
+    ImageInfo imageInfo = null;
+    Value imageInfoValue = PolyglotHelpers.getDictOrObjectMember("imageInfo", source, true);
+    if (imageInfoValue != null && !imageInfoValue.isNull()) {
+      imageInfo = imageInfoValue.as(ImageInfo.class);
+    }
+
+    try {
+      var img = source.as(ResolvedImage.class);
+      return new ImageSource(identifier, img, imageInfo, cacheInfo);
+    } catch (ClassCastException e) {
+      log.warn(
+          "Extension returned invalid value {} from resolve hook, cannot convert to ResolvedImage",
+          source,
+          e);
+      return null;
+    }
   }
 
   /// Close this [ExtensionRuntime], returning all borrowed [RuntimeContext]s to the pool.

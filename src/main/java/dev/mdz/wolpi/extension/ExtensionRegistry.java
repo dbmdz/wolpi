@@ -11,7 +11,6 @@ import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
-import dev.mdz.wolpi.extension.model.RuntimeContext;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -207,7 +206,7 @@ public class ExtensionRegistry {
         () -> {
           var graalCtx = contextSupplier.apply(guestContext);
           var bindings = hooksSupplier.apply(graalCtx);
-          return new RuntimeContext(lang, graalCtx, guestContext, bindings);
+          return new RuntimeContext(lang, graalCtx, bindings);
         },
         providedHooks);
   }

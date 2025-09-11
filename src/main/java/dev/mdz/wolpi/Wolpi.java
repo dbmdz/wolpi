@@ -5,9 +5,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.extension.RuntimeContext;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
-import dev.mdz.wolpi.extension.model.RuntimeContext;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.foreign.Arena;
@@ -16,6 +16,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
@@ -62,8 +66,9 @@ public class Wolpi implements WebMvcConfigurer {
   @RequestScope
   public ExtensionRuntime extensionRuntime(
       ExtensionRegistry registry,
-      @Qualifier("contextPool") KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool) {
-    return new ExtensionRuntime(registry, ctxPool);
+      @Qualifier("contextPool") KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
+      @Qualifier("extensionThreadPool") ExecutorService threadPool) {
+    return new ExtensionRuntime(registry, ctxPool, threadPool);
   }
 
   /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
@@ -76,6 +81,24 @@ public class Wolpi implements WebMvcConfigurer {
     // Disable bean self-registration via JMX
     cfg.setJmxEnabled(false);
     return new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(), cfg);
+  }
+
+  /// Pool to run extension code in parallel, used for auth and resolving to reduce latency.
+  @Bean("extensionThreadPool")
+  public ThreadPoolExecutor extensionThreadPool(WolpiConfig wolpiConfig) {
+    return new ThreadPoolExecutor(
+        // coreSize = 1 thread per extension
+        wolpiConfig.extensions().size(),
+        // maxSize = 1 thread per total number of contexts.
+        Math.max(1, wolpiConfig.extensions().size() * wolpiConfig.extensionPool().maxTotal()),
+        60L,
+        TimeUnit.SECONDS,
+        new LinkedBlockingQueue<>(),
+        r -> {
+          Thread t = new Thread(r);
+          t.setName("extension-thread-" + t.threadId());
+          return t;
+        });
   }
 
   /// Create a new HttpClient using HTTP/2 for the application.
