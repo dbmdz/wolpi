@@ -1,6 +1,7 @@
 package dev.mdz.wolpi.architecture;
 
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
@@ -28,21 +29,17 @@ public class ArchitectureTest {
           .layer("Controller")
           .definedBy("..controller..")
           .layer("Extension Management")
-          .definedBy("..wolpi.extension..")
+          .definedBy("..wolpi.extension")
           .layer("IIIF")
           .definedBy("..iiif..")
           .layer("Image Processing")
-          .definedBy("..wolpi.image..")
+          .definedBy("..wolpi.image")
           .layer("Model")
           .definedBy("dev.mdz.wolpi.model")
 
           // Support components
           .layer("Config")
           .definedBy("dev.mdz.wolpi.config")
-          .layer("Utility") // Maybe better in a separate rule?
-          .definedBy("..extension.util..", "..iiif.util..")
-          .layer("Exceptions")// Maybe better in a separate rule?
-          .definedBy("..exceptions..")
 
           // Rules
           .whereLayer("Controller")
@@ -58,10 +55,6 @@ public class ArchitectureTest {
               "Controller", "Extension Management", "Image Processing", "IIIF")
 
           // Support components should not access other components
-          .whereLayer("Exceptions")
-          .mayNotAccessAnyLayer()
-          .whereLayer("Utility")
-          .mayNotAccessAnyLayer()
           .whereLayer("Config")
           .mayNotAccessAnyLayer();
 
