@@ -9,7 +9,6 @@ import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
-import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
@@ -18,6 +17,7 @@ import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ImageSource;
+import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.model.TileSize;
 import java.io.IOException;
 import java.io.InputStream;
@@ -84,11 +84,8 @@ public class ImageLoader {
   /// @param eTag      The ETag of the cached image on the client, if any.
   /// @param lastModified The last modified timestamp of the cached image on the client, if any.
   /// @return The resolved image source, or null if it could not be resolved.
-  /// @throws SourceNotModifiedException If the source has not been modified since the given `eTag`
-  ///                                    or `lastModified` timestamp.
   public @Nullable ImageSource resolve(
-      String identifier, @Nullable String eTag, @Nullable Instant lastModified)
-      throws SourceNotModifiedException {
+      String identifier, @Nullable String eTag, @Nullable Instant lastModified) {
     ImageSource source = extensionRuntime.resolve(identifier, eTag, lastModified, arena);
     if (source == null) {
       source = this.resolveFromFilesystem(identifier);
@@ -161,6 +158,8 @@ public class ImageLoader {
               targetSize.width(),
               VipsOption.Int("height", targetSize.height()),
               VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+      case SourceNotModified ignored ->
+          throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
     };
   }
 
@@ -177,6 +176,8 @@ public class ImageLoader {
       case CustomSourceResolvedImage(Function<Arena, VCustomSource> srcSupplier) ->
           VImage.newFromSource(arena, srcSupplier.apply(arena));
       case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
+      case SourceNotModified ignored ->
+          throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
     };
   }
 

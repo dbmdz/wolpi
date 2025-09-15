@@ -11,9 +11,9 @@ import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.image.ImageLoader;
 import dev.mdz.wolpi.image.ImageProcessor;
-import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
+import dev.mdz.wolpi.model.SourceNotModified;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -80,17 +80,13 @@ public class IIIFImageAPIController {
           .body(Map.of("error", "Unauthorized access to image"));
     }
 
-    ImageSource source;
-    try {
-      source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
-    } catch (SourceNotModifiedException ignored) {
-      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
-    }
-
+    ImageSource source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
     if (source == null) {
       return ResponseEntity.status(HttpStatus.NOT_FOUND)
           .headers(outHeaders)
           .body(Map.of("error", "Image not found"));
+    } else if (source.resolvedImage() instanceof SourceNotModified) {
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
     }
 
     if (source.cacheInfo() != null) {
@@ -161,17 +157,14 @@ public class IIIFImageAPIController {
     }
 
     // See if the identifier actually resolves to something
-    ImageSource source = null;
-    try {
-      source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
-    } catch (SourceNotModifiedException e) {
-      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
-    }
+    ImageSource source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
     if (source == null) {
       return ResponseEntity.status(HttpStatus.NOT_FOUND)
           .headers(outHeaders)
           .contentType(MediaType.TEXT_PLAIN)
           .body(ByteBuffer.wrap("Image not found".getBytes()));
+    } else if (source.resolvedImage() instanceof SourceNotModified) {
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
     }
 
     // Check client headers if source has caching info, maybe we don't have to process the request?

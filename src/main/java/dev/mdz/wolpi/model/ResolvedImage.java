@@ -1,7 +1,8 @@
 package dev.mdz.wolpi.model;
 
 public sealed interface ResolvedImage
-    permits FilesystemResolvedImage,
+    permits BinaryResolvedImage,
+        CustomSourceResolvedImage,
+        FilesystemResolvedImage,
         HttpResolvedImage,
-        BinaryResolvedImage,
-        CustomSourceResolvedImage {}
+        SourceNotModified {}
