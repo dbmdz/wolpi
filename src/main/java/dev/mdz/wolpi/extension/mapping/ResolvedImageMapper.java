@@ -9,6 +9,7 @@ import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ResolvedImage;
+import dev.mdz.wolpi.model.SourceNotModified;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Set;
@@ -25,6 +26,11 @@ public class ResolvedImageMapper {
   }
 
   public static ResolvedImage map(Value val) {
+    Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", val, true);
+    if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
+      return new SourceNotModified();
+    }
+
     if (PolyglotHelpers.hasDictOrObjectMember("onRead", val, true)
         && PolyglotHelpers.hasDictOrObjectMember("onSeek", val, true)) {
       var seekFn = PolyglotHelpers.getDictOrObjectMember("onSeek", val, true);

@@ -4,7 +4,6 @@ import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
-import dev.mdz.wolpi.image.exceptions.SourceNotModifiedException;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
@@ -187,8 +186,7 @@ public class ExtensionRuntime implements AutoCloseable {
   /// @param vipsArena    a [Arena] to use for defining vips-ffm sources
   /// @return the resolved [ImageSource], or `null` if no extension
   public @Nullable ImageSource resolve(
-      String identifier, @Nullable String eTag, @Nullable Instant lastModified, Arena vipsArena)
-      throws SourceNotModifiedException {
+      String identifier, @Nullable String eTag, @Nullable Instant lastModified, Arena vipsArena) {
     List<LoadedExtension> resolveExts = registry.getExtensions(ExtensionHooks.RESOLVE);
     if (resolveExts.isEmpty()) {
       return null;
@@ -252,20 +250,12 @@ public class ExtensionRuntime implements AutoCloseable {
   }
 
   private @Nullable ImageSource runResolvingExtension(
-      Value extObj, String identifier, @Nullable String eTag, @Nullable String lastModifiedStr)
-      throws SourceNotModifiedException {
+      Value extObj, String identifier, @Nullable String eTag, @Nullable String lastModifiedStr) {
     Value resolveFn = PolyglotHelpers.getDictOrObjectMember("resolve", extObj);
     assert resolveFn != null && resolveFn.canExecute();
     Value source = resolveFn.execute(identifier, eTag, lastModifiedStr);
     if (source == null || source.isNull()) {
       return null;
-    }
-
-    Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", source, true);
-    if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
-      // If the extension indicates that the source has not been modified, we throw
-      // SourceNotModified to short-circuit further processing.
-      throw new SourceNotModifiedException();
     }
 
     CacheInfo cacheInfo = null;
