@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.extension.model;
 
+import dev.mdz.wolpi.extension.RuntimeContext;
 import java.util.Set;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;

@@ -1,8 +1,6 @@
 package dev.mdz.wolpi.extension;
 
 import dev.mdz.wolpi.extension.model.LoadedExtension;
-import dev.mdz.wolpi.extension.model.RuntimeContext;
-import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import org.apache.commons.pool2.BaseKeyedPooledObjectFactory;
 import org.apache.commons.pool2.DestroyMode;
 import org.apache.commons.pool2.PooledObject;
@@ -31,17 +29,13 @@ public class RuntimeContextPooledObjectFactory
   /// hook if it exists.
   @Override
   public void passivateObject(LoadedExtension key, PooledObject<RuntimeContext> p) {
-    var hooks = p.getObject().extensionObject();
-    var cleanupFn = PolyglotHelpers.getDictOrObjectMember("cleanup", hooks);
-    if (cleanupFn != null && cleanupFn.canExecute()) {
-      cleanupFn.executeVoid();
-    }
+    p.getObject().cleanupAfterRequest();
   }
 
   /// Closes the GraalVM Polyglot [Context] to free up resources when the object is destroyed.
   @Override
   public void destroyObject(
       LoadedExtension key, PooledObject<RuntimeContext> p, DestroyMode destroyMode) {
-    p.getObject().langContext().close();
+    p.getObject().close();
   }
 }
