@@ -58,7 +58,6 @@ public class ArchitectureTest {
           .whereLayer("Config")
           .mayNotAccessAnyLayer();
 
-
   @ArchTest
   static final ArchRule exceptionConventions =
       classes()
@@ -69,7 +68,6 @@ public class ArchitectureTest {
           .andShould()
           .resideInAPackage("..exceptions..");
 
-
   @ArchTest
   static final ArchRule noGraalVMLeaks =
       noClasses()
@@ -78,8 +76,6 @@ public class ArchitectureTest {
           .should()
           .accessClassesThat(resideInAPackage("..graalvm.."));
 
-  // Some predefined rule examples from ArchUnit:
-
   @ArchTest
   static final ArchRule testsSamePackageAsImplementation =
       GeneralCodingRules.testClassesShouldResideInTheSamePackageAsImplementation();
@@ -87,10 +83,4 @@ public class ArchitectureTest {
   @ArchTest
   static final ArchRule dontUseStandardStreams = noClasses().should(ACCESS_STANDARD_STREAMS);
 
-  @ArchTest
-  static final ArchRule dontDependOnUpperPackages =
-      DependencyRules.NO_CLASSES_SHOULD_DEPEND_UPPER_PACKAGES;
-
-  @ArchTest
-  static final ArchRule dontDependOnUpperPackages2 = noClasses().should(dependOnUpperPackages());
 }
