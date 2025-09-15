@@ -15,6 +15,7 @@ import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
+import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.SourceNotModified;
@@ -234,7 +235,7 @@ public class ExtensionRuntimeTest {
     @DisplayName("Should return null when no resolver extensions are installed")
     void shouldReturnNullWithNoResolverExtensions() {
       try (ExtensionRuntime runtime = getRuntimeWithExtensions()) {
-        assertThat(runtime.resolve("not-found", null, null, testArena)).isNull();
+        assertThat(runtime.resolve("not-found", null, null)).isNull();
       }
     }
 
@@ -243,7 +244,7 @@ public class ExtensionRuntimeTest {
     void shouldResolveFilesystemImage() {
       var exts = List.of(getTestResolverExtension("fs-", TestResolvingType.FILESYSTEM));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-        var result = runtime.resolve("fs-test", null, null, testArena);
+        var result = runtime.resolve("fs-test", null, null);
         assertThat(result).isNotNull();
         assertThat(result.resolvedImage()).isInstanceOf(FilesystemResolvedImage.class);
         var fsResolved = (FilesystemResolvedImage) result.resolvedImage();
@@ -256,7 +257,7 @@ public class ExtensionRuntimeTest {
     void shouldResolveHttpImage() {
       var exts = List.of(getTestResolverExtension("http-", TestResolvingType.HTTP));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-        var result = runtime.resolve("http-test", null, null, testArena);
+        var result = runtime.resolve("http-test", null, null);
         assertThat(result).isNotNull();
         assertThat(result.resolvedImage()).isInstanceOf(HttpResolvedImage.class);
         var httpResolved = (HttpResolvedImage) result.resolvedImage();
@@ -269,7 +270,7 @@ public class ExtensionRuntimeTest {
     void shouldResolveBinaryImage() {
       var exts = List.of(getTestResolverExtension("", TestResolvingType.BINARY));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-        var result = runtime.resolve("binary-test", null, null, testArena);
+        var result = runtime.resolve("binary-test", null, null);
         assertThat(result).isNotNull();
         assertThat(result.resolvedImage()).isInstanceOf(BinaryResolvedImage.class);
         var binResolved = (BinaryResolvedImage) result.resolvedImage();
@@ -282,11 +283,27 @@ public class ExtensionRuntimeTest {
     }
 
     @Test
+    @DisplayName("Should resolve custom source image")
+    void shouldResolveCustomSourceImage() {
+      var exts = List.of(getTestResolverExtension("", TestResolvingType.CUSTOM));
+      try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+        var result = runtime.resolve("custom-source-test", null, null);
+        assertThat(result).isNotNull();
+        assertThat(result.resolvedImage()).isInstanceOf(CustomSourceResolvedImage.class);
+        var customResolved = (CustomSourceResolvedImage) result.resolvedImage();
+        var img = VImage.newFromSource(testArena, customResolved.sourceSupplier().apply(testArena));
+        assertThat(img.getWidth()).isEqualTo(1);
+        assertThat(img.getHeight()).isEqualTo(1);
+        assertThat(img.getpoint(0, 0)).containsExactly(190.0);
+      }
+    }
+
+    @Test
     @DisplayName("should handle notModified responses from the hook")
     void shouldHandleNotModifiedResponsesFromTheHook() {
       var exts = List.of(getTestResolverExtension("", TestResolvingType.FILESYSTEM));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-        var resolved = runtime.resolve("not-modified-test", "not-modified", null, testArena);
+        var resolved = runtime.resolve("not-modified-test", "not-modified", null);
         assertThat(resolved.resolvedImage()).isInstanceOf(SourceNotModified.class);
       }
     }
@@ -296,7 +313,7 @@ public class ExtensionRuntimeTest {
     void shouldResolveWithCacheInfo() {
       var exts = List.of(getTestResolverExtension("", TestResolvingType.FILESYSTEM));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-        var withCacheInfo = runtime.resolve("foo.withCacheInfo", null, null, testArena);
+        var withCacheInfo = runtime.resolve("foo.withCacheInfo", null, null);
         assertThat(withCacheInfo).isNotNull();
         assertThat(withCacheInfo.resolvedImage()).isNotNull();
         assertThat(withCacheInfo.cacheInfo().eTag()).isEqualTo("js-extension-etag");
@@ -310,7 +327,7 @@ public class ExtensionRuntimeTest {
     void shouldResolveWithImageInfo() {
       var exts = List.of(getTestResolverExtension("", TestResolvingType.FILESYSTEM));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-        var withImageInfo = runtime.resolve("foo.withImageInfo", null, null, testArena);
+        var withImageInfo = runtime.resolve("foo.withImageInfo", null, null);
         assertThat(withImageInfo).isNotNull();
         var imageInfo = withImageInfo.imageInfo();
         assertThat(imageInfo).isNotNull();
@@ -332,7 +349,7 @@ public class ExtensionRuntimeTest {
                   "should-take-a-long-time-over-http", TestResolvingType.HTTP));
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
         long start = System.nanoTime();
-        var result = runtime.resolve("data-anything", null, null, testArena);
+        var result = runtime.resolve("data-anything", null, null);
         Duration duration = Duration.ofNanos(System.nanoTime() - start);
         assertThat(result).isNotNull();
         assertThat(result.resolvedImage()).isNotNull();
@@ -361,9 +378,9 @@ public class ExtensionRuntimeTest {
       assertThat(contextPool.getNumIdle()).isZero();
       try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
         // We expect one context per extension to be active in this block
-        runtime.resolve("foo", null, null, testArena);
+        runtime.resolve("foo", null, null);
         assertThat(contextPool.getNumActive()).isEqualTo(2);
-        runtime.resolve("fs-bar", null, null, testArena);
+        runtime.resolve("fs-bar", null, null);
         assertThat(contextPool.getNumActive()).isEqualTo(2);
       }
       // After closing the runtime, all contexts should be returned to the pool, but not closed
@@ -384,7 +401,7 @@ public class ExtensionRuntimeTest {
         assertThat(contextPool.getNumIdle()).isZero();
         // The same extensions also implement the resolving hook, so we should still only have
         // two active contexts after we run that hook.
-        runtime.resolve("foo", null, null, testArena);
+        runtime.resolve("foo", null, null);
         assertThat(contextPool.getNumActive()).isEqualTo(2);
         assertThat(contextPool.getNumIdle()).isZero();
       }

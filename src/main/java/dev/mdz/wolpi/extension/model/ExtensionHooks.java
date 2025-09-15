@@ -2,10 +2,13 @@ package dev.mdz.wolpi.extension.model;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /// Set of hooks that extensions can implement
 public enum ExtensionHooks {
+  CLEANUP("cleanup"),
+  INFO("info"),
   AUTHORIZE("authorize"),
   RESOLVE("resolve"),
   INFO_JSON("process_infojson_v2", "process_infojson_v3", "processInfojsonV2", "processInfojsonV3"),
@@ -20,6 +23,10 @@ public enum ExtensionHooks {
 
   ExtensionHooks(String... validNames) {
     this.validNames = new HashSet<>(Arrays.asList(validNames));
+  }
+
+  public Set<String> getValidNames() {
+    return validNames;
   }
 
   public static @Nullable ExtensionHooks fromName(String name) {

@@ -1,7 +1,5 @@
 package dev.mdz.wolpi.extension;
 
-import static dev.mdz.wolpi.extension.GraalContextSupplier.getPythonContext;
-
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
@@ -9,8 +7,9 @@ import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
-import dev.mdz.wolpi.extension.model.Language;
+import dev.mdz.wolpi.extension.model.JSLoadedExtension;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -27,12 +26,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.info.BuildProperties;
@@ -154,61 +149,29 @@ public class ExtensionRegistry {
     }
   }
 
-  /// Create a [LoadedExtension] instance for an extension.
+  /// Determine the set of extension hooks implemented by a given extension.
   ///
-  /// Called by the language-specific loading methods after they have initialized a GraalVM context
-  /// for retrieving the extension information and hooks.
+  /// Also verifies that the mandatory `info` and `cleanup` hooks are implemented.
   ///
-  /// @param lang             the programming language of the extension
-  /// @param guestContext     Wolpi guest context for use by the extension
-  /// @param extensionVersion the version of the extension
-  /// @param contextSupplier  a supplier that creates a new GraalVM context for the extension
-  /// @param hooksSupplier    a function that extracts the hooks from the context
-  /// @return the loaded extension
-  /// @throws ExtensionLoadException if the extension is invalid
-  private LoadedExtension extensionFromPolyglotValue(
-      Language lang,
-      ExtensionGuestContext guestContext,
-      String extensionVersion,
-      Function<@Nullable ExtensionGuestContext, Context> contextSupplier,
-      Function<Context, Value> hooksSupplier)
-      throws ExtensionLoadException {
-    ExtensionInfo extensionInfo;
-    Set<ExtensionHooks> providedHooks;
-    try (Context ctx = contextSupplier.apply(guestContext)) {
-      Value hooks = hooksSupplier.apply(ctx);
-      Value infoHook;
-      if ((infoHook = PolyglotHelpers.getDictOrObjectMember("info", hooks)) == null
-          || !infoHook.canExecute()) {
-        throw new ExtensionLoadException(
-            "Extension does not provide the 'info' hook, cannot load.");
-      }
-      Value cleanupHook;
-      if ((cleanupHook = PolyglotHelpers.getDictOrObjectMember("cleanup", hooks)) == null
-          || !cleanupHook.canExecute()) {
-        throw new ExtensionLoadException(
-            "Extension does not provide the 'cleanup' hook, cannot load.");
-      }
-
-      extensionInfo = infoHook.execute().as(ExtensionInfo.class);
-
-      providedHooks =
-          PolyglotHelpers.dictOrMemberKeys(hooks).stream()
-              .map(ExtensionHooks::fromName)
-              .filter(Objects::nonNull)
-              .collect(Collectors.toSet());
+  /// @param ctx a runtime context associated with the extension
+  /// @return the set of hooks implemented by the extension
+  /// @throws ExtensionLoadException if the mandatory hooks are not implemented
+  private Set<ExtensionHooks> getExtensionHooks(RuntimeContext ctx) throws ExtensionLoadException {
+    Set<ExtensionHooks> providedHooks =
+        ctx.run(
+            ext ->
+                PolyglotHelpers.dictOrMemberKeys(ext).stream()
+                    .map(ExtensionHooks::fromName)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet()));
+    if (!providedHooks.contains(ExtensionHooks.INFO)) {
+      throw new ExtensionLoadException("Extension does not provide the 'info' hook, cannot load.");
     }
-
-    return new LoadedExtension(
-        lang,
-        extensionInfo,
-        extensionVersion,
-        () -> {
-          var graalCtx = contextSupplier.apply(guestContext);
-          var bindings = hooksSupplier.apply(graalCtx);
-          return new RuntimeContext(lang, graalCtx, bindings);
-        },
-        providedHooks);
+    if (!providedHooks.contains(ExtensionHooks.CLEANUP)) {
+      throw new ExtensionLoadException(
+          "Extension does not provide the 'cleanup' hook, cannot load.");
+    }
+    return providedHooks;
   }
 
   /// Load a Python extension based on its definition in the configuration.
@@ -282,71 +245,17 @@ public class ExtensionRegistry {
 
     var guestCtx =
         new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
-    return extensionFromPolyglotValue(
-        Language.PYTHON,
-        guestCtx,
-        extensionVersion,
-        (@Nullable ExtensionGuestContext c) -> getPythonContext(venvPath, c),
-        c -> {
-          try {
-            return getPythonHooks(c, source, entryPoint);
-          } catch (ExtensionLoadException e) {
-            // Should not happen, if they loaded fine during discovery, they should load
-            // fine during runtime.
-            throw new RuntimeException(e);
-          }
-        });
-  }
 
-  /// Given a Python [Source] and a GraalPy [Context], load the extension hooks from it.
-  ///
-  /// @param ctx        the GraalPy context
-  /// @param source     the source containing the extension code or importing it
-  /// @param entryPoint optional entry point definition, if the extension is a package
-  /// @return a [Value] containing the extension hooks as members
-  /// @throws ExtensionLoadException if loading the hooks fails
-  private Value getPythonHooks(Context ctx, Source source, @Nullable EntryPoint entryPoint)
-      throws ExtensionLoadException {
-    ctx.eval(source);
-    var bindings = ctx.getBindings("python");
-
-    Value hooks;
-    if (entryPoint != null) {
-      if (!bindings.hasMember(entryPoint.function())) {
-        throw new IllegalArgumentException(
-            "Entry point function '%s' not found in extension.".formatted(entryPoint.function()));
-      }
-      var rv = bindings.getMember(entryPoint.function()).execute();
-      if (rv.hasHashEntries()) {
-        // If the entry point returned a dict, we copy its executable members as members of
-        // the top-level scope and use that as the hooks object.
-        var it = rv.getHashKeysIterator();
-        while (it.hasIteratorNextElement()) {
-          var key = it.getIteratorNextElement().asString();
-          Value v = rv.getHashValue(key);
-          if (!v.canExecute()) {
-            continue;
-          }
-          bindings.putMember(key, v);
-        }
-        hooks = bindings;
-      } else {
-        // Otherwise we assume that the entry point returned an object with the hooks as members.
-        hooks = rv;
-      }
-    } else {
-      hooks = bindings;
+    try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null)) {
+      return new PythonLoadedExtension(
+          source,
+          ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class),
+          extensionVersion,
+          getExtensionHooks(ctx),
+          entryPoint,
+          venvPath,
+          guestCtx);
     }
-
-    var functions =
-        hooks.getMemberKeys().stream()
-            .filter(key -> !key.startsWith("_") && hooks.getMember(key).canExecute())
-            .toList();
-
-    if (functions.isEmpty()) {
-      throw new ExtensionLoadException("Extension did not define any top-level functions.");
-    }
-    return hooks;
   }
 
   /// Load a JavaScript extension based on its definition in the configuration.
@@ -404,36 +313,14 @@ public class ExtensionRegistry {
 
     var guestCtx =
         new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
-    return extensionFromPolyglotValue(
-        Language.JAVASCRIPT,
-        guestCtx,
-        extensionVersion,
-        GraalContextSupplier::getJsContext,
-        c -> {
-          try {
-            return ExtensionRegistry.getJsHooks(c, source);
-          } catch (ExtensionLoadException e) {
-            // Should never happen, since we loaded it successfully during discovery.
-            throw new RuntimeException(e);
-          }
-        });
-  }
-
-  private static Value getJsHooks(Context ctx, Source source) throws ExtensionLoadException {
-    var exports = ctx.eval(source);
-
-    if (exports == null || exports.isNull()) {
-      throw new ExtensionLoadException("Extension did not export anything.");
+    try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx)) {
+      return new JSLoadedExtension(
+          source,
+          ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class),
+          extensionVersion,
+          getExtensionHooks(ctx),
+          guestCtx);
     }
-
-    // We support both named exports (where the hooks are individually exported) and default
-    // exports (where a single object containing the hooks is exported as the default).
-    // The default export is only used if it is the only export, otherwise we assume that the
-    // other exports are the hooks.
-    if (exports.getMemberKeys().size() == 1 && exports.hasMember("default")) {
-      exports = exports.getMember("default");
-    }
-    return exports;
   }
 
   /// Get the list of loaded extensions that implement all the given hooks.

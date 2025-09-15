@@ -1,6 +1,8 @@
 package dev.mdz.wolpi.extension;
 
+import dev.mdz.wolpi.extension.model.JSLoadedExtension;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import org.apache.commons.pool2.BaseKeyedPooledObjectFactory;
 import org.apache.commons.pool2.DestroyMode;
 import org.apache.commons.pool2.PooledObject;
@@ -16,8 +18,16 @@ public class RuntimeContextPooledObjectFactory
 
   /// Uses the callback on the [LoadedExtension] to create the [RuntimeContext].
   @Override
-  public RuntimeContext create(LoadedExtension loadedExtension) throws Exception {
-    return loadedExtension.createRuntimeContext();
+  public RuntimeContext create(LoadedExtension ext) throws Exception {
+    switch (ext) {
+      case JSLoadedExtension jsExt -> {
+        return new JSRuntimeContext(jsExt.source(), jsExt.guestContext());
+      }
+      case PythonLoadedExtension pyExt -> {
+        return new PythonRuntimeContext(
+            pyExt.source(), pyExt.entryPoint(), pyExt.virtualEnvironment(), pyExt.guestContext());
+      }
+    }
   }
 
   @Override

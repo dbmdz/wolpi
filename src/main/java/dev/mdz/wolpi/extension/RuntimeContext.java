@@ -1,8 +1,10 @@
 package dev.mdz.wolpi.extension;
 
+import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import org.graalvm.polyglot.Context;
@@ -10,24 +12,52 @@ import org.graalvm.polyglot.Value;
 
 /// Runtime context of an extension, contains all the state that is bound to the lifetime of a
 /// single request.
-public final class RuntimeContext {
+public abstract class RuntimeContext implements AutoCloseable {
 
-  private final Language lang;
-  private final Context langContext;
-  private final Value extensionObject;
+  protected final Context langContext;
+  protected final Value extensionObject;
 
   /// Secure access to the Polyglot context, preventing multiple threads from using it at the
   /// same time. Uses a `ReentrantLock` to allow the same thread to acquire multiple leases on the
   /// context, while still preventing access from multiple threads at the same time.
   private final ReentrantLock contextLock = new ReentrantLock();
 
-  /// @param lang            The GraalVM Polyglot language the extension is implemented in
-  /// @param langContext     The GraalVM Polyglot context the extension runs in
-  /// @param extensionObject The main extension object, containing the extension hooks as members
-  public RuntimeContext(Language lang, Context langContext, Value extensionObject) {
-    this.lang = lang;
-    this.langContext = langContext;
-    this.extensionObject = extensionObject;
+  protected RuntimeContext() throws ExtensionLoadException {
+    this.langContext = getGraalContext();
+    this.extensionObject = getExtensionObject();
+  }
+
+  /// @return The underlying GraalVM Polyglot context
+  protected abstract Context getGraalContext();
+
+  /// @return The Polyglot [Value] that has the extension hooks as members
+  protected abstract Value getExtensionObject() throws ExtensionLoadException;
+
+  /// @return The programming language the extension is implemented in
+  public abstract Language getLang();
+
+  ///  Convenience method to run a specific hook on the extension, passing the given arguments to
+  ///  it.
+  ///
+  /// @param hook The hook to run
+  /// @param args The arguments to pass to the hook
+  /// @return The result of the hook execution
+  /// @throws IllegalStateException if the hook is not implemented in the extension
+  public Value runHook(ExtensionHooks hook, Object... args) {
+    return run(
+        ext ->
+            hook.getValidNames().stream()
+                .flatMap(
+                    name ->
+                        Optional.ofNullable(PolyglotHelpers.getDictOrObjectMember(name, ext, true))
+                            .stream())
+                .filter(Value::canExecute)
+                .findFirst()
+                .map(fn -> fn.execute(args))
+                .orElseThrow(
+                    () ->
+                        new IllegalStateException(
+                            "Hook " + hook + " not implemented in extension")));
   }
 
   /// Obtain a lease on the context to run code in it.
@@ -40,6 +70,7 @@ public final class RuntimeContext {
   }
 
   /// Closes the associated Polyglot context, freeing up all resources associated with it.
+  @Override
   public void close() {
     langContext.close();
   }
@@ -55,36 +86,9 @@ public final class RuntimeContext {
     }
   }
 
-  /// @return The programming language the extension is implemented in
-  public Language getLang() {
-    return lang;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (obj == this) {
-      return true;
-    }
-    if (obj == null || obj.getClass() != this.getClass()) {
-      return false;
-    }
-    var that = (RuntimeContext) obj;
-    return Objects.equals(this.lang, that.lang)
-        && Objects.equals(this.langContext, that.langContext)
-        && Objects.equals(this.extensionObject, that.extensionObject);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(lang, langContext, extensionObject);
-  }
-
   @Override
   public String toString() {
     return "RuntimeContext["
-        + "lang="
-        + lang
-        + ", "
         + "langContext="
         + langContext
         + ", "

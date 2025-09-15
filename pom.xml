@@ -118,6 +118,8 @@
 					<release>24</release>
 					<compilerArgs>
 						<arg>--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED</arg>
+						<!-- enable-preview is only needed for Java 24, can be removed once Java 25 is released -->
+						<arg>--enable-preview</arg>
 					</compilerArgs>
 				</configuration>
 			</plugin>
@@ -148,8 +150,10 @@
 				<artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
 				<configuration>
+					<!-- enable-preview is only needed for Java 24, can be removed once Java 25 is released -->
 					<argLine>
 						${surefireArgLine}
+						--enable-preview
 						--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED
 						-Dpolyglot.engine.WarnInterpreterOnly=false
 						--enable-native-access=app.photofox.vipsffm,org.graalvm.truffle

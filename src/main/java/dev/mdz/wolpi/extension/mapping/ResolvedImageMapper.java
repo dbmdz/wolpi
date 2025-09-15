@@ -10,14 +10,13 @@ import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ResolvedImage;
 import dev.mdz.wolpi.model.SourceNotModified;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.MemorySegment;
 import java.util.Set;
 import org.graalvm.polyglot.Value;
 
 public class ResolvedImageMapper {
   private static final Set<String> RESOLVED_IMAGE_MEMBERS =
-      Set.of("url", "rawData", "path", "notModified");
+      Set.of("url", "rawData", "path", "onSeek", "onRead", "notModified");
 
   private ResolvedImageMapper() {}
 
@@ -52,9 +51,7 @@ public class ResolvedImageMapper {
               return 0;
             }
             byte[] data = readResult.as(byte[].class);
-            VarHandle byteArrayHandle =
-                MethodHandles.byteArrayViewVarHandle(byte.class, java.nio.ByteOrder.nativeOrder());
-            byteArrayHandle.set(memorySegment, data);
+            memorySegment.copyFrom(MemorySegment.ofArray(data));
             return data.length;
           };
       SeekCallback seekCb = (offset, whence) -> seekFn.execute(offset, whence.getValue()).asLong();
@@ -66,8 +63,6 @@ public class ResolvedImageMapper {
       return val.as(BinaryResolvedImage.class);
     } else if (PolyglotHelpers.hasDictOrObjectMember("url", val)) {
       return val.as(HttpResolvedImage.class);
-    } else if (PolyglotHelpers.hasDictOrObjectMember("notModified", val, true)) {
-      return val.as(SourceNotModified.class);
     } else {
       throw new IllegalArgumentException(
           "Cannot map polyglot value [%s] to ResolvedImage".formatted(val.toString()));
