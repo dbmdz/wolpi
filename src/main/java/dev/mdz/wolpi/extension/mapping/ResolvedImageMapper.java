@@ -16,7 +16,8 @@ import java.util.Set;
 import org.graalvm.polyglot.Value;
 
 public class ResolvedImageMapper {
-  private static final Set<String> RESOLVED_IMAGE_MEMBERS = Set.of("url", "rawData", "path");
+  private static final Set<String> RESOLVED_IMAGE_MEMBERS =
+      Set.of("url", "rawData", "path", "notModified");
 
   private ResolvedImageMapper() {}
 
@@ -28,7 +29,7 @@ public class ResolvedImageMapper {
   public static ResolvedImage map(Value val) {
     Value notModifiedValue = PolyglotHelpers.getDictOrObjectMember("notModified", val, true);
     if (notModifiedValue != null && !notModifiedValue.isNull() && notModifiedValue.asBoolean()) {
-      return new SourceNotModified();
+      return new SourceNotModified(true);
     }
 
     if (PolyglotHelpers.hasDictOrObjectMember("onRead", val, true)
@@ -65,6 +66,8 @@ public class ResolvedImageMapper {
       return val.as(BinaryResolvedImage.class);
     } else if (PolyglotHelpers.hasDictOrObjectMember("url", val)) {
       return val.as(HttpResolvedImage.class);
+    } else if (PolyglotHelpers.hasDictOrObjectMember("notModified", val, true)) {
+      return val.as(SourceNotModified.class);
     } else {
       throw new IllegalArgumentException(
           "Cannot map polyglot value [%s] to ResolvedImage".formatted(val.toString()));

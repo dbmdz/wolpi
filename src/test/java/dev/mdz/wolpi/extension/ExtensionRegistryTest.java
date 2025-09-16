@@ -91,7 +91,7 @@ class ExtensionRegistryTest {
     var registry = buildRegistryWithExtension(source, null, null, Map.of());
     assertThat(registry.getExtensions()).hasSize(1);
     var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS Extension");
+    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
 
     // Install from npm
     registry =
@@ -99,7 +99,7 @@ class ExtensionRegistryTest {
             null, new PkgSource("js-extension", "1.0.0", null), null, Map.of());
     assertThat(registry.getExtensions()).hasSize(1);
     loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS Extension");
+    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
   }
 
   @DisplayName("should load a Python package")
@@ -136,7 +136,7 @@ class ExtensionRegistryTest {
     var registry = buildRegistryWithExtension(source, null, null, Map.of());
     assertThat(registry.getExtensions()).hasSize(1);
     var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY Extension");
+    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
 
     // Instal from PyPI
     registry =
@@ -144,7 +144,7 @@ class ExtensionRegistryTest {
             null, null, new PkgSource("py-extension", "1.0.0", null), Map.of());
     assertThat(registry.getExtensions()).hasSize(1);
     loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY Extension");
+    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
   }
 
   private ExtensionRegistry buildRegistryWithExtension(
