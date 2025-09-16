@@ -8,24 +8,42 @@ server:
   forward-headers-strategy: framework
 
 wolpi:
+  # Location to store extensions installed from packagesin
   data-directory: "./data"
+  # Fallback location where images are loaded from if no resolving
+    # extension provides the image
   image-base-dir: "./images"
+  # List of extensions to load
   extensions: []
   #extensions:
+  #  # An extension in a single file with config
   #  - path: "./samples/helloworld.js"
   #    config:
   #      baseDirectory: "./images"
-  #  - path: "./samples/helloworld.py"
-  #    config:
-  #      baseDirectory: "./images"
+  #  # A local packaged extension
   #  - path: "./samples/hello-js-package"
-  #  - path: "./samples/hello-py-package"
+  #  # An extension from npm
+  #  - npm:
+  #      pkg: "@my-org/hello-npm-package"
+  #      version: "1.0.0"
+  #  # An extension from a custom PyPI index
+  #  - pypi:
+  #      pkg: "hello-pypi-package"
+  #      version: "0.1.0"
+  #      index: "https://pypi.org.tld/simple/"
   extension-pool:
     max-total: 16
     max-idle: 4
   packaging:
     install-timeout: 30s
-    npm-executable: "/home/jbaiter/.volta/bin/npm"
+
+    # NPM executable, default: auto-discovered from PATH
+    # npm-executable: "/usr/local/bin/npm"
+
+    # Python executable, default: auto-discovered from PATH
+    # Needs to be set to a GraalPython executable if using Python extensions
+    # with native dependencies
+    python-executable: "/usr/local/bin/graalpy"
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"
     info-json: "public, max-age=604800, must-revalidate"

@@ -86,7 +86,7 @@ public class ImageLoader {
   /// @return The resolved image source, or null if it could not be resolved.
   public @Nullable ImageSource resolve(
       String identifier, @Nullable String eTag, @Nullable Instant lastModified) {
-    ImageSource source = extensionRuntime.resolve(identifier, eTag, lastModified, arena);
+    ImageSource source = extensionRuntime.resolve(identifier, eTag, lastModified);
     if (source == null) {
       source = this.resolveFromFilesystem(identifier);
     }

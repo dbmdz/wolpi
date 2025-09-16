@@ -1,25 +1,23 @@
 package dev.mdz.wolpi.extension.model;
 
-import dev.mdz.wolpi.extension.RuntimeContext;
 import java.util.Set;
-import java.util.function.Supplier;
+import org.graalvm.polyglot.Source;
 import org.jspecify.annotations.Nullable;
 
-/// Container for a loaded extension, contains all the necessary information to run it
+/// Container for a loaded extension, contains all the necessary information to run it.
 ///
-/// @param lang The programming language the extension is written in
-/// @param extensionInfo Metadata about the extension, returned by its `info` hook
-/// @param extensionVersion The version of the extension, if available
-/// @param runtimeContextSupplier A supplier that creates a new runtime context for the extension
-/// @param implementedHooks The hooks that the extension implements
-public record LoadedExtension(
-    Language lang,
-    ExtensionInfo extensionInfo,
-    @Nullable String extensionVersion,
-    Supplier<RuntimeContext> runtimeContextSupplier,
-    Set<ExtensionHooks> implementedHooks) {
+/// Language-specific implementations require some additional information, so this is a sealed
+/// interface and not a common record class.
+public sealed interface LoadedExtension permits JSLoadedExtension, PythonLoadedExtension {
+  /// Returns the GraalVM [Source] object to load the extension from.
+  Source source();
 
-  public RuntimeContext createRuntimeContext() {
-    return runtimeContextSupplier.get();
-  }
+  /// Metadata about the extension, returned by its `info` hook.
+  ExtensionInfo extensionInfo();
+
+  /// The set of hooks implemented by the extension.
+  Set<ExtensionHooks> implementedHooks();
+
+  /// The guest context for this extension, if available.
+  @Nullable ExtensionGuestContext guestContext();
 }

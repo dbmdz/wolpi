@@ -8,7 +8,6 @@ import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.ResolvedImage;
-import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -183,10 +182,9 @@ public class ExtensionRuntime implements AutoCloseable {
   /// @param identifier   the identifier to resolve
   /// @param eTag         optional ETag of a cached image
   /// @param lastModified optional last modified timestamp of a cached image
-  /// @param vipsArena    a [Arena] to use for defining vips-ffm sources
   /// @return the resolved [ImageSource], or `null` if no extension
   public @Nullable ImageSource resolve(
-      String identifier, @Nullable String eTag, @Nullable Instant lastModified, Arena vipsArena) {
+      String identifier, @Nullable String eTag, @Nullable Instant lastModified) {
     List<LoadedExtension> resolveExts = registry.getExtensions(ExtensionHooks.RESOLVE);
     if (resolveExts.isEmpty()) {
       return null;
