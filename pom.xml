@@ -27,7 +27,7 @@
 	</developers>
 	<properties>
 		<java.version>24</java.version>
-		<graalvm.version>24.2.2</graalvm.version>
+		<graalvm.version>25.0.0</graalvm.version>
 		<jspecify.version>1.0.0</jspecify.version>
 		<guava.version>33.4.8-jre</guava.version>
 		<vips-ffm.version>1.9.1</vips-ffm.version>
