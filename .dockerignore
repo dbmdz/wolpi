@@ -1,0 +1,8 @@
+.git
+.gitignore
+.idea
+.mvn
+target
+samples
+docs
+data
