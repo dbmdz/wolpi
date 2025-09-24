@@ -1,5 +1,5 @@
 # Stage 1: Build the application with OpenJDK
-FROM debian:trixie-slim AS builder
+FROM docker.io/debian:13.1-slim AS builder
 WORKDIR /app
 
 RUN apt-get update -q && \
@@ -8,18 +8,10 @@ RUN apt-get update -q && \
 
 COPY . .
 
-# FIXME: Remove once we have a Maven JDK 25 Image for the CI
-# Patch pom.xml so it builds with Java 25
-RUN sed -i \
-    -e 's/<java.version>24/<java.version>25/g' \
-    -e 's/--enable-preview//g' \
-    -e 's/<release>24/<release>25/g' \
-    pom.xml
-
-RUN mvn -q clean install -DskipTests
+RUN mvn -q clean install -DskipTests -Dspotless.check.skip=true
 
 # Stage 2: Create the runtime image with GraalVM
-FROM debian:trixie-slim
+FROM docker.io/debian:13.1-slim
 WORKDIR /app
 
 RUN apt-get update -q && \
