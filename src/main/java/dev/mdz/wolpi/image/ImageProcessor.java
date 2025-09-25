@@ -213,7 +213,7 @@ public class ImageProcessor {
     if (rotation.mirror() || rotation.degrees() != 0.0) {
       // Apply mirroring and rotation
       if (rotation.mirror()) {
-        rotated = rotated.flip(VipsDirection.DIRECTION_VERTICAL);
+        rotated = rotated.flip(VipsDirection.DIRECTION_HORIZONTAL);
       }
       if (rotation.degrees() != 0.0) {
         rotated = rotated.rotate(rotation.degrees());
