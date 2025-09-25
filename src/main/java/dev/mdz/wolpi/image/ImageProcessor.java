@@ -190,6 +190,7 @@ public class ImageProcessor {
                 cropRectangle.y(),
                 cropRectangle.width(),
                 cropRectangle.height());
+        sourceSize = new ImageSize(cropRectangle.width(), cropRectangle.height());
       }
 
       var scaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);

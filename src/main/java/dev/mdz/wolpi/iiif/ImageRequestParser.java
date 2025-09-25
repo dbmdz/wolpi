@@ -232,7 +232,7 @@ public class ImageRequestParser {
   ///                    differ in a few points
   /// @param sizeSpec    The size specification as a string, formatted according to the IIIF Image
   ///                    API v2 or v3 specification.
-  /// @param sourceSize  The unscaled source image size
+  /// @param sourceSize  The unscaled (but potentially cropped) source image size
   /// @return A [ImageSize] object representing the parsed size.
   /// @throws IllegalArgumentException if the size specification is invalid or unsupported in the
   ///                                  selected IIIF Image API version.
