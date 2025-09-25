@@ -92,7 +92,11 @@ public class ImageRequestParser {
   /// The spec also permits custom qualities, these are not mapped here, instead extensions should
   /// take the raw quality string and handle it as needed.
   public IIIFQuality parseQuality(String qualitySpec) {
-    return IIIFQuality.fromString(qualitySpec);
+    try {
+      return IIIFQuality.fromString(qualitySpec);
+    } catch (IllegalStateException e) {
+      throw new IllegalArgumentException("Invalid quality specification: " + qualitySpec, e);
+    }
   }
 
   /// Parses the region specification from the request.

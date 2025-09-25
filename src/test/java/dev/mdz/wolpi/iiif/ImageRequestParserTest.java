@@ -777,7 +777,7 @@ class ImageRequestParserTest {
     @Test
     @DisplayName("should throw an exception for invalid quality spec")
     void shouldThrowForInvalidQualitySpec() {
-      assertThatExceptionOfType(IllegalStateException.class)
+      assertThatExceptionOfType(IllegalArgumentException.class)
           .isThrownBy(() -> parser.parseQuality("invalid"));
     }
   }

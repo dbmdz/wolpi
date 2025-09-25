@@ -257,12 +257,19 @@ public class IIIFImageAPIController {
     }
 
     // Encode the processed image to the requested output format and return it to the client
-    var encoded = processor.encodeImage(processedImage, request.formatSpec());
-    return ResponseEntity.ok()
-        .headers(outHeaders)
-        .contentType(MediaType.parseMediaType(encoded.contentType()))
-        .contentLength(encoded.data().remaining())
-        .body(encoded.data());
+    try {
+      var encoded = processor.encodeImage(processedImage, request.formatSpec());
+      return ResponseEntity.ok()
+          .headers(outHeaders)
+          .contentType(MediaType.parseMediaType(encoded.contentType()))
+          .contentLength(encoded.data().remaining())
+          .body(encoded.data());
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+          .headers(outHeaders)
+          .contentType(MediaType.TEXT_PLAIN)
+          .body(ByteBuffer.wrap(e.getMessage().getBytes()));
+    }
   }
 
   /// Set cache-related headers on the response according to the configuration and the image

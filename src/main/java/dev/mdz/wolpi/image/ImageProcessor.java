@@ -242,6 +242,9 @@ public class ImageProcessor {
 
   /// Encode an image to a target format.
   public EncodedImage encodeImage(VImage image, String suffix) throws IOException {
+    if (!wolpiConfig.iiif().formats().allowed().contains(suffix.toLowerCase())) {
+      throw new IllegalArgumentException("Unsupported output format: " + suffix);
+    }
     List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
 
     // Force 1bit output for bitonal images in PNG and GIF formats
