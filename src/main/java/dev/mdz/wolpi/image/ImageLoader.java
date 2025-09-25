@@ -5,6 +5,7 @@ import static app.photofox.vipsffm.VSource.newFromInputStream;
 import app.photofox.vipsffm.VBlob;
 import app.photofox.vipsffm.VCustomSource;
 import app.photofox.vipsffm.VImage;
+import app.photofox.vipsffm.VSource;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.WolpiConfig;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -42,6 +44,9 @@ import org.springframework.stereotype.Component;
 /// ImageLoader is responsible for resolving and loading images from various sources.
 @Component
 public class ImageLoader {
+  // Hardcoded identifier for official IIIF Image API Validation image
+  private static final String VALIDATION_ID_PREFIX = "67352ccc-d1b0-11e1-89ae-279075081939";
+
   private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   ///  Request-scoped runtime for executing extension code.
@@ -86,6 +91,9 @@ public class ImageLoader {
   /// @return The resolved image source, or null if it could not be resolved.
   public @Nullable ImageSource resolve(
       String identifier, @Nullable String eTag, @Nullable Instant lastModified) {
+    if (identifier.startsWith(VALIDATION_ID_PREFIX)) {
+      return resolveValidationImage(identifier);
+    }
     ImageSource source = extensionRuntime.resolve(identifier, eTag, lastModified);
     if (source == null) {
       source = this.resolveFromFilesystem(identifier);
@@ -107,6 +115,24 @@ public class ImageLoader {
       return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null, cacheInfo);
     }
     return null;
+  }
+
+  private ImageSource resolveValidationImage(String identifier) {
+    String format = "png";
+    String[] parts = identifier.split("-");
+    if (parts.length > 5) {
+      String requestedFormat = parts[5].toLowerCase();
+      if (requestedFormat.equals("png") || requestedFormat.equals("jp2")) {
+        format = requestedFormat;
+      }
+    }
+    String resourceName = "/test-img/%s.%s".formatted(VALIDATION_ID_PREFIX, format);
+    return new ImageSource(
+        VALIDATION_ID_PREFIX,
+        new CustomSourceResolvedImage((arena) -> VSource.newFromInputStream(
+            arena, Objects.requireNonNull(getClass().getResourceAsStream(resourceName)))),
+        null,
+        null);
   }
 
   /// Get the image information for the given source.
