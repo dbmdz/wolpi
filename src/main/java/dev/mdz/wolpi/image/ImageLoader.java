@@ -170,7 +170,7 @@ public class ImageLoader {
               VipsOption.Enum("size", VipsSize.SIZE_FORCE));
       case HttpResolvedImage(URI uri, Map<String, String> headers, Boolean supportsByteRange) ->
           loadFromHttp(uri, headers, targetSize, supportsByteRange);
-      case CustomSourceResolvedImage(Function<Arena, VCustomSource> srcSupplier) ->
+      case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
           VImage.thumbnailSource(
               arena,
               srcSupplier.apply(arena),
@@ -199,7 +199,7 @@ public class ImageLoader {
               Map<String, String> headers,
               @Nullable Boolean supportsByteRange) ->
           loadFromHttp(uri, headers, null, supportsByteRange);
-      case CustomSourceResolvedImage(Function<Arena, VCustomSource> srcSupplier) ->
+      case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
           VImage.newFromSource(arena, srcSupplier.apply(arena));
       case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
       case SourceNotModified ignored ->

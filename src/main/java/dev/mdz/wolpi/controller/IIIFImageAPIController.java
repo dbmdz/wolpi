@@ -19,11 +19,15 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +35,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -58,9 +64,28 @@ public class IIIFImageAPIController {
     this.complianceRegistry = complianceRegistry;
   }
 
+  /// Handle OPTIONS requests for the /info.json endpoint
+  @RequestMapping(value = "/{version}/{identifier}/info.json", method = {RequestMethod.OPTIONS})
+  public ResponseEntity<Void> optionsImageInfo(@RequestHeader HttpHeaders requestHeaders) {
+    return createOptionsResponse(requestHeaders);
+  }
+
+  /// Redirect requests to the base URI of an image (without /info.json) to the info.json endpoint,
+  /// if configured to do so.
+  @GetMapping(value = "/{version}/{identifier}", produces = "application/json")
+  public ResponseEntity<Void> baseUriRedirect(@PathVariable IIIFVersion version, @PathVariable String identifier) {
+    if (!config.iiif().features().baseUriRedirect()) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
+    HttpHeaders headers = new HttpHeaders();
+    String redirectUrl = ServletUriComponentsBuilder.fromCurrentRequest().build().toUriString() + "/info.json";
+    headers.add("Location", redirectUrl);
+    return ResponseEntity.status(HttpStatus.SEE_OTHER).headers(headers).build();
+  }
+
   /// Return the IIIF Image Information for the given image identifier, using the specified version
   /// format.
-  @GetMapping(value = "/{version}/{identifier}/info.json", produces = "application/json")
+  @GetMapping(value = "/{version}/{identifier}/info.json", produces = {"application/json", "application/ld+json"})
   public ResponseEntity<Map<String, Object>> getImageInfo(
       @PathVariable IIIFVersion version,
       @PathVariable String identifier,
@@ -72,7 +97,7 @@ public class IIIFImageAPIController {
       WebRequest webRequest) {
     HttpHeaders outHeaders = new HttpHeaders();
     if (config.iiif().features().cors()) {
-      outHeaders.setAccessControlAllowOrigin("*");
+      outHeaders.setAccessControlAllowOrigin(Optional.ofNullable(headers.getOrigin()).orElse("*"));
     }
     if (!loader.authorize(identifier, headers, request.getRemoteAddr())) {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -127,6 +152,13 @@ public class IIIFImageAPIController {
     return ResponseEntity.ok().headers(outHeaders).body(rawInfo);
   }
 
+
+  /// Handle OPTIONS requests for the image processing endpoint
+  @RequestMapping(value = "/{version}/{identifier}/{scale}/{size}/{rotation}/{color}.{format}", method = {RequestMethod.OPTIONS})
+  public ResponseEntity<Void> optionsImage(@RequestHeader HttpHeaders requestHeaders) {
+    return createOptionsResponse(requestHeaders);
+  }
+
   /// Process the image according to the IIIF Image API request in the URL.
   @GetMapping(value = "/{version}/{identifier}/{scale}/{size}/{rotation}/{color}.{format}")
   public ResponseEntity<ByteBuffer> getImage(
@@ -148,7 +180,7 @@ public class IIIFImageAPIController {
     HttpHeaders outHeaders = new HttpHeaders();
     // CORS needs to be set for all response types
     if (config.iiif().features().cors()) {
-      outHeaders.setAccessControlAllowOrigin("*");
+      outHeaders.setAccessControlAllowOrigin(Optional.ofNullable(requestHeaders.getOrigin()).orElse("*"));
     }
 
     // Check permissions first
@@ -237,23 +269,27 @@ public class IIIFImageAPIController {
           .body(null);
     }
 
+    List<String> linkHeaderUrls = new ArrayList<>();
     if (canonicalRequest != null && config.iiif().features().canonicalLinkHeader()) {
       String canonicalUrl =
           ServletUriComponentsBuilder.fromCurrentRequest()
               .build()
               .toUriString()
               .replace(request.toRequestPath(), canonicalRequest.toRequestPath());
-      outHeaders.add("Link", "<%s>; rel=\"canonical\"".formatted(canonicalUrl));
+      linkHeaderUrls.add("<%s>; rel=\"canonical\"".formatted(canonicalUrl));
     }
 
     // Cache Headers only on proper image responses
     setCacheHeaders(outHeaders, source);
 
     if (config.iiif().features().profileLinkHeader()) {
-      outHeaders.add(
-          "Link",
+      linkHeaderUrls.add(
           "<http://iiif.io/api/image/%d/level2.json>; rel=\"profile\""
               .formatted(version == IIIFVersion.V2 ? 2 : 3));
+    }
+
+    if (!linkHeaderUrls.isEmpty()) {
+      outHeaders.add(HttpHeaders.LINK, String.join(", ", linkHeaderUrls));
     }
 
     // Encode the processed image to the requested output format and return it to the client
@@ -286,5 +322,25 @@ public class IIIFImageAPIController {
         headers.setLastModified(source.cacheInfo().lastModified());
       }
     }
+  }
+
+  /// Generate an OPTIONS response with allowed methods and CORS headers if enabled.
+  private ResponseEntity<Void> createOptionsResponse(HttpHeaders requestHeaders) {
+    HttpHeaders outHeaders = new HttpHeaders();
+    outHeaders.setAccessControlAllowMethods(List.of(HttpMethod.GET, HttpMethod.HEAD, HttpMethod.OPTIONS));
+    if (config.iiif().features().cors()) {
+      // Explicitly allow the origin that made the request
+      outHeaders.setAccessControlAllowOrigin(Optional.ofNullable(requestHeaders.getOrigin()).orElse("*"));
+
+      // Allow all requested headers, and "Accept" by default
+      List<String> reqHeaders = requestHeaders.getAccessControlRequestHeaders();
+      if (!reqHeaders.isEmpty()) {
+        outHeaders.setAccessControlAllowHeaders(reqHeaders);
+      } else {
+        outHeaders.setAccessControlAllowHeaders(List.of("Accept"));
+      }
+      outHeaders.setAccessControlMaxAge(86400L);
+    }
+    return ResponseEntity.ok().headers(outHeaders).build();
   }
 }
