@@ -39,7 +39,7 @@ public class IIIFImageInfo {
                 "profile",
                 isV2
                     ? complianceRegistry.v2Profiles()
-                    : complianceRegistry.complianceLevelV3().uri(IIIFVersion.V3))
+                    : complianceRegistry.complianceLevelV3().v3String())
             .kv("width", sourceImageInfo.nativeWidth())
             .kv("height", sourceImageInfo.nativeHeight());
 

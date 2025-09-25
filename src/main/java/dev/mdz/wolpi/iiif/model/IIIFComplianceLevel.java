@@ -13,9 +13,11 @@ public enum IIIFComplianceLevel {
     this.value = value;
   }
 
-  public URI uri(IIIFVersion version) {
-    return URI.create(
-        "http://iiif.io/api/image/%d/level%d.json"
-            .formatted(version == IIIFVersion.V2 ? 2 : 3, value));
+  public URI v2Uri() {
+    return URI.create("http://iiif.io/api/image/2/level%d.json".formatted(value));
+  }
+
+  public String v3String() {
+    return "level%d".formatted(value);
   }
 }

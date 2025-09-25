@@ -188,7 +188,7 @@ public class IIIFComplianceRegistry {
 
   private static List<Object> getV2Profiles(IIIFConfig config, IIIFComplianceLevel compliance) {
     List<Object> out = new ArrayList<>();
-    out.add(compliance.uri(IIIFVersion.V2));
+    out.add(compliance.v2Uri());
     List<String> supports = new ArrayList<>();
 
     supports.add("sizeByWh");
