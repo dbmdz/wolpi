@@ -4,6 +4,7 @@ import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
@@ -191,30 +192,35 @@ public class ExtensionRegistry {
     EntryPoint entryPoint;
     Path sitePackagesPath;
 
-    if (isLocalPackage) {
-      packageName = pyInstaller.installFromLocalDirectory(config.path());
-      sitePackagesPath = pyInstaller.getVenvSitePackages(packageName);
-      if (sitePackagesPath == null) {
-        throw new ExtensionLoadException(
-            "Could not find virtual environment for installed package: " + packageName);
+    try {
+      if (isLocalPackage) {
+        packageName = pyInstaller.installExtensionFromLocalDirectory(config.path());
+        sitePackagesPath = pyInstaller.getVenvSitePackages(packageName);
+        if (sitePackagesPath == null) {
+          throw new ExtensionLoadException(
+              "Could not find virtual environment for installed package: " + packageName);
+        }
+        entryPoint = pyInstaller.getWolpiEntryPoint(packageName);
+        extensionVersion = pyInstaller.getVersion(packageName);
+      } else if (isPyPi) {
+        packageName = config.pypi().pkg();
+        pyInstaller.installExtension(config.pypi().pkg(), config.pypi().version(),
+            config.pypi().index());
+        sitePackagesPath = pyInstaller.getVenvSitePackages(config.pypi().pkg());
+        if (sitePackagesPath == null) {
+          throw new ExtensionLoadException(
+              "Could not find virtual environment for installed package: " + config.pypi().pkg());
+        }
+        entryPoint = pyInstaller.getWolpiEntryPoint(config.pypi().pkg());
+        extensionVersion = config.pypi().version();
+      } else if (isLocalFile) {
+        entryPoint = null;
+        sitePackagesPath = null;
+      } else {
+        throw new IllegalArgumentException("Invalid Python extension configuration.");
       }
-      entryPoint = pyInstaller.getEntryPoint(packageName);
-      extensionVersion = pyInstaller.getVersion(packageName);
-    } else if (isPyPi) {
-      packageName = config.pypi().pkg();
-      pyInstaller.install(config.pypi().pkg(), config.pypi().version(), config.pypi().index());
-      sitePackagesPath = pyInstaller.getVenvSitePackages(config.pypi().pkg());
-      if (sitePackagesPath == null) {
-        throw new ExtensionLoadException(
-            "Could not find virtual environment for installed package: " + config.pypi().pkg());
-      }
-      entryPoint = pyInstaller.getEntryPoint(config.pypi().pkg());
-      extensionVersion = config.pypi().version();
-    } else if (isLocalFile) {
-      entryPoint = null;
-      sitePackagesPath = null;
-    } else {
-      throw new IllegalArgumentException("Invalid Python extension configuration.");
+    } catch (PackageInstallException e) {
+      throw new ExtensionLoadException("Failed to install Python extension package", e);
     }
 
     Path venvPath;
@@ -267,23 +273,28 @@ public class ExtensionRegistry {
 
     String packageName = null;
     Path entryPoint;
-    if (config.path() != null) {
-      if (Files.isDirectory(config.path())
-          && Files.isRegularFile(config.path().resolve("package.json"))) {
-        packageName = jsInstaller.installFromLocalDirectory(config.path());
-        entryPoint = jsInstaller.getEntryPoint(packageName);
-      } else if (Files.isRegularFile(config.path())) {
-        entryPoint = config.path();
+    try {
+      if (config.path() != null) {
+        if (Files.isDirectory(config.path())
+            && Files.isRegularFile(config.path().resolve("package.json"))) {
+          packageName = jsInstaller.installExtensionFromLocalDirectory(config.path());
+          entryPoint = jsInstaller.getWolpiEntryPoint(packageName);
+        } else if (Files.isRegularFile(config.path())) {
+          entryPoint = config.path();
+        } else {
+          throw new ExtensionLoadException(
+              "Invalid JavaScript extension path, must point to a .js file or a directory with package.json");
+        }
+      } else if (config.npm() != null) {
+        jsInstaller.installExtension(config.npm().pkg(), config.npm().version(),
+            config.npm().index());
+        entryPoint = jsInstaller.getWolpiEntryPoint(config.npm().pkg());
+        packageName = config.npm().pkg();
       } else {
-        throw new ExtensionLoadException(
-            "Invalid JavaScript extension path, must point to a .js file or a directory with package.json");
+        throw new IllegalArgumentException("Invalid JavaScript extension configuration.");
       }
-    } else if (config.npm() != null) {
-      jsInstaller.install(config.npm().pkg(), config.npm().version(), config.npm().index());
-      entryPoint = jsInstaller.getEntryPoint(config.npm().pkg());
-      packageName = config.npm().pkg();
-    } else {
-      throw new IllegalArgumentException("Invalid JavaScript extension configuration.");
+    } catch (PackageInstallException e) {
+      throw new ExtensionLoadException("Failed to install JavaScript extension package", e);
     }
 
     if (entryPoint == null) {
@@ -305,7 +316,11 @@ public class ExtensionRegistry {
     if (config.npm() != null) {
       extensionVersion = config.npm().version();
     } else if (packageName != null) {
-      extensionVersion = jsInstaller.getVersion(packageName);
+      try {
+        extensionVersion = jsInstaller.getVersion(packageName);
+      } catch (PackageInstallException e) {
+        log.warn("Failed to determine version of installed package: " + packageName, e);
+      }
     }
     if (extensionVersion == null) {
       extensionVersion = "unknown";

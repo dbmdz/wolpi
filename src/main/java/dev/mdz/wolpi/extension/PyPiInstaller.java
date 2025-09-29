@@ -8,6 +8,7 @@ import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.util.CommandRunner;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -28,8 +29,9 @@ import org.springframework.stereotype.Component;
 /// Install a Python package from PyPI or a local directory into a dedicated virtual environment
 /// using the system's Python installation.
 ///
-/// The package must define a `wolpi-ext` entry point that points to a callable that returns a
-/// WolpiExtension instance.
+/// For Wolpi extensions, the package must define a `wolpi-ext` entry point that points to a
+/// callable that returns a WolpiExtension instance or a dictionary with the respective fields as
+/// items.
 ///
 /// If installing from a local directory, the directory must contain a `pyproject.toml` file with
 /// the package metadata, including the entry point.
@@ -73,22 +75,46 @@ public class PyPiInstaller {
     }
   }
 
-  ///  Install a package from the PyPI registry using an exact version.
+  ///  Install a Python package from the PyPI registry using an exact version.
   ///
   /// @param packageName  name of the package
   /// @param version      exact version (no ranges)
   /// @param customIndex  optional custom PyPI index URI
-  public void install(String packageName, String version, @Nullable URI customIndex)
-      throws ExtensionLoadException {
+  /// @param skipDependencies  if true, do not install dependencies of the package
+  public Path install(String packageName, String version, @Nullable URI customIndex, boolean skipDependencies)
+      throws PackageInstallException {
     Path venvPath = ensureVenv(packageName);
-    runPip(venvPath, "install", "%s==%s".formatted(packageName, version));
-    verifyInstalledPackage(packageName);
+    List<String> pipArgs = new ArrayList<>();
+    pipArgs.add("install");
+    if (customIndex != null) {
+      pipArgs.add("--extra-index-url");
+      pipArgs.add(customIndex.toString());
+    }
+    if (skipDependencies) {
+      pipArgs.add("--no-deps");
+    }
+    pipArgs.add("%s==%s".formatted(packageName, version));
+    runPip(venvPath, pipArgs.toArray(String[]::new));
+    return venvPath;
   }
 
-  /// Install a package from a local directory containing a `pyproject.toml` file.
+  ///  Install a Wolpi extension package from the PyPI registry using an exact version.
   ///
-  /// @return the name of the installed package as specified in `pyproject.toml`
-  public String installFromLocalDirectory(Path localPackageDir) throws ExtensionLoadException {
+  /// @param packageName  name of the package
+  /// @param version      exact version (no ranges)
+  /// @param customIndex  optional custom PyPI index URI
+  public void installExtension(String packageName, String version, @Nullable URI customIndex)
+      throws PackageInstallException, ExtensionLoadException {
+    this.install(packageName, version, customIndex, false);
+    verifyInstalledExtension(packageName);
+  }
+
+  /// Install a Python package from a local directory containing a `pyproject.toml` file.
+  ///
+  /// @param localPackageDir  path to the local package directory
+  /// @param skipDependencies if true, do not install dependencies of the package
+  /// @return the path to the virtual environment of the installed package
+  public Path installFromLocalDirectory(Path localPackageDir, boolean skipDependencies) throws PackageInstallException {
     if (!Files.isDirectory(localPackageDir)
         || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
       throw new IllegalArgumentException(
@@ -96,14 +122,34 @@ public class PyPiInstaller {
     }
     String packageName = parsePackageNameFromPyproject(localPackageDir);
     Path venvPath = ensureVenv(packageName);
-    runPip(venvPath, "install", localPackageDir.toAbsolutePath().toString());
-    verifyInstalledPackage(packageName);
+    runPip(venvPath, "install", skipDependencies ? "--no-deps" : "", localPackageDir.toAbsolutePath().toString());
+    return venvPath;
+  }
+
+  /// Install a Wolpi extension package from a local directory containing a `pyproject.toml` file.
+  ///
+  /// @return the name of the installed package as specified in `pyproject.toml`
+  public String installExtensionFromLocalDirectory(Path localPackageDir)
+      throws PackageInstallException, ExtensionLoadException {
+    if (!Files.isDirectory(localPackageDir)
+        || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
+      throw new IllegalArgumentException(
+          "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);
+    }
+    String packageName = parsePackageNameFromPyproject(localPackageDir);
+    installFromLocalDirectory(localPackageDir, false);
+    verifyInstalledExtension(packageName);
     return packageName;
   }
 
   /// Obtain the `wolpi-ext` entry point for the given package.
-  public @Nullable EntryPoint getEntryPoint(String packageName) throws ExtensionLoadException {
-    Path installLocation = getPackageMetadataLocation(packageName);
+  public @Nullable EntryPoint getWolpiEntryPoint(String packageName) throws ExtensionLoadException {
+    Path installLocation;
+    try {
+      installLocation = getPackageMetadataLocation(packageName);
+    } catch (PackageInstallException e) {
+      throw new ExtensionLoadException(e);
+    }
 
     Path entryPointsFile = installLocation.resolve("entry_points.txt");
     if (!Files.isRegularFile(entryPointsFile)) {
@@ -181,19 +227,20 @@ public class PyPiInstaller {
           .findFirst()
           .map(line -> line.substring("Version:".length()).trim())
           .orElse(null);
-    } catch (ExtensionLoadException e) {
+    } catch (PackageInstallException e) {
       return null;
     }
   }
 
   /// Parse the pyproject.toml in the package directory to extract the package name.
-  private String parsePackageNameFromPyproject(Path localPackageDir) throws ExtensionLoadException {
+  private String parsePackageNameFromPyproject(Path localPackageDir)
+      throws PackageInstallException {
     Path pyproject = localPackageDir.resolve("pyproject.toml");
     Map<String, Object> toml;
     try {
       toml = tomlMapper.readValue(pyproject.toFile(), new TypeReference<>() {});
     } catch (IOException e) {
-      throw new ExtensionLoadException(e);
+      throw new PackageInstallException(e);
     }
     if (toml.containsKey("project")) {
       @SuppressWarnings("unchecked")
@@ -202,15 +249,15 @@ public class PyPiInstaller {
         return (String) project.get("name");
       }
     }
-    throw new ExtensionLoadException("Could not find package name in pyproject.toml: " + pyproject);
+    throw new PackageInstallException("Could not find package name in pyproject.toml: " + pyproject);
   }
 
   /// Create a new virtual environment for the given package if it does not already exist.
   ///
   /// @return the path to the created or existing virtual environment
-  Path ensureVenv(String packageName) throws ExtensionLoadException {
+  Path ensureVenv(String packageName) throws PackageInstallException {
     if (pythonPath == null) {
-      throw new ExtensionLoadException(
+      throw new PackageInstallException(
           "Python executable not configured or not found. Cannot install package '%s'."
               .formatted(packageName));
     }
@@ -225,7 +272,7 @@ public class PyPiInstaller {
             "venv",
             venvPath.toAbsolutePath().toString());
       } catch (IOException | InterruptedException e) {
-        throw new ExtensionLoadException(
+        throw new PackageInstallException(
             "Failed to create virtual environment for extension '%s'".formatted(packageName), e);
       }
     }
@@ -233,29 +280,29 @@ public class PyPiInstaller {
   }
 
   /// Run pip with the given arguments in the given virtual environment.
-  private String runPip(Path venvPath, String... args) throws ExtensionLoadException {
+  private String runPip(Path venvPath, String... args) throws PackageInstallException {
     Path pythonInVenv = venvPath.resolve("bin").resolve("python");
     List<String> cmd = new ArrayList<>();
     cmd.add("-m");
     cmd.add("pip");
-    cmd.addAll(Arrays.asList(args));
+    cmd.addAll(Arrays.stream(args).filter(s -> !s.isBlank()).toList());
     try {
       return CommandRunner.runCommand(
           pythonInVenv, baseDir, processTimeout, cmd.toArray(new String[0]));
     } catch (IOException | InterruptedException e) {
-      throw new ExtensionLoadException(e);
+      throw new PackageInstallException(e);
     }
   }
 
   /// Get the location of the `.dist-info` directory for the installed package.
-  private Path getPackageMetadataLocation(String packageName) throws ExtensionLoadException {
+  private Path getPackageMetadataLocation(String packageName) throws PackageInstallException {
     Path venvPath = ensureVenv(packageName);
     String out = runPip(venvPath, "inspect");
     JsonNode root;
     try {
       root = jsonMapper.readTree(out);
     } catch (JsonProcessingException e) {
-      throw new ExtensionLoadException("Failed to parse pip inspect output: " + out, e);
+      throw new PackageInstallException("Failed to parse pip inspect output: " + out, e);
     }
     var installed = root.get("installed");
     return StreamSupport.stream(installed.spliterator(), false)
@@ -264,13 +311,17 @@ public class PyPiInstaller {
         .findFirst()
         .orElseThrow(
             () ->
-                new ExtensionLoadException(
+                new PackageInstallException(
                     "Could not determine install location for " + packageName));
   }
 
-  private void verifyInstalledPackage(String packageName) throws ExtensionLoadException {
-    getPackageMetadataLocation(packageName);
-    getEntryPoint(packageName);
+  private void verifyInstalledExtension(String packageName) throws ExtensionLoadException {
+    try {
+      getPackageMetadataLocation(packageName);
+      getWolpiEntryPoint(packageName);
+    } catch (PackageInstallException e) {
+      throw new ExtensionLoadException(e);
+    }
   }
 
   /// Definition of the `wolpi-ext` entry point from package metadata

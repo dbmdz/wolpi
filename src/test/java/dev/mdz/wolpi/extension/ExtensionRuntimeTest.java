@@ -13,6 +13,7 @@ import dev.mdz.wolpi.config.WolpiConfig.ExtensionPoolConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
@@ -121,7 +122,7 @@ public class ExtensionRuntimeTest {
   }
 
   @BeforeEach
-  void setUp() throws ExtensionLoadException {
+  void setUp() throws ExtensionLoadException, PackageInstallException {
     lenient().when(buildProperties.getVersion()).thenReturn("0.1.0");
     testArena = Arena.ofConfined();
 
@@ -139,10 +140,10 @@ public class ExtensionRuntimeTest {
 
     Path pyExtPath = Path.of("src/test/resources/py-extension");
     Path pySitePkgPath = tempDir.resolve("venv/lib/python3.11/site-packages");
-    lenient().when(pyPiInstaller.installFromLocalDirectory(pyExtPath)).thenReturn("py-extension");
+    lenient().when(pyPiInstaller.installExtensionFromLocalDirectory(pyExtPath)).thenReturn("py-extension");
     lenient().when(pyPiInstaller.getVenvSitePackages("py-extension")).thenReturn(pySitePkgPath);
     lenient()
-        .when(pyPiInstaller.getEntryPoint("py-extension"))
+        .when(pyPiInstaller.getWolpiEntryPoint("py-extension"))
         .thenReturn(new EntryPoint("py_extension", "wolpi_extension"));
   }
 

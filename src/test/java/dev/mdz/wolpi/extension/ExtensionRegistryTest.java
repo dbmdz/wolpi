@@ -8,6 +8,7 @@ import dev.mdz.wolpi.config.ExtensionConfig.PkgSource;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import java.io.IOException;
 import java.net.http.HttpClient;
@@ -68,7 +69,7 @@ class ExtensionRegistryTest {
 
   @DisplayName("should load a JavaScript package")
   @Test
-  void shouldLoadJsPackage() throws IOException, ExtensionLoadException {
+  void shouldLoadJsPackage() throws IOException, ExtensionLoadException, PackageInstallException {
     Path source = Path.of("src/test/resources/js-extension");
     Path target = tempDir.resolve("js-extension");
     Files.createDirectories(target);
@@ -83,8 +84,8 @@ class ExtensionRegistryTest {
               }
             });
 
-    when(npmInstaller.installFromLocalDirectory(source)).thenReturn("js-extension");
-    when(npmInstaller.getEntryPoint("js-extension")).thenReturn(target.resolve("index.js"));
+    when(npmInstaller.installExtensionFromLocalDirectory(source)).thenReturn("js-extension");
+    when(npmInstaller.getWolpiEntryPoint("js-extension")).thenReturn(target.resolve("index.js"));
     when(npmInstaller.getVersion("js-extension")).thenReturn("1.0.0");
 
     // Install from local path
@@ -104,7 +105,7 @@ class ExtensionRegistryTest {
 
   @DisplayName("should load a Python package")
   @Test
-  void shouldLoadPyPackage() throws IOException, ExtensionLoadException {
+  void shouldLoadPyPackage() throws IOException, ExtensionLoadException, PackageInstallException {
     // Create venv structure
     Path venvPath = tempDir.resolve("venv");
     Path binPath = venvPath.resolve("bin");
@@ -127,9 +128,9 @@ class ExtensionRegistryTest {
                 throw new RuntimeException(e);
               }
             });
-    when(pyPiInstaller.installFromLocalDirectory(source)).thenReturn("py-extension");
+    when(pyPiInstaller.installExtensionFromLocalDirectory(source)).thenReturn("py-extension");
     when(pyPiInstaller.getVenvSitePackages("py-extension")).thenReturn(libPath);
-    when(pyPiInstaller.getEntryPoint("py-extension"))
+    when(pyPiInstaller.getWolpiEntryPoint("py-extension"))
         .thenReturn(new EntryPoint("py_extension", "wolpi_extension"));
 
     // Install from local path

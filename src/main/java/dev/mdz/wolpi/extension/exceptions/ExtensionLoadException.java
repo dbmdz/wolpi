@@ -1,5 +1,7 @@
 package dev.mdz.wolpi.extension.exceptions;
 
+import org.jspecify.annotations.Nullable;
+
 /// Thrown when loading an extension fails
 public class ExtensionLoadException extends Exception {
 
@@ -11,7 +13,7 @@ public class ExtensionLoadException extends Exception {
     super(e);
   }
 
-  public ExtensionLoadException(String msg, Exception e) {
+  public ExtensionLoadException(String msg, @Nullable Exception e) {
     super(msg, e);
   }
 }
