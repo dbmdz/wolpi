@@ -14,9 +14,9 @@ public enum IIIFComplianceLevel {
 
     public static @Nullable IIIFComplianceLevel fromInt(int value) {
         return Arrays.stream(IIIFComplianceLevel.values())
-            .filter(level -> level.value == value)
-            .findFirst()
-            .orElse(null);
+                .filter(level -> level.value == value)
+                .findFirst()
+                .orElse(null);
     }
 
     IIIFComplianceLevel(int value) {

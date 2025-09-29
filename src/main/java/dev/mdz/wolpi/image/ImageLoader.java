@@ -137,10 +137,12 @@ public class ImageLoader {
         URL res = Objects.requireNonNull(getClass().getResource(resourceName));
         if ("file".equals(res.getProtocol())) {
             try {
-              Path path = Path.of(res.toURI());
-              cacheInfo = new CacheInfo(null, Instant.ofEpochMilli(Files.getLastModifiedTime(path).toMillis()));
-            } catch (URISyntaxException|IOException e) {
-              // NOP
+                Path path = Path.of(res.toURI());
+                cacheInfo = new CacheInfo(
+                        null,
+                        Instant.ofEpochMilli(Files.getLastModifiedTime(path).toMillis()));
+            } catch (URISyntaxException | IOException e) {
+                // NOP
             }
         } else if ("jar".equals(res.getProtocol())) {
             try {
@@ -150,7 +152,7 @@ public class ImageLoader {
                     cacheInfo = new CacheInfo(null, Instant.ofEpochMilli(lastModified));
                 }
             } catch (IOException e) {
-              // NOP
+                // NOP
             }
         }
 

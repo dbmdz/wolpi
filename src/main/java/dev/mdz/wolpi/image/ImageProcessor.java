@@ -249,14 +249,12 @@ public class ImageProcessor {
         VTarget writeTarget = VTarget.newToMemory(vipsArena);
         VBlob buf;
         if (suffix.equals("pdf")) {
-          buf = image.magicksaveBuffer(VipsOption.String("format", "pdf"));
+            buf = image.magicksaveBuffer(VipsOption.String("format", "pdf"));
         } else {
-          image.writeToTarget(writeTarget, ".%s".formatted(suffix),
-              options.toArray(new VipsOption[0]));
-          buf = writeTarget.getBlob();
+            image.writeToTarget(writeTarget, ".%s".formatted(suffix), options.toArray(new VipsOption[0]));
+            buf = writeTarget.getBlob();
         }
         return new EncodedImage(
-                buf.asArenaScopedByteBuffer(),
-                mimeType != null ? mimeType : "image/%s".formatted(suffix));
+                buf.asArenaScopedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix));
     }
 }
