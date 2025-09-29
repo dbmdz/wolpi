@@ -123,6 +123,10 @@
         <targetPath>js</targetPath>
         <directory>${project.basedir}/src/main/js</directory>
       </resource>
+      <resource>
+        <targetPath>python</targetPath>
+        <directory>${project.basedir}/src/main/python</directory>
+      </resource>
     </resources>
     <plugins>
       <plugin>

@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.util.CommandRunner;
 import dev.mdz.wolpi.testutil.ProcessBuilderMocks;
 import java.io.IOException;
@@ -54,7 +55,7 @@ class PyPiInstallerTest {
 
   @Test
   @DisplayName("should install a package from PyPI")
-  void install() throws Exception {
+  void installExtension() throws Exception {
     Path distInfoLocation =
         pypiDir.resolve(
             "test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
@@ -74,13 +75,13 @@ class PyPiInstallerTest {
           distInfoLocation.resolve("entry_points.txt"),
           "[wolpi]\nmy-ext = my_pkg.main:get_extension");
 
-      installer.install("test-package", "1.2.3", URI.create("https://example.com/simple"));
+      installer.installExtension("test-package", "1.2.3", URI.create("https://example.com/simple"));
     }
   }
 
   @Test
   @DisplayName("should install a package from a local directory")
-  void installFromLocalDirectory() throws Exception {
+  void installExtensionFromLocalDirectory() throws Exception {
     Path packageDir = tempDir.resolve("my-package");
     Files.createDirectories(packageDir);
     Path pyproject = packageDir.resolve("pyproject.toml");
@@ -104,14 +105,14 @@ class PyPiInstallerTest {
       Files.writeString(
           distInfoDir.resolve("entry_points.txt"), "[wolpi]\nmy-ext = my_pkg.main:get_extension");
 
-      String packageName = installer.installFromLocalDirectory(packageDir);
+      String packageName = installer.installExtensionFromLocalDirectory(packageDir);
       assertThat(packageName).isEqualTo("my-package");
     }
   }
 
   @Test
   @DisplayName("should throw an exception if installation fails")
-  void installFails() {
+  void installExtensionFails() {
     assertThatThrownBy(
             () -> {
               var builder =
@@ -120,11 +121,11 @@ class PyPiInstallerTest {
                       .failure()
                       .stderr("pip install failed");
               try (var _ = builder.build()) {
-                installer.install(
+                installer.installExtension(
                     "test-package", "1.2.3", URI.create("https://example.com/simple"));
               }
             })
-        .isInstanceOf(ExtensionLoadException.class)
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("pip")
         .hasMessageContaining("fail");
   }
@@ -148,9 +149,9 @@ class PyPiInstallerTest {
       PyPiInstaller installerWithoutPython = new PyPiInstaller(config, new ObjectMapper());
       assertThatThrownBy(
               () ->
-                  installerWithoutPython.install(
+                  installerWithoutPython.installExtension(
                       "test-package", "1.2.3", URI.create("https://example.com/simple")))
-          .isInstanceOf(ExtensionLoadException.class)
+          .isInstanceOf(PackageInstallException.class)
           .hasMessageContaining("Python executable not configured or not found")
           .hasMessageContaining("test-package");
     }
@@ -158,7 +159,7 @@ class PyPiInstallerTest {
 
   @Test
   @DisplayName("should retrieve entry point from installed package")
-  void getEntryPoint() throws Exception {
+  void getWolpiEntryPoint() throws Exception {
     Path distInfo =
         pypiDir.resolve(
             "test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
@@ -178,7 +179,7 @@ class PyPiInstallerTest {
             .success()
             .stdoutWhenContains("inspect", inspectOutput);
     try (var _ = builder.build()) {
-      PyPiInstaller.EntryPoint entryPoint = installer.getEntryPoint("test-package");
+      PyPiInstaller.EntryPoint entryPoint = installer.getWolpiEntryPoint("test-package");
       assertThat(entryPoint.module()).isEqualTo("my_pkg.main");
       assertThat(entryPoint.function()).isEqualTo("get_extension");
     }
@@ -186,7 +187,7 @@ class PyPiInstallerTest {
 
   @Test
   @DisplayName("should throw an exception when entry_points.txt is missing")
-  void getEntryPoint_missingEntryPointsTxt_throws() throws Exception {
+  void getEntryPoint_missingWolpiEntryPointsTxt_throws() throws Exception {
     Path distInfo =
         pypiDir.resolve(
             "test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
@@ -202,7 +203,7 @@ class PyPiInstallerTest {
             .success()
             .stdoutWhenContains("inspect", inspectOutput);
     try (var _ = builder.build()) {
-      assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
+      assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
           .isInstanceOf(ExtensionLoadException.class)
           .hasMessageContaining("entry_points.txt")
           .hasMessageContaining("Could not find");
@@ -228,7 +229,7 @@ class PyPiInstallerTest {
             .success()
             .stdoutWhenContains("inspect", inspectOutput);
     try (var _ = builder.build()) {
-      assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
+      assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
           .isInstanceOf(ExtensionLoadException.class)
           .hasMessageContaining("No 'wolpi' entry point found")
           .hasMessageContaining("test-package");
@@ -254,7 +255,7 @@ class PyPiInstallerTest {
             .success()
             .stdoutWhenContains("inspect", inspectOutput);
     try (var _ = builder.build()) {
-      assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
+      assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
           .isInstanceOf(ExtensionLoadException.class)
           .hasMessageContaining("Invalid wolpi entry point specification")
           .hasMessageContaining("test-package");
@@ -270,7 +271,7 @@ class PyPiInstallerTest {
             .success()
             .stdoutWhenContains("inspect", "{invalid");
     try (var _ = builder.build()) {
-      assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
+      assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
           .isInstanceOf(ExtensionLoadException.class)
           .hasMessageContaining("Failed to parse pip inspect output");
     }
@@ -293,7 +294,7 @@ class PyPiInstallerTest {
             .success()
             .stdoutWhenContains("inspect", inspectOutput);
     try (var _ = builder.build()) {
-      assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
+      assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
           .isInstanceOf(ExtensionLoadException.class)
           .hasMessageContaining("Could not determine install location")
           .hasMessageContaining("test-package");
@@ -376,7 +377,7 @@ class PyPiInstallerTest {
   void shouldThrowWhenPyprojectTomlIsMissingWhenInstallingFromLocalDirectory() {
     Path dir = pypiDir.resolve("no-pyproject");
     assertThat(dir.toFile().mkdirs()).isTrue();
-    assertThatThrownBy(() -> installer.installFromLocalDirectory(dir))
+    assertThatThrownBy(() -> installer.installExtensionFromLocalDirectory(dir))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("pyproject.toml");
   }

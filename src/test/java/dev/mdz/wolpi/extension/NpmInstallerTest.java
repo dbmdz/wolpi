@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
+import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.util.CommandRunner;
 import dev.mdz.wolpi.testutil.ProcessBuilderMocks;
 import java.io.IOException;
@@ -32,7 +33,7 @@ class NpmInstallerTest {
   Path nodeModulesDir;
 
   @BeforeEach
-  void setUp() throws IOException, ExtensionLoadException {
+  void setUp() throws IOException, ExtensionLoadException, PackageInstallException {
     Path npmPath = tempDir.resolve("bin", "npm");
     Files.createDirectories(npmPath.getParent());
     Files.createFile(npmPath);
@@ -55,7 +56,7 @@ class NpmInstallerTest {
 
   @Test
   @DisplayName("should install a package from the npm registry")
-  void install() throws Exception {
+  void installExtension() throws Exception {
     Path packageDir = nodeModulesDir.resolve("test-package");
     Files.createDirectories(packageDir);
     Files.writeString(
@@ -73,13 +74,13 @@ class NpmInstallerTest {
 
     var builder = ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
     try (var _ = builder.build()) {
-      installer.install("test-package", "1.2.3", URI.create("https://registry.npmjs.org"));
+      installer.installExtension("test-package", "1.2.3", URI.create("https://registry.npmjs.org"));
     }
   }
 
   @Test
   @DisplayName("should install a package from a local directory")
-  void installFromLocalDirectory() throws Exception {
+  void installExtensionFromLocalDirectory() throws Exception {
     Path packageDir = tempDir.resolve("my-package");
     Files.createDirectories(packageDir);
     Files.writeString(
@@ -97,14 +98,14 @@ class NpmInstallerTest {
 
     var builder = ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
     try (var _ = builder.build()) {
-      String packageName = installer.installFromLocalDirectory(packageDir);
+      String packageName = installer.installExtensionFromLocalDirectory(packageDir);
       assertThat(packageName).isEqualTo("my-package");
     }
   }
 
   @Test
   @DisplayName("should throw an exception if npm install fails")
-  void installFails() {
+  void installExtensionFails() {
     assertThatThrownBy(
             () -> {
               var builder =
@@ -113,18 +114,18 @@ class NpmInstallerTest {
                       .failure()
                       .stderr("npm install failed");
               try (var _ = builder.build()) {
-                installer.install(
+                installer.installExtension(
                     "test-package", "1.2.3", URI.create("https://registry.npmjs.org"));
               }
             })
-        .isInstanceOf(ExtensionLoadException.class)
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("npm")
         .hasMessageContaining("fail");
   }
 
   @Test
   @DisplayName("should throw an exception if npm executable not found")
-  void npmExecutableNotFound() throws ExtensionLoadException {
+  void npmExecutableNotFound() throws PackageInstallException {
     WolpiConfig config =
         new WolpiConfig(
             tempDir,
@@ -141,9 +142,9 @@ class NpmInstallerTest {
       NpmInstaller installerWithoutNode = new NpmInstaller(config, new ObjectMapper());
       assertThatThrownBy(
               () ->
-                  installerWithoutNode.install(
+                  installerWithoutNode.installExtension(
                       "test-package", "1.2.3", URI.create("https://registry.npmjs.org")))
-          .isInstanceOf(ExtensionLoadException.class)
+          .isInstanceOf(PackageInstallException.class)
           .hasMessageContaining("npm executable not configured");
     }
   }
@@ -196,7 +197,7 @@ class NpmInstallerTest {
         }
         """);
 
-    Path entryPoint = installer.getEntryPoint("test-package");
+    Path entryPoint = installer.getWolpiEntryPoint("test-package");
     assertThat(entryPoint).isEqualTo(packageDir.resolve("dist/extension.js"));
   }
 
@@ -206,8 +207,8 @@ class NpmInstallerTest {
     Path packageDir = nodeModulesDir.resolve("test-package");
     Files.createDirectories(packageDir);
 
-    assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
-        .isInstanceOf(ExtensionLoadException.class)
+    assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("No package.json found");
   }
 
@@ -225,8 +226,8 @@ class NpmInstallerTest {
         }
         """);
 
-    assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
-        .isInstanceOf(ExtensionLoadException.class)
+    assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("no exports field");
   }
 
@@ -237,8 +238,8 @@ class NpmInstallerTest {
     Files.createDirectories(packageDir);
     Files.writeString(packageDir.resolve("package.json"), "{invalid json");
 
-    assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
-        .isInstanceOf(ExtensionLoadException.class)
+    assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("Failed to parse package.json");
   }
 
@@ -265,7 +266,7 @@ class NpmInstallerTest {
   @DisplayName("should throw an exception if package not found when getting version")
   void shouldThrowIfPackageNotFoundWhenGettingVersion() throws Exception {
     assertThatThrownBy(() -> installer.getVersion("non-existent-package"))
-        .isInstanceOf(ExtensionLoadException.class)
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("not installed");
   }
 
@@ -276,7 +277,7 @@ class NpmInstallerTest {
     Files.createDirectories(packageDir);
 
     assertThatThrownBy(() -> installer.getVersion("test-package"))
-        .isInstanceOf(ExtensionLoadException.class)
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("No package.json");
   }
 
@@ -295,7 +296,7 @@ class NpmInstallerTest {
         """);
 
     assertThatThrownBy(() -> installer.getVersion("test-package"))
-        .isInstanceOf(ExtensionLoadException.class)
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("no version field");
   }
 
@@ -305,8 +306,8 @@ class NpmInstallerTest {
   void shouldThrowIfDirectoryHasNoPackageJsonWhenInstallingFromLocalDirectory() {
     Path dir = tempDir.resolve("no-package-json");
     assertThat(dir.toFile().mkdirs()).isTrue();
-    assertThatThrownBy(() -> installer.installFromLocalDirectory(dir))
-        .isInstanceOf(ExtensionLoadException.class)
+    assertThatThrownBy(() -> installer.installExtensionFromLocalDirectory(dir))
+        .isInstanceOf(PackageInstallException.class)
         .hasMessageContaining("must exist and contain a package.json");
   }
 }

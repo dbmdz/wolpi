@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.extension;
 
+import app.photofox.vipsffm.VipsHelper;
 import dev.mdz.wolpi.extension.mapping.RecordValueMapper;
 import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
@@ -13,7 +14,10 @@ import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ResolvedImage;
 import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.model.TileSize;
+import dev.mdz.wolpi.validation.model.ValidationResult.ValidationFailure;
+import dev.mdz.wolpi.validation.model.ValidationResult.ValidationSuccess;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,10 +44,14 @@ public class GraalContextSupplier {
           FilesystemResolvedImage.class,
           HttpResolvedImage.class,
           BinaryResolvedImage.class,
-          SourceNotModified.class);
+          SourceNotModified.class,
+          ValidationSuccess.class,
+          ValidationFailure.class
+      );
 
-  private static final Engine graalEngine = Engine.newBuilder("python", "js").build();
   private static final HostAccess hostAccess = buildHostAccess();
+
+  private static Engine graalEngine = Engine.newBuilder("python", "js").build();
 
   private GraalContextSupplier() {}
 
@@ -53,7 +61,9 @@ public class GraalContextSupplier {
   /// the record types passed between Wolpi and the Extensions, as well as for some common Java
   /// types that we map from [String]s in the polyglot context.
   private static HostAccess buildHostAccess() {
-    var builder = HostAccess.newBuilder(HostAccess.ALL);
+    var builder = HostAccess.newBuilder(HostAccess.ALL)
+        .denyAccess(MemorySegment.class)  // Disallow direct FFM pointer access
+        .denyAccess(VipsHelper.class);    // Disallow direct access to vips-ffm internals
     for (var r : MAPPED_RECORDS) {
       //noinspection unchecked
       Class<Record> recordClass = (Class<Record>) r;
@@ -86,8 +96,10 @@ public class GraalContextSupplier {
     var ctx =
         Context.newBuilder("js")
             .allowHostAccess(hostAccess)
+            .allowHostClassLookup(c -> true)
             .engine(graalEngine)
             .allowIO(IOAccess.newBuilder().fileSystem(new ESMFileSystem()).build())
+            .useSystemExit(false)  // Disallow `exit()` calls from JS extensions
             .option("js.esm-eval-returns-exports", "true")
             .build();
     if (wolpiCtx != null) {
@@ -109,7 +121,10 @@ public class GraalContextSupplier {
         Context.newBuilder("python")
             .engine(graalEngine)
             .allowHostAccess(hostAccess)
+            .allowHostClassLookup(c -> true)
             .allowIO(IOAccess.ALL)
+            .useSystemExit(false)  // Disallow `exit()` calls from Python extensions
+            .allowCreateThread(true)
             .allowExperimentalOptions(true)
             .option("python.IsolateNativeModules", "true");
     if (venvPath != null) {
@@ -156,5 +171,15 @@ public class GraalContextSupplier {
     }
 
     return ctx;
+  }
+
+  /// **Internal API only** - Reset the GraalVM engine, closing all existing contexts.
+  ///
+  /// There should never be a need to call this method outside test classes that have a per-class
+  /// lifecycle. The caches in the Engine are absolutely vital for performance and should not be
+  /// discarded during normal operation.
+  public static void resetEngine() {
+    graalEngine.close();
+    graalEngine = Engine.newBuilder("python", "js").build();
   }
 }

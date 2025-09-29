@@ -24,9 +24,12 @@ import java.io.InputStream;
 import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -129,12 +132,34 @@ public class ImageLoader {
             }
         }
         String resourceName = "/test-img/%s.%s".formatted(VALIDATION_ID_PREFIX, format);
+
+        CacheInfo cacheInfo = null;
+        URL res = Objects.requireNonNull(getClass().getResource(resourceName));
+        if ("file".equals(res.getProtocol())) {
+            try {
+              Path path = Path.of(res.toURI());
+              cacheInfo = new CacheInfo(null, Instant.ofEpochMilli(Files.getLastModifiedTime(path).toMillis()));
+            } catch (URISyntaxException|IOException e) {
+              // NOP
+            }
+        } else if ("jar".equals(res.getProtocol())) {
+            try {
+                var conn = res.openConnection();
+                var lastModified = conn.getLastModified();
+                if (lastModified > 0) {
+                    cacheInfo = new CacheInfo(null, Instant.ofEpochMilli(lastModified));
+                }
+            } catch (IOException e) {
+              // NOP
+            }
+        }
+
         return new ImageSource(
                 VALIDATION_ID_PREFIX,
                 new CustomSourceResolvedImage((arena) -> VSource.newFromInputStream(
                         arena, Objects.requireNonNull(getClass().getResourceAsStream(resourceName)))),
                 null,
-                null);
+                cacheInfo);
     }
 
     /// Get the image information for the given source.
