@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.image;
 
+import app.photofox.vipsffm.VBlob;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VNamedEnum;
 import app.photofox.vipsffm.VTarget;
@@ -246,9 +247,16 @@ public class ImageProcessor {
 
         String mimeType = Files.probeContentType(Paths.get("image.%s".formatted(suffix)));
         VTarget writeTarget = VTarget.newToMemory(vipsArena);
-        image.writeToTarget(writeTarget, ".%s".formatted(suffix), options.toArray(new VipsOption[0]));
+        VBlob buf;
+        if (suffix.equals("pdf")) {
+          buf = image.magicksaveBuffer(VipsOption.String("format", "pdf"));
+        } else {
+          image.writeToTarget(writeTarget, ".%s".formatted(suffix),
+              options.toArray(new VipsOption[0]));
+          buf = writeTarget.getBlob();
+        }
         return new EncodedImage(
-                writeTarget.getBlob().asArenaScopedByteBuffer(),
+                buf.asArenaScopedByteBuffer(),
                 mimeType != null ? mimeType : "image/%s".formatted(suffix));
     }
 }

@@ -303,8 +303,8 @@ public class ImageRequestParser {
                 throw new IllegalArgumentException("Percent-based scaling is not supported in this configuration.");
             }
             double scale = Double.parseDouble(sizeSpec.substring(4)) / 100.0;
-            if (scale <= 0 || scale > 1) {
-                throw new IllegalArgumentException("Scale must be >=0 and <=100: " + sizeSpec);
+            if (scale <= 0) {
+                throw new IllegalArgumentException("Scale must be >=0: " + sizeSpec);
             }
             result = new ImageSize((int) Math.max(1, Math.floor(result.width() * scale)), (int)
                     Math.max(1, Math.floor(result.height() * scale)));
@@ -348,10 +348,10 @@ public class ImageRequestParser {
         if (wasUpscaled) {
             if (doUpscale && !supported.allowUpscaling()) {
                 throw new NotImplementedException("Upscaling is not supported in this configuration.");
-            } else if (!doUpscale && supported.allowUpscaling()) {
+            } else if (!doUpscale && iiifVersion == IIIFVersion.V3 && supported.allowUpscaling()) {
                 throw new IllegalArgumentException(
                         "Size requests that exceed the native image size must be prefixed with '^'");
-            } else if (!doUpscale) {
+            } else if (!supported.allowUpscaling()) {
                 throw new IllegalArgumentException("Upscaling is not supported in this configuration");
             }
         }

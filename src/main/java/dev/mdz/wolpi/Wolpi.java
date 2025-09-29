@@ -30,6 +30,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.convert.ApplicationConversionService;
+import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.format.FormatterRegistry;
@@ -152,6 +154,15 @@ public class Wolpi implements WebMvcConfigurer {
           }
         });
   }
+
+  @Bean
+  public WebServerFactoryCustomizer<TomcatServletWebServerFactory> tomcatCustomizer() {
+    return factory -> factory.addConnectorCustomizers(connector -> {
+      connector.setProperty("relaxedPathChars", "^");
+      connector.setProperty("relaxedQueryChars", "^");
+    });
+  }
+
 
   public static void main(String[] args) {
     // Need to enable untrusted loaders, since OpenJPEG is categorized as untrusted

@@ -85,16 +85,16 @@ public class ImageApiValidator {
     String jarLocation =
         ImageApiValidator.class.getProtectionDomain().getCodeSource().getLocation().toString();
     Path absolutePath = Path.of(jarLocation.replace("file:", "")).toAbsolutePath();
-    Path stubLocation;
+    Path shimLocation;
     try {
       if (jarLocation.endsWith(".jar")) {
         try (var jarFs = FileSystems.newFileSystem(absolutePath)) {
-          stubLocation = Files.createTempFile("tmp_wolpi_pyvips_stub", ".py");
-          Files.write(stubLocation, Files.readAllBytes(jarFs.getPath("classes", "python",
+          shimLocation = Files.createTempFile("tmp_wolpi_pyvips_shim", ".py");
+          Files.write(shimLocation, Files.readAllBytes(jarFs.getPath("classes", "python",
               "pyvips_shim.py")));
         }
       } else {
-        stubLocation = absolutePath.resolveSibling("classes/python/pyvips_shim.py");
+        shimLocation = absolutePath.resolveSibling("classes/python/pyvips_shim.py");
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -107,8 +107,8 @@ public class ImageApiValidator {
         
         import pyvips_shim
 
-        sys.modules['pyvips'] = pyvips_stub
-        """.formatted(stubLocation.getParent().toAbsolutePath().toString());
+        sys.modules['pyvips'] = pyvips_shim
+        """.formatted(shimLocation.getParent().toAbsolutePath().toString());
     context.eval("python", code);
   }
 
