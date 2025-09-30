@@ -97,11 +97,10 @@ wolpi:
     formats:
       allowed:
         - jpg
-        - tiff
+        - tif
         - png
         - gif
         - jp2
-        - pdf
         - webp
       preferred:
         - jpg

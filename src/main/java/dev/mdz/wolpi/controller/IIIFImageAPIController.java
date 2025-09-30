@@ -19,11 +19,15 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,253 +35,321 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @Controller
 public class IIIFImageAPIController {
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Logger log =
+            LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  private final WolpiConfig config;
-  private final ImageLoader loader;
-  private final ImageProcessor processor;
-  private final ImageRequestParser imageRequestParser;
-  private final IIIFComplianceRegistry complianceRegistry;
+    private final WolpiConfig config;
+    private final ImageLoader loader;
+    private final ImageProcessor processor;
+    private final ImageRequestParser imageRequestParser;
+    private final IIIFComplianceRegistry complianceRegistry;
 
-  public IIIFImageAPIController(
-      WolpiConfig config,
-      ImageLoader loader,
-      ImageProcessor processor,
-      ImageRequestParser imageRequestParser,
-      IIIFComplianceRegistry complianceRegistry) {
-    this.config = config;
-    this.loader = loader;
-    this.processor = processor;
-    this.imageRequestParser = imageRequestParser;
-    this.complianceRegistry = complianceRegistry;
-  }
-
-  /// Return the IIIF Image Information for the given image identifier, using the specified version
-  /// format.
-  @GetMapping(value = "/{version}/{identifier}/info.json", produces = "application/json")
-  public ResponseEntity<Map<String, Object>> getImageInfo(
-      @PathVariable IIIFVersion version,
-      @PathVariable String identifier,
-      @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
-      @Nullable @RequestHeader(value = "If-Modified-Since", required = false)
-          Instant ifModifiedSince,
-      HttpHeaders headers,
-      HttpServletRequest request,
-      WebRequest webRequest) {
-    HttpHeaders outHeaders = new HttpHeaders();
-    if (config.iiif().features().cors()) {
-      outHeaders.setAccessControlAllowOrigin("*");
-    }
-    if (!loader.authorize(identifier, headers, request.getRemoteAddr())) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-          .headers(outHeaders)
-          .body(Map.of("error", "Unauthorized access to image"));
+    public IIIFImageAPIController(
+            WolpiConfig config,
+            ImageLoader loader,
+            ImageProcessor processor,
+            ImageRequestParser imageRequestParser,
+            IIIFComplianceRegistry complianceRegistry) {
+        this.config = config;
+        this.loader = loader;
+        this.processor = processor;
+        this.imageRequestParser = imageRequestParser;
+        this.complianceRegistry = complianceRegistry;
     }
 
-    ImageSource source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
-    if (source == null) {
-      return ResponseEntity.status(HttpStatus.NOT_FOUND)
-          .headers(outHeaders)
-          .body(Map.of("error", "Image not found"));
-    } else if (source.resolvedImage() instanceof SourceNotModified) {
-      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
+    /// Handle OPTIONS requests for the /info.json endpoint
+    @RequestMapping(
+            value = "/{version}/{identifier}/info.json",
+            method = {RequestMethod.OPTIONS})
+    public ResponseEntity<Void> optionsImageInfo(@RequestHeader HttpHeaders requestHeaders) {
+        return createOptionsResponse(requestHeaders);
     }
 
-    if (source.cacheInfo() != null) {
-      boolean notModified = false;
-      if (source.cacheInfo().lastModified() != null) {
-        notModified =
-            webRequest.checkNotModified(
-                source.cacheInfo().eTag(), source.cacheInfo().lastModified().toEpochMilli());
-      } else if (source.cacheInfo().eTag() != null) {
-        notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
-      }
-      if (notModified) {
+    /// Redirect requests to the base URI of an image (without /info.json) to the info.json endpoint,
+    /// if configured to do so.
+    @GetMapping(value = "/{version}/{identifier}", produces = "application/json")
+    public ResponseEntity<Void> baseUriRedirect(@PathVariable IIIFVersion version, @PathVariable String identifier) {
+        if (!config.iiif().features().baseUriRedirect()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        String redirectUrl =
+                ServletUriComponentsBuilder.fromCurrentRequest().build().toUriString() + "/info.json";
+        headers.add("Location", redirectUrl);
+        return ResponseEntity.status(HttpStatus.SEE_OTHER).headers(headers).build();
+    }
+
+    /// Return the IIIF Image Information for the given image identifier, using the specified version
+    /// format.
+    @GetMapping(
+            value = "/{version}/{identifier}/info.json",
+            produces = {"application/json", "application/ld+json"})
+    public ResponseEntity<Map<String, Object>> getImageInfo(
+            @PathVariable IIIFVersion version,
+            @PathVariable String identifier,
+            @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
+            @Nullable @RequestHeader(value = "If-Modified-Since", required = false) Instant ifModifiedSince,
+            HttpHeaders headers,
+            HttpServletRequest request,
+            WebRequest webRequest) {
+        HttpHeaders outHeaders = new HttpHeaders();
+        if (config.iiif().features().cors()) {
+            outHeaders.setAccessControlAllowOrigin(
+                    Optional.ofNullable(headers.getOrigin()).orElse("*"));
+        }
+        if (!loader.authorize(identifier, headers, request.getRemoteAddr())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .headers(outHeaders)
+                    .body(Map.of("error", "Unauthorized access to image"));
+        }
+
+        ImageSource source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
+        if (source == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .headers(outHeaders)
+                    .body(Map.of("error", "Image not found"));
+        } else if (source.resolvedImage() instanceof SourceNotModified) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                    .headers(outHeaders)
+                    .body(null);
+        }
+
+        if (source.cacheInfo() != null) {
+            boolean notModified = false;
+            if (source.cacheInfo().lastModified() != null) {
+                notModified = webRequest.checkNotModified(
+                        source.cacheInfo().eTag(),
+                        source.cacheInfo().lastModified().toEpochMilli());
+            } else if (source.cacheInfo().eTag() != null) {
+                notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
+            }
+            if (notModified) {
+                setCacheHeaders(outHeaders, source);
+                return ResponseEntity.status(HttpStatus.NOT_MODIFIED).body(null);
+            }
+        }
+
+        ImageInfo imageInfo = loader.getImageInfo(source);
+        if (imageInfo == null) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .headers(outHeaders)
+                    .body(Map.of("error", "Could not read image information"));
+        }
+
+        Map<String, Object> rawInfo = new IIIFImageInfo(imageInfo, config.iiif(), complianceRegistry)
+                .toJSON(version, request.getRequestURL().toString().replace("/info.json", ""));
+
+        if (config.iiif().features().jsonLdMediaType()) {
+            outHeaders.setContentType(
+                    MediaType.valueOf("application/ld+json;profile=\"http://iiif.io/api/image/%d/context.json\""
+                            .formatted(version == IIIFVersion.V2 ? 2 : 3)));
+        } else {
+            outHeaders.setContentType(MediaType.APPLICATION_JSON);
+        }
         setCacheHeaders(outHeaders, source);
-        return ResponseEntity.status(HttpStatus.NOT_MODIFIED).body(null);
-      }
+        return ResponseEntity.ok().headers(outHeaders).body(rawInfo);
     }
 
-    ImageInfo imageInfo = loader.getImageInfo(source);
-    if (imageInfo == null) {
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .headers(outHeaders)
-          .body(Map.of("error", "Could not read image information"));
+    /// Handle OPTIONS requests for the image processing endpoint
+    @RequestMapping(
+            value = "/{version}/{identifier}/{region}/{size}/{rotation}/{quality}.{format}",
+            method = {RequestMethod.OPTIONS})
+    public ResponseEntity<Void> optionsImage(@RequestHeader HttpHeaders requestHeaders) {
+        return createOptionsResponse(requestHeaders);
     }
 
-    Map<String, Object> rawInfo =
-        new IIIFImageInfo(imageInfo, config.iiif(), complianceRegistry)
-            .toJSON(version, request.getRequestURL().toString().replace("/info.json", ""));
+    /// Process the image according to the IIIF Image API request in the URL.
+    @GetMapping(value = "/{version}/{identifier}/{region}/{size}/{rotation}/{quality}.{format}")
+    public ResponseEntity<ByteBuffer> getImage(
+            @PathVariable String identifier,
+            @PathVariable IIIFVersion version,
+            @PathVariable("region") String regionSpec,
+            @PathVariable("size") String sizeSpec,
+            @PathVariable("rotation") String rotationSpec,
+            @PathVariable("quality") String colorSpec,
+            @PathVariable("format") String formatSpec,
+            @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
+            @Nullable @RequestHeader(value = "If-Modified-Since", required = false) Instant ifModifiedSince,
+            @RequestHeader HttpHeaders requestHeaders,
+            HttpServletRequest servletRequest,
+            WebRequest webRequest)
+            throws IOException, InterruptedException {
 
-    if (config.iiif().features().jsonLdMediaType()) {
-      outHeaders.setContentType(
-          MediaType.valueOf(
-              "application/ld+json;profile=\"http://iiif.io/api/image/%d/context.json\""
-                  .formatted(version == IIIFVersion.V2 ? 2 : 3)));
-    } else {
-      outHeaders.setContentType(MediaType.APPLICATION_JSON);
-    }
-    setCacheHeaders(outHeaders, source);
-    return ResponseEntity.ok().headers(outHeaders).body(rawInfo);
-  }
+        HttpHeaders outHeaders = new HttpHeaders();
+        // CORS needs to be set for all response types
+        if (config.iiif().features().cors()) {
+            outHeaders.setAccessControlAllowOrigin(
+                    Optional.ofNullable(requestHeaders.getOrigin()).orElse("*"));
+        }
 
-  /// Process the image according to the IIIF Image API request in the URL.
-  @GetMapping(value = "/{version}/{identifier}/{scale}/{size}/{rotation}/{color}.{format}")
-  public ResponseEntity<ByteBuffer> getImage(
-      @PathVariable String identifier,
-      @PathVariable IIIFVersion version,
-      @PathVariable("scale") String regionSpec,
-      @PathVariable("size") String sizeSpec,
-      @PathVariable("rotation") String rotationSpec,
-      @PathVariable("color") String colorSpec,
-      @PathVariable("format") String formatSpec,
-      @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
-      @Nullable @RequestHeader(value = "If-Modified-Since", required = false)
-          Instant ifModifiedSince,
-      @RequestHeader HttpHeaders requestHeaders,
-      HttpServletRequest servletRequest,
-      WebRequest webRequest)
-      throws IOException, InterruptedException {
+        // Check permissions first
+        if (!loader.authorize(identifier, requestHeaders, servletRequest.getRemoteAddr())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .headers(outHeaders)
+                    .body(null);
+        }
 
-    HttpHeaders outHeaders = new HttpHeaders();
-    // CORS needs to be set for all response types
-    if (config.iiif().features().cors()) {
-      outHeaders.setAccessControlAllowOrigin("*");
-    }
+        // See if the identifier actually resolves to something
+        ImageSource source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
+        if (source == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(ByteBuffer.wrap("Image not found".getBytes()));
+        } else if (source.resolvedImage() instanceof SourceNotModified) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                    .headers(outHeaders)
+                    .body(null);
+        }
 
-    // Check permissions first
-    if (!loader.authorize(identifier, requestHeaders, servletRequest.getRemoteAddr())) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).headers(outHeaders).body(null);
-    }
+        // Check client headers if source has caching info, maybe we don't have to process the request?
+        if (source.cacheInfo() != null) {
+            boolean notModified = false;
+            if (source.cacheInfo().lastModified() != null) {
+                notModified = webRequest.checkNotModified(
+                        source.cacheInfo().eTag(),
+                        source.cacheInfo().lastModified().toEpochMilli());
+            } else if (source.cacheInfo().eTag() != null) {
+                notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
+            }
 
-    // See if the identifier actually resolves to something
-    ImageSource source = loader.resolve(identifier, ifNoneMatch, ifModifiedSince);
-    if (source == null) {
-      return ResponseEntity.status(HttpStatus.NOT_FOUND)
-          .headers(outHeaders)
-          .contentType(MediaType.TEXT_PLAIN)
-          .body(ByteBuffer.wrap("Image not found".getBytes()));
-    } else if (source.resolvedImage() instanceof SourceNotModified) {
-      return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
-    }
+            if (notModified) {
+                setCacheHeaders(outHeaders, source);
+                return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                        .headers(outHeaders)
+                        .body(null);
+            }
+        }
 
-    // Check client headers if source has caching info, maybe we don't have to process the request?
-    if (source.cacheInfo() != null) {
-      boolean notModified = false;
-      if (source.cacheInfo().lastModified() != null) {
-        notModified =
-            webRequest.checkNotModified(
-                source.cacheInfo().eTag(), source.cacheInfo().lastModified().toEpochMilli());
-      } else if (source.cacheInfo().eTag() != null) {
-        notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
-      }
+        ImageInfo imageInfo = loader.getImageInfo(source);
+        if (imageInfo == null) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(ByteBuffer.wrap("Could not read image information".getBytes()));
+        }
 
-      if (notModified) {
+        // Determine canonical form of the request
+        ImageRequest request =
+                new ImageRequest(identifier, version, regionSpec, sizeSpec, rotationSpec, colorSpec, formatSpec);
+        ImageRequest canonicalRequest = imageRequestParser.toCanonicalForm(request, imageInfo.nativeSize());
+
+        // Check if the request has its canonical form, and if not, redirect to it, if configured to do
+        // so
+        if (canonicalRequest != null
+                && !request.equals(canonicalRequest)
+                && config.iiif().features().canonicalRedirect()) {
+            // Redirect to canonical URL
+            String canonicalUrl = canonicalRequest.toRequestPath();
+            outHeaders.add("Location", canonicalUrl);
+            return ResponseEntity.status(HttpStatus.SEE_OTHER)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(ByteBuffer.wrap(("See: " + canonicalUrl).getBytes()));
+        }
+
+        // Time to actually process the image
+        VImage processedImage;
+        try {
+            processedImage = processor.processImage(source, request);
+        } catch (NotImplementedException e) {
+            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(ByteBuffer.wrap(e.getMessage().getBytes()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(ByteBuffer.wrap(e.getMessage().getBytes()));
+        } catch (VipsError e) {
+            String requestPath = canonicalRequest != null ? canonicalRequest.toRequestPath() : request.toRequestPath();
+            log.error("Error processing image request {} due to error in libvips", requestPath, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(null);
+        }
+
+        List<String> linkHeaderUrls = new ArrayList<>();
+        if (canonicalRequest != null && config.iiif().features().canonicalLinkHeader()) {
+            String canonicalUrl = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .build()
+                    .toUriString()
+                    .replace(request.toRequestPath(), canonicalRequest.toRequestPath());
+            linkHeaderUrls.add("<%s>; rel=\"canonical\"".formatted(canonicalUrl));
+        }
+
+        // Cache Headers only on proper image responses
         setCacheHeaders(outHeaders, source);
-        return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(outHeaders).body(null);
-      }
+
+        if (config.iiif().features().profileLinkHeader()) {
+            linkHeaderUrls.add("<http://iiif.io/api/image/%d/level2.json>; rel=\"profile\""
+                    .formatted(version == IIIFVersion.V2 ? 2 : 3));
+        }
+
+        if (!linkHeaderUrls.isEmpty()) {
+            outHeaders.add(HttpHeaders.LINK, String.join(", ", linkHeaderUrls));
+        }
+
+        // Encode the processed image to the requested output format and return it to the client
+        try {
+            var encoded = processor.encodeImage(processedImage, request.formatSpec());
+            return ResponseEntity.ok()
+                    .headers(outHeaders)
+                    .contentType(MediaType.parseMediaType(encoded.contentType()))
+                    .contentLength(encoded.data().remaining())
+                    .body(encoded.data());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .headers(outHeaders)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(ByteBuffer.wrap(e.getMessage().getBytes()));
+        }
     }
 
-    ImageInfo imageInfo = loader.getImageInfo(source);
-    if (imageInfo == null) {
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .headers(outHeaders)
-          .contentType(MediaType.TEXT_PLAIN)
-          .body(ByteBuffer.wrap("Could not read image information".getBytes()));
+    /// Set cache-related headers on the response according to the configuration and the image
+    /// source's cache info.
+    private void setCacheHeaders(HttpHeaders headers, ImageSource source) {
+        if (!config.cacheControlHeaders().infoJson().isEmpty()) {
+            headers.setCacheControl(config.cacheControlHeaders().infoJson());
+        }
+        if (source.cacheInfo() != null) {
+            if (source.cacheInfo().eTag() != null && !headers.containsKey("ETag")) {
+                headers.setETag("\"%s\"".formatted(source.cacheInfo().eTag()));
+            }
+            if (source.cacheInfo().lastModified() != null && !headers.containsKey("Last-Modified")) {
+                headers.setLastModified(source.cacheInfo().lastModified());
+            }
+        }
     }
 
-    // Determine canonical form of the request
-    ImageRequest request =
-        new ImageRequest(
-            identifier, version, regionSpec, sizeSpec, rotationSpec, colorSpec, formatSpec);
-    ImageRequest canonicalRequest =
-        imageRequestParser.toCanonicalForm(request, imageInfo.nativeSize());
+    /// Generate an OPTIONS response with allowed methods and CORS headers if enabled.
+    private ResponseEntity<Void> createOptionsResponse(HttpHeaders requestHeaders) {
+        HttpHeaders outHeaders = new HttpHeaders();
+        outHeaders.setAccessControlAllowMethods(List.of(HttpMethod.GET, HttpMethod.HEAD, HttpMethod.OPTIONS));
+        if (config.iiif().features().cors()) {
+            // Explicitly allow the origin that made the request
+            outHeaders.setAccessControlAllowOrigin(
+                    Optional.ofNullable(requestHeaders.getOrigin()).orElse("*"));
 
-    // Check if the request has its canonical form, and if not, redirect to it, if configured to do
-    // so
-    if (canonicalRequest != null
-        && !request.equals(canonicalRequest)
-        && config.iiif().features().canonicalRedirect()) {
-      // Redirect to canonical URL
-      String canonicalUrl = canonicalRequest.toRequestPath();
-      outHeaders.add("Location", canonicalUrl);
-      return ResponseEntity.status(HttpStatus.SEE_OTHER)
-          .headers(outHeaders)
-          .contentType(MediaType.TEXT_PLAIN)
-          .body(ByteBuffer.wrap(("See: " + canonicalUrl).getBytes()));
+            // Allow all requested headers, and "Accept" by default
+            List<String> reqHeaders = requestHeaders.getAccessControlRequestHeaders();
+            if (!reqHeaders.isEmpty()) {
+                outHeaders.setAccessControlAllowHeaders(reqHeaders);
+            } else {
+                outHeaders.setAccessControlAllowHeaders(List.of("Accept"));
+            }
+            outHeaders.setAccessControlMaxAge(86400L);
+        }
+        return ResponseEntity.ok().headers(outHeaders).build();
     }
-
-    // Time to actually process the image
-    VImage processedImage;
-    try {
-      processedImage = processor.processImage(source, request);
-    } catch (NotImplementedException e) {
-      return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-          .headers(outHeaders)
-          .contentType(MediaType.TEXT_PLAIN)
-          .body(ByteBuffer.wrap(e.getMessage().getBytes()));
-    } catch (IllegalArgumentException e) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .headers(outHeaders)
-          .contentType(MediaType.TEXT_PLAIN)
-          .body(ByteBuffer.wrap(e.getMessage().getBytes()));
-    } catch (VipsError e) {
-      String requestPath =
-          canonicalRequest != null ? canonicalRequest.toRequestPath() : request.toRequestPath();
-      log.error("Error processing image request {} due to error in libvips", requestPath, e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .headers(outHeaders)
-          .contentType(MediaType.TEXT_PLAIN)
-          .body(null);
-    }
-
-    if (canonicalRequest != null && config.iiif().features().canonicalLinkHeader()) {
-      String canonicalUrl =
-          ServletUriComponentsBuilder.fromCurrentRequest()
-              .build()
-              .toUriString()
-              .replace(request.toRequestPath(), canonicalRequest.toRequestPath());
-      outHeaders.add("Link", "<%s>; rel=\"canonical\"".formatted(canonicalUrl));
-    }
-
-    // Cache Headers only on proper image responses
-    setCacheHeaders(outHeaders, source);
-
-    if (config.iiif().features().profileLinkHeader()) {
-      outHeaders.add(
-          "Link",
-          "<http://iiif.io/api/image/%d/level2.json>; rel=\"profile\""
-              .formatted(version == IIIFVersion.V2 ? 2 : 3));
-    }
-
-    // Encode the processed image to the requested output format and return it to the client
-    var encoded = processor.encodeImage(processedImage, request.formatSpec());
-    return ResponseEntity.ok()
-        .headers(outHeaders)
-        .contentType(MediaType.parseMediaType(encoded.contentType()))
-        .contentLength(encoded.data().remaining())
-        .body(encoded.data());
-  }
-
-  /// Set cache-related headers on the response according to the configuration and the image
-  /// source's cache info.
-  private void setCacheHeaders(HttpHeaders headers, ImageSource source) {
-    if (!config.cacheControlHeaders().infoJson().isEmpty()) {
-      headers.setCacheControl(config.cacheControlHeaders().infoJson());
-    }
-    if (source.cacheInfo() != null) {
-      if (source.cacheInfo().eTag() != null && !headers.containsKey("ETag")) {
-        headers.setETag("\"%s\"".formatted(source.cacheInfo().eTag()));
-      }
-      if (source.cacheInfo().lastModified() != null && !headers.containsKey("Last-Modified")) {
-        headers.setLastModified(source.cacheInfo().lastModified());
-      }
-    }
-  }
 }
