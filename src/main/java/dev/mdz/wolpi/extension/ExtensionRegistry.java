@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +57,13 @@ public class ExtensionRegistry {
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+    /// Map of hooks to the list of extensions that implement them
     private final Map<ExtensionHooks, List<LoadedExtension>> implementedHooks;
+
+    /// Non-empty when running validation tests against extensions in isolation,
+    /// contains all extensions except the one that is under test.
+    private final Set<LoadedExtension> disabledExtensions = new HashSet<>();
+
     private final HttpClient httpClient;
     private final PyPiInstaller pyInstaller;
     private final NpmInstaller jsInstaller;
@@ -81,26 +88,29 @@ public class ExtensionRegistry {
         try (ExecutorService pool =
                 Executors.newFixedThreadPool(cfg.extensions().size())) {
             var futs = cfg.extensions().stream()
-                    .map(ext -> pool.submit(() -> {
-                        long start = System.nanoTime();
-                        var loaded = loadExtension(ext);
-                        log.info("Extension '%s' loaded in %.2f ms"
-                                .formatted(loaded.extensionInfo().name(), (System.nanoTime() - start) / 1_000_000.0));
-                        return loaded;
-                    }))
-                    .toList();
+                    .collect(Collectors.toMap(
+                            ext -> ext,
+                            ext -> pool.submit(() -> {
+                                long start = System.nanoTime();
+                                var loaded = loadExtension(ext);
+                                log.info("Extension '%s' loaded in %.2f ms"
+                                        .formatted(
+                                                loaded.extensionInfo().name(),
+                                                (System.nanoTime() - start) / 1_000_000.0));
+                                return loaded;
+                            })));
 
             // Determine which extension implements which hooks
-            for (var f : futs) {
+            for (var entry : futs.entrySet()) {
                 try {
-                    var ext = f.get();
+                    var ext = entry.getValue().get();
                     for (ExtensionHooks hook : ext.implementedHooks()) {
                         implementedHooks
                                 .computeIfAbsent(hook, (k) -> new ArrayList<>())
                                 .add(ext);
                     }
                 } catch (InterruptedException | ExecutionException e) {
-                    log.error("Failed to load extension", e);
+                    log.error("Failed to load extension {}", entry.getKey(), e);
                 }
             }
         }
@@ -330,12 +340,13 @@ public class ExtensionRegistry {
     /// @param hooks the hook(s) to check for
     /// @return the list of loaded extensions that implement all the given hooks, all extensions if no
     ///         hooks are given
-    List<LoadedExtension> getExtensions(ExtensionHooks... hooks) {
+    public List<LoadedExtension> getExtensions(ExtensionHooks... hooks) {
         if (hooks.length == 0) {
             // If no hooks are given, return all extensions
             return implementedHooks.values().stream()
                     .flatMap(List::stream)
                     .distinct()
+                    .filter(e -> !disabledExtensions.contains(e))
                     .toList();
         }
 
@@ -347,6 +358,27 @@ public class ExtensionRegistry {
                 break;
             }
         }
+        matchingExtensions.removeAll(disabledExtensions);
         return new ArrayList<>(matchingExtensions);
+    }
+
+    /// Temporarily disable all extensions except the given one.
+    ///
+    /// Used for running validation tests against a single extension in isolation.
+    ///
+    /// @param ext the extension to keep enabled
+    /// @return an AutoCloseable that will re-enable all extensions when closed
+    public TemporarilyIsolatedRegistry temporarilyIsolateExtension(LoadedExtension ext) {
+        this.getExtensions().stream().filter(e -> e != ext).forEach(this.disabledExtensions::add);
+        return new TemporarilyIsolatedRegistry(this);
+    }
+
+    /// AutoCloseable that re-enables all extensions when closed, used for temporarily isolating an
+    /// extension during validation tests.
+    public record TemporarilyIsolatedRegistry(ExtensionRegistry registry) implements AutoCloseable {
+        @Override
+        public void close() {
+            this.registry.disabledExtensions.clear();
+        }
     }
 }

@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ImageApiValidator {
     private static final String VALIDATOR_VERSION = "0.1.0";
+    private static final String VALIDATION_IMAGE_PNG = "67352ccc-d1b0-11e1-89ae-279075081939-png";
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -73,6 +74,56 @@ public class ImageApiValidator {
         var ctx = GraalContextSupplier.getPythonContext(venvPath, null);
         installPyVipsShim(ctx);
         return ctx;
+    }
+
+    /// Run the full IIIF Image API validation test suite against the given local server port
+    /// with each installed extension enabled (one at a time) to ensure that no extension breaks
+    /// API compliance.
+    ///
+    /// @param port the local server port to run the tests against
+    /// @return `true` if all tests passed with all extensions, `false` if any test failed
+    public boolean runStartupExtensionValidation(int port) {
+        for (var ext : extensionRegistry.getExtensions()) {
+            try (var ignored = extensionRegistry.temporarilyIsolateExtension(ext)) {
+                log.info(
+                        "Running IIIF Image API validation tests with extension '{}'...",
+                        ext.extensionInfo().name());
+                for (IIIFVersion version : IIIFVersion.values()) {
+                    var results =
+                            this.runTests("http://localhost:%d/v3".formatted(port), VALIDATION_IMAGE_PNG, version, 4);
+                    var allFailures = results.entrySet().stream()
+                            .map(e -> Map.entry(
+                                    e.getKey(),
+                                    e.getValue().stream()
+                                            .filter(ValidationFailure.class::isInstance)
+                                            .map(ValidationFailure.class::cast)
+                                            .toList()))
+                            .toList();
+                    if (allFailures.isEmpty()) {
+                        continue;
+                    }
+                    log.error(
+                            "Extension '{}' caused IIF Image API v{} validation failures:",
+                            version.value(),
+                            ext.extensionInfo().name());
+                    for (var entry : allFailures) {
+                        var test = entry.getKey();
+                        for (var failure : entry.getValue()) {
+                            log.error(
+                                    " - Test '{}' ({}): {} (expected: {}, got: {})\nURL: {}",
+                                    test.name(),
+                                    test.category(),
+                                    failure.details(),
+                                    failure.expected(),
+                                    failure.received(),
+                                    failure.url());
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /// Install a shim for the `pyvips` library into the given Python context.
