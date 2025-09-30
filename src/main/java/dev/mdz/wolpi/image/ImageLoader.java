@@ -114,13 +114,18 @@ public class ImageLoader {
         return null;
     }
 
-    private ImageSource resolveValidationImage(String identifier) {
+    /// Load the official IIIF Image API Validation image from the classpath, either in PNG or JP2
+    private @Nullable ImageSource resolveValidationImage(String identifier) {
+        // Default format if no suffix is specified
         String format = "png";
         String[] parts = identifier.split("-");
+        // Explicitly requested format via extra dashed component in identifier
         if (parts.length > 5) {
             String requestedFormat = parts[5].toLowerCase();
             if (requestedFormat.equals("png") || requestedFormat.equals("jp2")) {
                 format = requestedFormat;
+            } else {
+                return null;
             }
         }
         String resourceName = "/test-img/%s.%s".formatted(VALIDATION_ID_PREFIX, format);

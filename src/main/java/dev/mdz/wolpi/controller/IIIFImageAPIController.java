@@ -160,21 +160,21 @@ public class IIIFImageAPIController {
 
     /// Handle OPTIONS requests for the image processing endpoint
     @RequestMapping(
-            value = "/{version}/{identifier}/{scale}/{size}/{rotation}/{color}.{format}",
+            value = "/{version}/{identifier}/{region}/{size}/{rotation}/{quality}.{format}",
             method = {RequestMethod.OPTIONS})
     public ResponseEntity<Void> optionsImage(@RequestHeader HttpHeaders requestHeaders) {
         return createOptionsResponse(requestHeaders);
     }
 
     /// Process the image according to the IIIF Image API request in the URL.
-    @GetMapping(value = "/{version}/{identifier}/{scale}/{size}/{rotation}/{color}.{format}")
+    @GetMapping(value = "/{version}/{identifier}/{region}/{size}/{rotation}/{quality}.{format}")
     public ResponseEntity<ByteBuffer> getImage(
             @PathVariable String identifier,
             @PathVariable IIIFVersion version,
-            @PathVariable("scale") String regionSpec,
+            @PathVariable("region") String regionSpec,
             @PathVariable("size") String sizeSpec,
             @PathVariable("rotation") String rotationSpec,
-            @PathVariable("color") String colorSpec,
+            @PathVariable("quality") String colorSpec,
             @PathVariable("format") String formatSpec,
             @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
             @Nullable @RequestHeader(value = "If-Modified-Since", required = false) Instant ifModifiedSince,
