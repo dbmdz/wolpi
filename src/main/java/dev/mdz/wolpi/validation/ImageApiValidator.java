@@ -29,8 +29,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class ImageApiValidator {
     private static final String VALIDATOR_VERSION = "0.1.0";
-    private static final String VALIDATION_IMAGE_PNG = "67352ccc-d1b0-11e1-89ae-279075081939-png";
-    private static final String VALIDATION_IMAGE_JP2 = "8a5f6e1c-3b2d-11e1-8ed1-279075081939-jp2";
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -119,17 +117,19 @@ public class ImageApiValidator {
             throw new RuntimeException(e);
         }
 
+        var shimModuleName = shimLocation.getFileName().toString().replace(".py", "");
         var code =
                 """
         import sys
 
         sys.path.insert(0, '%s')
 
-        import pyvips_shim
+        import %s
 
-        sys.modules['pyvips'] = pyvips_shim
+        sys.modules['pyvips'] = %s
         """
-                        .formatted(shimLocation.getParent().toAbsolutePath().toString());
+                        .formatted(
+                                shimLocation.getParent().toAbsolutePath().toString(), shimModuleName, shimModuleName);
         try {
             context.eval("python", code);
         } finally {

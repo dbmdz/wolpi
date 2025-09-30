@@ -41,5 +41,8 @@ module wolpi {
     exports dev.mdz.wolpi.validation.model;
 
     // Needed to allow proxying of RuntimeContext by Spring AOP for request-scoped bean
-    opens dev.mdz.wolpi.extension;
+    opens dev.mdz.wolpi to
+            spring.core;
+    opens dev.mdz.wolpi.extension to
+            spring.core;
 }
