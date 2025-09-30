@@ -14,6 +14,7 @@ import java.lang.invoke.MethodHandles;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -90,14 +91,29 @@ public class ImageApiValidator {
                 .toString();
         Path absolutePath = Path.of(jarLocation.replace("file:", "")).toAbsolutePath();
         Path shimLocation;
+        boolean deleteShimAfter;
         try {
             if (jarLocation.endsWith(".jar")) {
                 try (var jarFs = FileSystems.newFileSystem(absolutePath)) {
-                    shimLocation = Files.createTempFile("tmp_wolpi_pyvips_shim", ".py");
+                    // GraalPy can't import code from a JAR directly, so we write the shim to a temp
+                    // file with restricted permissions first
+                    if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+                        shimLocation = Files.createTempFile(
+                                "tmp_wolpi_pyvips_shim",
+                                ".py",
+                                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+                    } else {
+                        shimLocation = Files.createTempFile("tmp_wolpi_pyvips_shim", ".py");
+                        var file = shimLocation.toFile();
+                        file.setReadable(true, true);
+                        file.setWritable(true, true);
+                    }
                     Files.write(shimLocation, Files.readAllBytes(jarFs.getPath("classes", "python", "pyvips_shim.py")));
+                    deleteShimAfter = true;
                 }
             } else {
                 shimLocation = absolutePath.resolveSibling("classes/python/pyvips_shim.py");
+                deleteShimAfter = false;
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -114,7 +130,19 @@ public class ImageApiValidator {
         sys.modules['pyvips'] = pyvips_shim
         """
                         .formatted(shimLocation.getParent().toAbsolutePath().toString());
-        context.eval("python", code);
+        try {
+            context.eval("python", code);
+        } finally {
+            if (deleteShimAfter) {
+                // Shim can be safely deleted after importing, as it was bytecode-compiled and loaded into
+                // memory by the interpreter.
+                try {
+                    Files.delete(shimLocation);
+                } catch (IOException e) {
+                    log.warn("Failed to delete temporary pyvips shim file: {}", shimLocation, e);
+                }
+            }
+        }
     }
 
     public Map<ValidationTest, List<ValidationResult>> runTests(
