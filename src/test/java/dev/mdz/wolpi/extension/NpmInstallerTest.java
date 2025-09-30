@@ -225,8 +225,8 @@ class NpmInstallerTest {
         }
         """);
 
-        assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
-                .isInstanceOf(ExtensionLoadException.class)
+        assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
+                .isInstanceOf(PackageInstallException.class)
                 .hasMessageContaining("no exports field");
     }
 

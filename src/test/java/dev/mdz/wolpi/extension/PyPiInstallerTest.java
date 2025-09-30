@@ -127,6 +127,8 @@ class PyPiInstallerTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Collections.emptyList(),
                 null,
                 new PackagingConfig(null, null, Duration.ofSeconds(5)),

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.extension.ExtensionRuntime.ExtensionRuntimeImpl;
 import dev.mdz.wolpi.extension.RuntimeContext;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
@@ -70,7 +71,7 @@ public class Wolpi implements WebMvcConfigurer {
             ExtensionRegistry registry,
             @Qualifier("contextPool") KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
             @Qualifier("extensionThreadPool") ExecutorService threadPool) {
-        return new ExtensionRuntime(registry, ctxPool, threadPool);
+        return new ExtensionRuntimeImpl(registry, ctxPool, threadPool);
     }
 
     /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.

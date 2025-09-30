@@ -408,7 +408,7 @@ public class ExtensionRuntimeTest {
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
         var registry = new ExtensionRegistry(config, httpClient, pyPiInstaller, npmInstaller, buildProperties);
-        return new ExtensionRuntime(registry, contextPool, threadPool);
+        return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 
     private ExtensionConfig getTestAuthExtension(
