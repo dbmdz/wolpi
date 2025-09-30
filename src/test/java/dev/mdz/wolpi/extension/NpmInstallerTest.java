@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
-import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.util.CommandRunner;
 import dev.mdz.wolpi.testutil.ProcessBuilderMocks;
@@ -34,7 +33,7 @@ class NpmInstallerTest {
     Path nodeModulesDir;
 
     @BeforeEach
-    void setUp() throws IOException, ExtensionLoadException, PackageInstallException {
+    void setUp() throws IOException, PackageInstallException {
         Path npmPath = tempDir.resolve("bin", "npm");
         Files.createDirectories(npmPath.getParent());
         Files.createFile(npmPath);

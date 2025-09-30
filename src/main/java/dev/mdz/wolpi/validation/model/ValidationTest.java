@@ -3,7 +3,7 @@ package dev.mdz.wolpi.validation.model;
 import dev.mdz.wolpi.iiif.model.IIIFComplianceLevel;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +19,7 @@ public record ValidationTest(
         List<IIIFVersion> versions,
         Set<String> extraNames) {
     public static ValidationTest fromPyClass(Value pyClass) {
-        Map<IIIFVersion, IIIFComplianceLevel> complianceLevels = new HashMap<>();
+        Map<IIIFVersion, IIIFComplianceLevel> complianceLevels = new EnumMap<>(IIIFVersion.class);
         Value compliance = pyClass.getMember("compliance_level");
         if (compliance.hasHashEntries()) {
             // It's a dict, so version-specific compiance levels

@@ -40,8 +40,7 @@ public class ImageApiValidator {
     private @Nullable List<ValidationTest> allTests = null;
     private @Nullable Path venvPath = null;
 
-    public ImageApiValidator(PyPiInstaller pyPiInstaller, ExtensionRegistry extensionRegistry)
-            throws PackageInstallException {
+    public ImageApiValidator(PyPiInstaller pyPiInstaller, ExtensionRegistry extensionRegistry) {
         this.pyPiInstaller = pyPiInstaller;
         this.extensionRegistry = extensionRegistry;
     }
@@ -55,7 +54,7 @@ public class ImageApiValidator {
             log.error("Failed to install iiif-validator-ng package for IIIF Image API validation, cannot proceed.", e);
             throw new RuntimeException(e);
         }
-        this.allTests = this.discoverAllTests(this.venvPath);
+        this.allTests = this.discoverAllTests();
     }
 
     /// Get all available validation tests from the installed validator package
@@ -232,7 +231,7 @@ public class ImageApiValidator {
         return results;
     }
 
-    private List<ValidationTest> discoverAllTests(Path venvPath) {
+    private List<ValidationTest> discoverAllTests() {
         try (var context = this.getValidationContext()) {
             var pyTestSet = context.eval(
                     "python",
