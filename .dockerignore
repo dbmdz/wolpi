@@ -4,5 +4,6 @@
 .mvn
 target
 samples
+images
 docs
 data

@@ -44,6 +44,8 @@ class PyPiInstallerTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Collections.emptyList(),
                 null,
                 new PackagingConfig(null, pythonPath, Duration.ofSeconds(5)),

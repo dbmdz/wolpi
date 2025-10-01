@@ -169,6 +169,8 @@ public class Wolpi implements WebMvcConfigurer {
         Vips.allowUntrustedOperations();
         // Operations cache does not make much sense for our access patterns
         Vips.disableOperationCache();
-        SpringApplication.run(Wolpi.class, args);
+        SpringApplication app = new SpringApplication(Wolpi.class);
+        app.addListeners(new ConfigOverrideListener());
+        app.run(args);
     }
 }

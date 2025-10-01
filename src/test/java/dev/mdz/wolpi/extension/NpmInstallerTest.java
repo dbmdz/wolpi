@@ -44,6 +44,8 @@ class NpmInstallerTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Collections.emptyList(),
                 null,
                 new PackagingConfig(npmPath, null, Duration.ofSeconds(5)),
@@ -126,6 +128,8 @@ class NpmInstallerTest {
     void npmExecutableNotFound() throws PackageInstallException {
         WolpiConfig config = new WolpiConfig(
                 tempDir,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -221,8 +225,8 @@ class NpmInstallerTest {
         }
         """);
 
-        assertThatThrownBy(() -> installer.getWolpiEntryPoint("test-package"))
-                .isInstanceOf(PackageInstallException.class)
+        assertThatThrownBy(() -> installer.getEntryPoint("test-package"))
+                .isInstanceOf(ExtensionLoadException.class)
                 .hasMessageContaining("no exports field");
     }
 

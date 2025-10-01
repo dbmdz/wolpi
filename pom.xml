@@ -169,7 +169,7 @@
           <argLine>${surefireArgLine}
 						--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED
 						-Dpolyglot.engine.WarnInterpreterOnly=false
-						--enable-native-access=app.photofox.vipsffm,org.graalvm.truffle
+						--enable-native-access=ALL-UNNAMED
 						-XX:+EnableDynamicAgentLoading</argLine>
         </configuration>
       </plugin>
@@ -177,7 +177,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <jvmArguments>--enable-native-access=app.photofox.vipsffm,org.graalvm.truffle</jvmArguments>
+          <jvmArguments>--enable-native-access=ALL-UNNAMED</jvmArguments>
         </configuration>
         <executions>
           <execution>
