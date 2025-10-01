@@ -1,0 +1,6 @@
+${AnsiColor.BRIGHT_RED}  Ѱ Ѱ
+${AnsiColor.BLUE} (\_/)
+${AnsiColor.BRIGHT_RED}ʚ${AnsiColor.BLUE}(•.•)${AnsiColor.BRIGHT_RED}ɞ
+${AnsiColor.BLUE} (")(")
+${AnsiColor.GREEN}~ wolpi ~
+  ${AnsiStyle.BOLD}${AnsiColor.BRIGHT_CYAN}${application.version}${AnsiStyle.NORMAL}${AnsiColor.DEFAULT}

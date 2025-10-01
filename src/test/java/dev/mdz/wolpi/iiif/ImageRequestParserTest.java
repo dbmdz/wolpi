@@ -39,7 +39,7 @@ class ImageRequestParserTest {
         IIIFConfig.Qualities qualities = new IIIFConfig.Qualities("color", List.of("color", "gray", "bitonal"));
         IIIFConfig.Formats formats = new IIIFConfig.Formats(List.of("jpg", "png"), List.of("jpg"));
         IIIFConfig iiifConfig = new IIIFConfig(false, limits, features, qualities, formats);
-        wolpiConfig = new WolpiConfig(null, null, iiifConfig, null, null, null, null, null);
+        wolpiConfig = new WolpiConfig(null, null, null, null, iiifConfig, null, null, null, null, null);
         parser = new ImageRequestParser(wolpiConfig);
     }
 
@@ -65,6 +65,8 @@ class ImageRequestParserTest {
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
+                wolpiConfig.http(),
+                wolpiConfig.logging(),
                 newIIIFConfig,
                 wolpiConfig.cacheControlHeaders(),
                 wolpiConfig.extensions(),
@@ -95,6 +97,8 @@ class ImageRequestParserTest {
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
+                wolpiConfig.http(),
+                wolpiConfig.logging(),
                 newIIIFConfig,
                 wolpiConfig.cacheControlHeaders(),
                 wolpiConfig.extensions(),
@@ -125,6 +129,8 @@ class ImageRequestParserTest {
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
+                wolpiConfig.http(),
+                wolpiConfig.logging(),
                 newIIIFConfig,
                 wolpiConfig.cacheControlHeaders(),
                 wolpiConfig.extensions(),
@@ -144,6 +150,8 @@ class ImageRequestParserTest {
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
+                wolpiConfig.http(),
+                wolpiConfig.logging(),
                 newIIIFConfig,
                 wolpiConfig.cacheControlHeaders(),
                 wolpiConfig.extensions(),
@@ -163,6 +171,8 @@ class ImageRequestParserTest {
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
+                wolpiConfig.http(),
+                wolpiConfig.logging(),
                 newIIIFConfig,
                 wolpiConfig.cacheControlHeaders(),
                 wolpiConfig.extensions(),

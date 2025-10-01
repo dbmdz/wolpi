@@ -41,6 +41,7 @@ class PyPiInstallerTest {
         new WolpiConfig(
             tempDir,
             null,
+            null, null,
             null,
             null,
             Collections.emptyList(),
@@ -136,6 +137,7 @@ class PyPiInstallerTest {
         new WolpiConfig(
             tempDir,
             null,
+            null, null,
             null,
             null,
             Collections.emptyList(),

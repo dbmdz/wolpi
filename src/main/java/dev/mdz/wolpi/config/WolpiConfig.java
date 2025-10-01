@@ -7,6 +7,8 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.boot.logging.LogLevel;
 
 ///  Wolpi Configuration, see src/main/resources/application.yml for defaults
 /// @param dataDirectory directory to store installed extensions and other data in
@@ -28,6 +30,8 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 public record WolpiConfig(
     Path dataDirectory,
     Path imageBaseDir,
+    @NestedConfigurationProperty @Nullable HttpConfig http,
+    @NestedConfigurationProperty @Nullable LoggingConfig logging,
     @NestedConfigurationProperty IIIFConfig iiif,
     @NestedConfigurationProperty CacheControlHeaders cacheControlHeaders,
     @NestedConfigurationProperty List<ExtensionConfig> extensions,
@@ -69,4 +73,45 @@ public record WolpiConfig(
   ///                 block until a context is returned to the pool. Set this to the expected
   ///                 maximum number of concurrent requests.
   public record ExtensionPoolConfig(int maxIdle, int maxTotal) {}
+
+  /// Configuration for the embedded HTTP server.
+  ///
+  /// @param host Host to bind the server to, defaults to all interfaces.
+  /// @param port Port to bind the server to, defaults to 8080.
+  /// @param minThreads Minimum number of threads in the server thread pool, defaults to 10
+  /// @param maxThreads Maximum number of threads in the server thread pool, defaults to 200
+  /// @param maxRequestsAccepted Maximum number of requests the server will accept and queue, if
+  ///                            the queue is full, requests will be rejected with a 503 error.
+  ///                            Defaults to 100.
+  /// @param baseUri Base URI the server is accessible at, used for generating absolute URLs in
+  ///                responses, such as in the profile link header. If not set, the server will
+  ///                will attempt to determine the base URI from the request headers (`Host` and
+  ///                `X-Forwarded-*`)`
+  public record HttpConfig(
+      @DefaultValue("") String host,
+      @DefaultValue("-1") Integer port,
+      @DefaultValue("-1") Integer minThreads,
+      @DefaultValue("-1") Integer maxThreads,
+      @DefaultValue("-1") Integer maxRequestsAccepted,
+      @DefaultValue("") String baseUri
+  ) {}
+
+  /// Configuration for logging.
+  ///
+  /// @param format Format of the log output, either `text` or `json`. Defaults to `text`.
+  /// @param level Minimum log level, one of `trace`, `debug`, `info`, `warn`, `error`, or
+  ///              `off`. Defaults to `info`.
+  public record LoggingConfig(
+      @DefaultValue("text") LogFormat format,
+      @DefaultValue("info") LogLevel level
+  ) {}
+
+  /// Supported log formats.
+  public enum LogFormat {
+    /// Human-readable text format, `{timestamp} {level} {logger} {message}`
+    TEXT,
+    /// Structured JSON format, one JSON object per log line with fields `@timestamp`, `level`,
+    /// `logger_name`, `message`, `stack_trace`, `stack_hash`, `request_id`
+    JSON
+  }
 }

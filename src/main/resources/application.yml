@@ -8,6 +8,9 @@ server:
   forward-headers-strategy: framework
 
 wolpi:
+  logging:
+    level: info
+    format: text
   # Location to store extensions installed from packagesin
   data-directory: "./data"
   # Fallback location where images are loaded from if no resolving

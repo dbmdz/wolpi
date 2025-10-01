@@ -42,6 +42,7 @@ class NpmInstallerTest {
         new WolpiConfig(
             tempDir,
             null,
+            null, null,
             null,
             null,
             Collections.emptyList(),
@@ -129,6 +130,7 @@ class NpmInstallerTest {
         new WolpiConfig(
             tempDir,
             null,
+            null, null,
             null,
             null,
             Collections.emptyList(),

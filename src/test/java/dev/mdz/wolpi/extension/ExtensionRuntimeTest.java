@@ -130,6 +130,7 @@ public class ExtensionRuntimeTest {
         new WolpiConfig(
             tempDir,
             null,
+            null, null,
             mock(IIIFConfig.class),
             mock(CacheControlHeaders.class),
             new ArrayList<>(),

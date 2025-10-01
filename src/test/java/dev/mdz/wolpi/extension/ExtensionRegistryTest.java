@@ -154,7 +154,8 @@ class ExtensionRegistryTest {
       exts.add(new ExtensionConfig(path, npm, pypi, cfg));
     }
     WolpiConfig wolpiConfig =
-        new WolpiConfig(Path.of("/data"), null, null, null, exts, null, null, null);
+        new WolpiConfig(Path.of("/data"), null, null, null, null, null,
+                exts, null, null, null);
     return new ExtensionRegistry(
         wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties);
   }
