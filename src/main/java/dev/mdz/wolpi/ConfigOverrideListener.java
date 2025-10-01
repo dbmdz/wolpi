@@ -53,11 +53,11 @@ public class ConfigOverrideListener implements ApplicationListener<ApplicationEn
                 overrides.put("logging.structured.json.stacktrace.include-hashes", "true");
                 overrides.put("logging.structured.json.stacktrace.root", "first");
             } else if (config.logging().format() == LogFormat.TEXT) {
-                overrides.put("logging.pattern.console",
-                        "%d{HH:mm:ss.SSS} %clr(%5p) %clr(%-24.24c{23}){cyan} %m %X%n%wEx");
+                overrides.put(
+                        "logging.pattern.console", "%d{HH:mm:ss.SSS} %clr(%5p) %clr(%-24.24c{23}){cyan} %m %X%n%wEx");
             }
         }
-        return new MapPropertySource("wolpi-logging-overrides",  overrides);
+        return new MapPropertySource("wolpi-logging-overrides", overrides);
     }
 
     private MapPropertySource getHttpOverrides(WolpiConfig config) {
@@ -80,7 +80,7 @@ public class ConfigOverrideListener implements ApplicationListener<ApplicationEn
                 overrides.put("server.tomcat.accept-count", Integer.toString(http.maxRequestsAccepted()));
             }
         }
-        return new MapPropertySource("wolpi-http-overrides",  overrides);
+        return new MapPropertySource("wolpi-http-overrides", overrides);
     }
 
     @Override

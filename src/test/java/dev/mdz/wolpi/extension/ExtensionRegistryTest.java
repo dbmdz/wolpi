@@ -29,134 +29,126 @@ import org.springframework.boot.info.BuildProperties;
 @DisplayName("ExtensionRegistry")
 class ExtensionRegistryTest {
 
-  @Mock private BuildProperties buildProperties;
+    @Mock
+    private BuildProperties buildProperties;
 
-  @Mock private HttpClient httpClient;
+    @Mock
+    private HttpClient httpClient;
 
-  @Mock private NpmInstaller npmInstaller;
+    @Mock
+    private NpmInstaller npmInstaller;
 
-  @Mock private PyPiInstaller pyPiInstaller;
+    @Mock
+    private PyPiInstaller pyPiInstaller;
 
-  @TempDir private Path tempDir;
+    @TempDir
+    private Path tempDir;
 
-  @DisplayName("should not load extensions when config is empty")
-  @Test
-  void shouldNotLoadExtensionsWhenConfigIsEmpty() {
-    var registry = buildRegistryWithExtension(null, null, null, null);
-    assertThat(registry.getExtensions()).isEmpty();
-  }
-
-  @DisplayName("should load a single JavaScript file")
-  @Test
-  void shouldLoadSingleJsFile() throws IOException {
-    Path source = Path.of("src/test/resources/test.js");
-    var registry = buildRegistryWithExtension(source, null, null, Map.of());
-    assertThat(registry.getExtensions()).hasSize(1);
-    var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS File Extension");
-  }
-
-  @DisplayName("should load a single Python file")
-  @Test
-  void shouldLoadSinglePyFile() throws IOException {
-    Path source = Path.of("src/test/resources/test.py");
-    var registry = buildRegistryWithExtension(source, null, null, Collections.emptyMap());
-    assertThat(registry.getExtensions()).hasSize(1);
-    var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY File Extension");
-  }
-
-  @DisplayName("should load a JavaScript package")
-  @Test
-  void shouldLoadJsPackage() throws IOException, ExtensionLoadException {
-    Path source = Path.of("src/test/resources/js-extension");
-    Path target = tempDir.resolve("js-extension");
-    Files.createDirectories(target);
-    Files.walk(source)
-        .filter(s -> s != source)
-        .forEach(
-            s -> {
-              try {
-                Files.copy(s, target.resolve(source.relativize(s)));
-              } catch (IOException e) {
-                throw new RuntimeException(e);
-              }
-            });
-
-    when(npmInstaller.installFromLocalDirectory(source)).thenReturn("js-extension");
-    when(npmInstaller.getEntryPoint("js-extension")).thenReturn(target.resolve("index.js"));
-    when(npmInstaller.getVersion("js-extension")).thenReturn("1.0.0");
-
-    // Install from local path
-    var registry = buildRegistryWithExtension(source, null, null, Map.of());
-    assertThat(registry.getExtensions()).hasSize(1);
-    var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
-
-    // Install from npm
-    registry =
-        buildRegistryWithExtension(
-            null, new PkgSource("js-extension", "1.0.0", null), null, Map.of());
-    assertThat(registry.getExtensions()).hasSize(1);
-    loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
-  }
-
-  @DisplayName("should load a Python package")
-  @Test
-  void shouldLoadPyPackage() throws IOException, ExtensionLoadException {
-    // Create venv structure
-    Path venvPath = tempDir.resolve("venv");
-    Path binPath = venvPath.resolve("bin");
-    Files.createDirectories(binPath);
-    Path graalPy = binPath.resolve("graalpy");
-    Files.createFile(graalPy);
-    graalPy.toFile().setExecutable(true);
-    Path libPath = venvPath.resolve("lib/python3.13/site-packages");
-    Files.createDirectories(libPath);
-
-    // "Install" extension to venv
-    Path source = Path.of("src/test/resources/py-extension");
-    Files.walk(source)
-        .filter(s -> s != source)
-        .forEach(
-            s -> {
-              try {
-                Files.copy(s, libPath.resolve(source.relativize(s)));
-              } catch (IOException e) {
-                throw new RuntimeException(e);
-              }
-            });
-    when(pyPiInstaller.installFromLocalDirectory(source)).thenReturn("py-extension");
-    when(pyPiInstaller.getVenvSitePackages("py-extension")).thenReturn(libPath);
-    when(pyPiInstaller.getEntryPoint("py-extension"))
-        .thenReturn(new EntryPoint("py_extension", "wolpi_extension"));
-
-    // Install from local path
-    var registry = buildRegistryWithExtension(source, null, null, Map.of());
-    assertThat(registry.getExtensions()).hasSize(1);
-    var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
-
-    // Instal from PyPI
-    registry =
-        buildRegistryWithExtension(
-            null, null, new PkgSource("py-extension", "1.0.0", null), Map.of());
-    assertThat(registry.getExtensions()).hasSize(1);
-    loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
-    assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
-  }
-
-  private ExtensionRegistry buildRegistryWithExtension(
-      Path path, PkgSource npm, PkgSource pypi, Map<String, Object> cfg) {
-    List<ExtensionConfig> exts = new ArrayList<>();
-    if (path != null || npm != null || pypi != null) {
-      exts.add(new ExtensionConfig(path, npm, pypi, cfg));
+    @DisplayName("should not load extensions when config is empty")
+    @Test
+    void shouldNotLoadExtensionsWhenConfigIsEmpty() {
+        var registry = buildRegistryWithExtension(null, null, null, null);
+        assertThat(registry.getExtensions()).isEmpty();
     }
-    WolpiConfig wolpiConfig =
-        new WolpiConfig(Path.of("/data"), null, null, null, null, null,
-                exts, null, null, null);
-    return new ExtensionRegistry(
-        wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties);
-  }
+
+    @DisplayName("should load a single JavaScript file")
+    @Test
+    void shouldLoadSingleJsFile() throws IOException {
+        Path source = Path.of("src/test/resources/test.js");
+        var registry = buildRegistryWithExtension(source, null, null, Map.of());
+        assertThat(registry.getExtensions()).hasSize(1);
+        var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS File Extension");
+    }
+
+    @DisplayName("should load a single Python file")
+    @Test
+    void shouldLoadSinglePyFile() throws IOException {
+        Path source = Path.of("src/test/resources/test.py");
+        var registry = buildRegistryWithExtension(source, null, null, Collections.emptyMap());
+        assertThat(registry.getExtensions()).hasSize(1);
+        var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY File Extension");
+    }
+
+    @DisplayName("should load a JavaScript package")
+    @Test
+    void shouldLoadJsPackage() throws IOException, ExtensionLoadException {
+        Path source = Path.of("src/test/resources/js-extension");
+        Path target = tempDir.resolve("js-extension");
+        Files.createDirectories(target);
+        Files.walk(source).filter(s -> s != source).forEach(s -> {
+            try {
+                Files.copy(s, target.resolve(source.relativize(s)));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        when(npmInstaller.installFromLocalDirectory(source)).thenReturn("js-extension");
+        when(npmInstaller.getEntryPoint("js-extension")).thenReturn(target.resolve("index.js"));
+        when(npmInstaller.getVersion("js-extension")).thenReturn("1.0.0");
+
+        // Install from local path
+        var registry = buildRegistryWithExtension(source, null, null, Map.of());
+        assertThat(registry.getExtensions()).hasSize(1);
+        var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
+
+        // Install from npm
+        registry = buildRegistryWithExtension(null, new PkgSource("js-extension", "1.0.0", null), null, Map.of());
+        assertThat(registry.getExtensions()).hasSize(1);
+        loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
+    }
+
+    @DisplayName("should load a Python package")
+    @Test
+    void shouldLoadPyPackage() throws IOException, ExtensionLoadException {
+        // Create venv structure
+        Path venvPath = tempDir.resolve("venv");
+        Path binPath = venvPath.resolve("bin");
+        Files.createDirectories(binPath);
+        Path graalPy = binPath.resolve("graalpy");
+        Files.createFile(graalPy);
+        graalPy.toFile().setExecutable(true);
+        Path libPath = venvPath.resolve("lib/python3.13/site-packages");
+        Files.createDirectories(libPath);
+
+        // "Install" extension to venv
+        Path source = Path.of("src/test/resources/py-extension");
+        Files.walk(source).filter(s -> s != source).forEach(s -> {
+            try {
+                Files.copy(s, libPath.resolve(source.relativize(s)));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        when(pyPiInstaller.installFromLocalDirectory(source)).thenReturn("py-extension");
+        when(pyPiInstaller.getVenvSitePackages("py-extension")).thenReturn(libPath);
+        when(pyPiInstaller.getEntryPoint("py-extension")).thenReturn(new EntryPoint("py_extension", "wolpi_extension"));
+
+        // Install from local path
+        var registry = buildRegistryWithExtension(source, null, null, Map.of());
+        assertThat(registry.getExtensions()).hasSize(1);
+        var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
+
+        // Instal from PyPI
+        registry = buildRegistryWithExtension(null, null, new PkgSource("py-extension", "1.0.0", null), Map.of());
+        assertThat(registry.getExtensions()).hasSize(1);
+        loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
+    }
+
+    private ExtensionRegistry buildRegistryWithExtension(
+            Path path, PkgSource npm, PkgSource pypi, Map<String, Object> cfg) {
+        List<ExtensionConfig> exts = new ArrayList<>();
+        if (path != null || npm != null || pypi != null) {
+            exts.add(new ExtensionConfig(path, npm, pypi, cfg));
+        }
+        WolpiConfig wolpiConfig =
+                new WolpiConfig(Path.of("/data"), null, null, null, null, null, exts, null, null, null);
+        return new ExtensionRegistry(wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties);
+    }
 }
