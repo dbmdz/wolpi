@@ -61,13 +61,20 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
         log.info(
                 "Starting validation of {} registered extensions",
                 extensionRegistry.getExtensions().size());
+
+        boolean validationFailed = false;
         for (var ext : extensionRegistry.getExtensions()) {
             try (var _ = extensionRegistry.temporarilyIsolateExtension(ext)) {
                 if (!validator.runStartupExtensionValidation(this.serverPort)) {
-                    int exitCode = SpringApplication.exit(this.context, () -> 1);
-                    System.exit(exitCode);
+                    validationFailed = true;
                 }
             }
+        }
+
+        if (validationFailed) {
+            log.error("Extension validation failed, fix or remove misbehaving extensions and restart.");
+            int exitCode = SpringApplication.exit(this.context, () -> 1);
+            System.exit(exitCode);
         }
 
         log.info(
