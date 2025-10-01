@@ -25,7 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/// Validates the current configuration against the official IIIF Image API test suite
+/// Validates the application against the official IIIF Image API test suite
 @Component
 public class ImageApiValidator {
     private static final String VALIDATOR_VERSION = "0.1.0";
@@ -144,6 +144,22 @@ public class ImageApiValidator {
         }
     }
 
+    /// Run all tests that are applicable to the current configuration
+    ///
+    /// This delegates the test selection to the `iiif-validator-ng` pacakge, which will download
+    /// the info.json from the given baseUrl and select the tests that should pass based on the
+    /// compliance level and set of additional features advertised in the info.json.
+    ///
+    /// Use this if you want to validate the **current application configuration**.
+    ///
+    /// @param baseUrl Base URL of the IIIF Image API endpoint to validate (i.e. the base URL of the
+    ///                image service, without identifiers)
+    /// @param testId  Identifier that resolves to the the official IIIF Image Validation test image
+    ///                in the application
+    /// @param version IIIF Image API version to validate against
+    /// @param maxThreads Maximum number of threads to use for running tests in parallel, or null to
+    ///                   use the default (4)
+    /// @return Map of all tests that were run to their results
     public Map<ValidationTest, List<ValidationResult>> runTests(
             String baseUrl, String testId, IIIFVersion version, @Nullable Integer maxThreads) {
         if (this.venvPath == null) {
@@ -188,12 +204,39 @@ public class ImageApiValidator {
         return results;
     }
 
+    /// Run a single test by its identifier with a separate [Context]
+    ///
+    /// Use this if you want to validate a specific test, regardless of the current
+    /// application configuration.
+    ///
+    /// @param test    The test to run
+    /// @param baseUrl Base URL of the IIIF Image API endpoint to validate (i.e. the base URL of the
+    ///                image service, without identifiers)
+    /// @param testId  Identifier that resolves to the the official IIIF Image Validation test image
+    ///                in the application
+    /// @param version IIIF Image API version to validate against
+    /// @return List of results for the test, usually a single result, but can be multiple if the
+    ///         test contains multiple assertions
     public List<ValidationResult> runTest(ValidationTest test, String baseUrl, String testId, IIIFVersion version) {
         try (var context = getValidationContext()) {
             return runTest(test, baseUrl, testId, version, context);
         }
     }
 
+    /// Run a single test by its identifier in the given [Context]
+    ///
+    /// Use this if you want to run multiple tests in the same context, e.g.
+    /// to save the overhead of creating a new context for each test.
+    ///
+    /// @param test    The test to run
+    /// @param baseUrl Base URL of the IIIF Image API endpoint to validate (i.e. the base URL of the
+    ///                image service, without identifiers)
+    /// @param testId  Identifier that resolves to the the official IIIF Image Validation test image
+    ///                in the application
+    /// @param version IIIF Image API version to validate against
+    /// @param context The Python context to run the test in
+    /// @return List of results for the test, usually a single result, but can be multiple if the
+    ///         test contains multiple assertions
     public List<ValidationResult> runTest(
             ValidationTest test, String baseUrl, String testId, IIIFVersion version, Context context) {
         List<ValidationResult> results = new ArrayList<>();
@@ -231,6 +274,12 @@ public class ImageApiValidator {
         return results;
     }
 
+    /// Discover all available tests from the installed validator package.
+    ///
+    /// This is called during installation of the validator package to populate
+    /// the list of all tests.
+    ///
+    /// @return List of all available tests
     private List<ValidationTest> discoverAllTests() {
         try (var context = this.getValidationContext()) {
             var pyTestSet = context.eval(
