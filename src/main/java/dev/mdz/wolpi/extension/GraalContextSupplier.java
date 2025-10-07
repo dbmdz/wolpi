@@ -19,6 +19,7 @@ import dev.mdz.wolpi.validation.model.ValidationResult.ValidationSuccess;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -70,7 +71,13 @@ public class GraalContextSupplier {
         }
         builder.targetTypeMapping(
                 Value.class, ResolvedImage.class, ResolvedImageMapper::canMap, ResolvedImageMapper::map);
-        builder.targetTypeMapping(Value.class, URI.class, Value::isString, v -> URI.create(v.asString()));
+        builder.targetTypeMapping(Value.class, URI.class, Value::isString, v -> {
+            try {
+                return new URI(v.asString());
+            } catch (URISyntaxException e) {
+                return null;
+            }
+        });
         builder.targetTypeMapping(Value.class, Instant.class, Value::isString, v -> Instant.parse(v.asString()));
         builder.targetTypeMapping(Value.class, Path.class, Value::isString, v -> Path.of(v.asString()));
         // For `TypedArray` objects in JS we need to access the `ArrayBuffer` inside the `TypedArray` to

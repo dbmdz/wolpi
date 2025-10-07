@@ -18,14 +18,14 @@ import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -80,48 +80,38 @@ public class ExtensionRegistry {
         this.jsInstaller = jsInstaller;
         this.wolpiVersion = buildProps.getVersion();
 
-        this.implementedHooks = new HashMap<>();
+        this.implementedHooks = new ConcurrentHashMap<>();
         if (cfg.extensions().isEmpty()) {
             return;
         }
         // Parallelize extension loading to speed up application startup time
         try (ExecutorService pool =
                 Executors.newFixedThreadPool(cfg.extensions().size())) {
-            var futs = cfg.extensions().stream()
-                    .collect(Collectors.toMap(
-                            ext -> ext,
-                            ext -> pool.submit(() -> {
-                                long start = System.nanoTime();
-                                var loaded = loadExtension(ext);
-                                log.info("Extension '%s' loaded in %.2f ms"
-                                        .formatted(
-                                                loaded.extensionInfo().name(),
-                                                (System.nanoTime() - start) / 1_000_000.0));
-                                return loaded;
-                            })));
-
-            // Determine which extension implements which hooks
-            for (var entry : futs.entrySet()) {
-                try {
-                    var ext = entry.getValue().get();
-                    for (ExtensionHooks hook : ext.implementedHooks()) {
-                        implementedHooks
-                                .computeIfAbsent(hook, (k) -> new ArrayList<>())
-                                .add(ext);
-                    }
-                } catch (InterruptedException | ExecutionException e) {
-                    log.error("Failed to load extension {}", entry.getKey(), e);
-                }
-            }
+            cfg.extensions().stream()
+                    .<Runnable>map(ext -> () -> {
+                        try {
+                            var loaded = loadExtension(ext);
+                            log.info(
+                                    "Extension '{}' loaded.",
+                                    loaded.extensionInfo().name());
+                        } catch (ExtensionLoadException e) {
+                            log.error("Failed to load extension from {}", ext, e);
+                        }
+                    })
+                    .forEach(pool::submit);
         }
     }
 
-    /// Load an extension based on its definition in the configuration
+    /// Load an extension based on its definition in the provided configuration.
+    ///
+    /// If an earlier version of the extension with the same name is already loaded, it is
+    /// replaced with the new version.
     ///
     /// @param config extension definition from the Wolpi configuration
     /// @return the loaded extension
     /// @throws ExtensionLoadException if loading the extension fails
-    private LoadedExtension loadExtension(ExtensionConfig config) throws ExtensionLoadException {
+    public LoadedExtension loadExtension(ExtensionConfig config) throws ExtensionLoadException {
+        LoadedExtension ext;
         if (config.path() != null) {
             Path path = config.path().toAbsolutePath().normalize();
             if (!Files.exists(path)) {
@@ -131,28 +121,42 @@ public class ExtensionRegistry {
                 throw new ExtensionLoadException("Extension path is not readable: " + path);
             }
             if (path.toString().endsWith(".js")) {
-                return loadJsExtension(config);
+                ext = loadJsExtension(config);
             } else if (path.toString().endsWith(".py")) {
-                return loadPythonExtension(config);
-            }
-            if (!Files.isDirectory(path)) {
+                ext = loadPythonExtension(config);
+            } else if (!Files.isDirectory(path)) {
                 throw new ExtensionLoadException("Extension path must be a directory or a .js/.py file: " + path);
-            }
-            if (Files.exists(path.resolve("pyproject.toml"))) {
-                return loadPythonExtension(config);
+            } else if (Files.exists(path.resolve("pyproject.toml"))) {
+                ext = loadPythonExtension(config);
             } else if (Files.exists(path.resolve("package.json"))) {
-                return loadJsExtension(config);
+                ext = loadJsExtension(config);
             } else {
                 throw new ExtensionLoadException(
                         "Extension path must contain a package.json (for JS) or pyproject.toml (for Python): " + path);
             }
         } else if (config.npm() != null) {
-            return loadJsExtension(config);
+            ext = loadJsExtension(config);
         } else if (config.pypi() != null) {
-            return loadPythonExtension(config);
+            ext = loadPythonExtension(config);
         } else {
             throw new IllegalArgumentException("Invalid extension configuration.");
         }
+
+        // First, remove the extension from all hooks to avoid duplication with older versions
+        for (List<LoadedExtension> exts : implementedHooks.values()) {
+            exts.stream()
+                    .filter(e ->
+                            e.extensionInfo().name().equals(ext.extensionInfo().name()))
+                    .findFirst()
+                    .map(exts::remove);
+        }
+        // Then add it
+        for (ExtensionHooks hook : ext.implementedHooks()) {
+            implementedHooks
+                    .computeIfAbsent(hook, (k) -> new CopyOnWriteArrayList<>())
+                    .add(ext);
+        }
+        return ext;
     }
 
     /// Determine the set of extension hooks implemented by a given extension.

@@ -4,6 +4,7 @@ import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.PyPiInstaller;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
+import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.validation.model.ValidationResult;
 import dev.mdz.wolpi.validation.model.ValidationResult.ValidationFailure;
@@ -47,7 +48,7 @@ public class ImageApiValidator {
     }
 
     /// Install the validator package into a new virtual environment and discover all tests in it
-    private void installValidator() {
+    void installValidator() {
         log.info("Installing iiif-validator-ng package for IIIF Image API validation...");
         try {
             this.venvPath = this.pyPiInstaller.install("iiif-validator-ng", VALIDATOR_VERSION, null, true);
@@ -84,44 +85,51 @@ public class ImageApiValidator {
     /// @return `true` if all tests passed with all extensions, `false` if any test failed
     public boolean runStartupExtensionValidation(int port) {
         for (var ext : extensionRegistry.getExtensions()) {
+            validateExtension(ext, port);
+        }
+        return true;
+    }
+
+    boolean validateExtension(LoadedExtension ext, int port) {
+        log.info(
+                "Running IIIF Image API validation tests with extension '{}'...",
+                ext.extensionInfo().name());
+        for (IIIFVersion version : IIIFVersion.values()) {
+            Map<ValidationTest, List<ValidationResult>> results;
             try (var ignored = extensionRegistry.temporarilyIsolateExtension(ext)) {
-                log.info(
-                        "Running IIIF Image API validation tests with extension '{}'...",
-                        ext.extensionInfo().name());
-                for (IIIFVersion version : IIIFVersion.values()) {
-                    var results =
-                            this.runTests("http://localhost:%d/v3".formatted(port), VALIDATION_IMAGE_PNG, version, 4);
-                    var allFailures = results.entrySet().stream()
-                            .map(e -> Map.entry(
-                                    e.getKey(),
-                                    e.getValue().stream()
-                                            .filter(ValidationFailure.class::isInstance)
-                                            .map(ValidationFailure.class::cast)
-                                            .toList()))
-                            .toList();
-                    if (allFailures.isEmpty()) {
-                        continue;
-                    }
+                results = this.runTests(
+                        "http://localhost:%d/v%d".formatted(port, version.value()), VALIDATION_IMAGE_PNG, version, 4);
+            }
+            var allFailures = results.entrySet().stream()
+                    .map(e -> Map.entry(
+                            e.getKey(),
+                            e.getValue().stream()
+                                    .filter(ValidationFailure.class::isInstance)
+                                    .map(ValidationFailure.class::cast)
+                                    .toList()))
+                    .filter(e -> !e.getValue().isEmpty())
+                    .toList();
+            if (allFailures.isEmpty()) {
+                continue;
+            }
+            log.error(
+                    "Extension '{}' caused IIF Image API v{} validation failures:",
+                    ext.extensionInfo().name(),
+                    version.value());
+            for (var entry : allFailures) {
+                var test = entry.getKey();
+                for (var failure : entry.getValue()) {
                     log.error(
-                            "Extension '{}' caused IIF Image API v{} validation failures:",
-                            version.value(),
-                            ext.extensionInfo().name());
-                    for (var entry : allFailures) {
-                        var test = entry.getKey();
-                        for (var failure : entry.getValue()) {
-                            log.error(
-                                    " - Test '{}' ({}): {} (expected: {}, got: {})\nURL: {}",
-                                    test.name(),
-                                    test.category(),
-                                    failure.details(),
-                                    failure.expected(),
-                                    failure.received(),
-                                    failure.url());
-                        }
-                    }
-                    return false;
+                            " - Test '{}' ({}): {}\nexpected: '{}'\ngot: '{}'\nURL: {}",
+                            test.name(),
+                            test.category(),
+                            failure.details(),
+                            failure.expected(),
+                            failure.received(),
+                            failure.url());
                 }
             }
+            return false;
         }
         return true;
     }
@@ -222,7 +230,7 @@ public class ImageApiValidator {
                     "python",
                     """
           from iiif_validator.tests.test import IIIFVersion, TargetServer
-          from iiif_validator.validation import run_tests
+          from iiif_validator.validate import run_tests
 
           all_results = dict()
           for test, results in run_tests(TargetServer('%s', '%s', IIIFVersion.V%d), max_threads=%s):
@@ -237,16 +245,25 @@ public class ImageApiValidator {
             var it = fromPy.getHashEntriesIterator();
             while (it.hasIteratorNextElement()) {
                 var entry = it.getIteratorNextElement();
-                var test = entry.getIteratorNextElement();
-                var testResults = entry.getIteratorNextElement();
+                var entryIt = entry.getIterator();
+                var test = entryIt.getIteratorNextElement();
+                var testResults = entryIt.getIteratorNextElement();
                 var validationTest = ValidationTest.fromPyClass(test);
                 List<ValidationResult> validationResults = new ArrayList<>();
-                for (int i = 0; i < testResults.getArraySize(); i++) {
-                    var res = testResults.getArrayElement(i);
-                    if (res.getMember("success").asBoolean()) {
-                        validationResults.add(res.as(ValidationSuccess.class));
+                if (testResults.getMetaObject().getMetaSimpleName().equals("list")) {
+                    for (int i = 0; i < testResults.getArraySize(); i++) {
+                        var res = testResults.getArrayElement(i);
+                        if (res.getMember("success").asBoolean()) {
+                            validationResults.add(res.as(ValidationSuccess.class));
+                        } else {
+                            validationResults.add(res.as(ValidationFailure.class));
+                        }
+                    }
+                } else {
+                    if (testResults.getMember("success").asBoolean()) {
+                        validationResults.add(testResults.as(ValidationSuccess.class));
                     } else {
-                        validationResults.add(res.as(ValidationFailure.class));
+                        validationResults.add(testResults.as(ValidationFailure.class));
                     }
                 }
                 results.put(validationTest, validationResults);

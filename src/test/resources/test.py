@@ -4,5 +4,5 @@ def info():
 def cleanup():
     pass
 
-def authorize():
+def authorize(identifier, headers, clientIp):
     return True

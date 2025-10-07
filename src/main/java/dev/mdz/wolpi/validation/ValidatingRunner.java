@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.validation;
 
+import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
     private final ImageApiValidator validator;
     private final ApplicationEventPublisher publisher;
     private final ConfigurableApplicationContext context;
+    private final WolpiConfig config;
 
     // Injected once Tomcat is ready to serve requests
     private int serverPort;
@@ -39,11 +41,13 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
             ExtensionRegistry extensionRegistry,
             ImageApiValidator validator,
             ApplicationEventPublisher publisher,
-            ConfigurableApplicationContext context) {
+            ConfigurableApplicationContext context,
+            WolpiConfig config) {
         this.extensionRegistry = extensionRegistry;
         this.validator = validator;
         this.publisher = publisher;
         this.context = context;
+        this.config = config;
     }
 
     /// Run validation on all registered extensions after the web server is ready.
@@ -54,7 +58,12 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
     @Override
     public void run(ApplicationArguments args) throws Exception {
         if (extensionRegistry.getExtensions().isEmpty()) {
-            log.info("No extensions registered, skipping validation");
+            log.info(
+                    "Listening on {}:{}",
+                    this.config.http() == null
+                            ? "localhost"
+                            : this.config.http().host(),
+                    this.serverPort);
             return;
         }
         AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.REFUSING_TRAFFIC);
@@ -71,6 +80,10 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
                 "Extension validation successful for all {} registered extensions, accepting traffic.",
                 extensionRegistry.getExtensions().size());
         AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.ACCEPTING_TRAFFIC);
+        log.info(
+                "Listening on {}:{}",
+                this.config.http() == null ? "localhost" : this.config.http().host(),
+                this.serverPort);
     }
 
     /// Capture the server port once Tomcat is initialized

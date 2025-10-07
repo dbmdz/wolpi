@@ -111,21 +111,25 @@ public class PyPiInstaller {
     ///
     /// @param localPackageDir  path to the local package directory
     /// @param skipDependencies if true, do not install dependencies of the package
-    /// @return the path to the virtual environment of the installed package
-    public Path installFromLocalDirectory(Path localPackageDir, boolean skipDependencies)
+    public void installFromLocalDirectory(Path localPackageDir, boolean skipDependencies)
             throws PackageInstallException {
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
             throw new IllegalArgumentException(
                     "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);
         }
         String packageName = parsePackageNameFromPyproject(localPackageDir);
+        Path existingSitePackages = getVenvSitePackages(packageName);
+        if (existingSitePackages != null) {
+            log.debug("Package '{}' already installed, skipping installation", packageName);
+            return;
+        }
         Path venvPath = ensureVenv(packageName);
         runPip(
                 venvPath,
                 "install",
                 skipDependencies ? "--no-deps" : "",
+                "-e", // editable, i.e. local modifications are reflected in the installed package
                 localPackageDir.toAbsolutePath().toString());
-        return venvPath;
     }
 
     /// Install a Wolpi extension package from a local directory containing a `pyproject.toml` file.

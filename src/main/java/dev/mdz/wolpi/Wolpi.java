@@ -2,6 +2,7 @@ package dev.mdz.wolpi;
 
 import app.photofox.vipsffm.Vips;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import dev.mdz.wolpi.config.ConfigOverrideListener;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;

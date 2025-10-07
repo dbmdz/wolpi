@@ -54,7 +54,7 @@ public class NpmInstaller {
         if (npmPath == null) {
             npmPath = CommandRunner.findOnSystemPath("npm");
         }
-        if (npmPath == null || !Files.isRegularFile(npmPath) || !Files.isExecutable(npmPath)) {
+        if (npmPath == null || !Files.isExecutable(npmPath)) {
             log.warn(
                     "npm executable not found or not executable: '%s'. Installing extensions from npm or local packages disabled."
                             .formatted(npmPath));
@@ -127,7 +127,9 @@ public class NpmInstaller {
                     "--no-save",
                     "--prefix",
                     baseDir.toString(),
-                    localPackageDir.toAbsolutePath().toString());
+                    // file: is mandatory so we get an "editable" installation that reflects changes
+                    // in the source directory
+                    "file:%s".formatted(localPackageDir.toAbsolutePath().toString()));
         } catch (IOException | InterruptedException e) {
             throw new PackageInstallException(e);
         }

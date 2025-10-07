@@ -1,6 +1,5 @@
-package dev.mdz.wolpi;
+package dev.mdz.wolpi.config;
 
-import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.LogFormat;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +39,14 @@ public class ConfigOverrideListener implements ApplicationListener<ApplicationEn
         src.addPropertySource(getLoggingOverrides(config));
         src.addPropertySource(getHttpOverrides(config));
 
+        if (config.logging() != null && config.logging().format().equals(LogFormat.JSON)) {
+            // Startup info is included in JSON logging
+            event.getSpringApplication().setLogStartupInfo(true);
+        } else {
+            // For text logging, we print our own startup info
+            event.getSpringApplication().setLogStartupInfo(false);
+        }
+
         environment.getPropertySources().addFirst(src);
     }
 
@@ -54,7 +61,8 @@ public class ConfigOverrideListener implements ApplicationListener<ApplicationEn
                 overrides.put("logging.structured.json.stacktrace.root", "first");
             } else if (config.logging().format() == LogFormat.TEXT) {
                 overrides.put(
-                        "logging.pattern.console", "%d{HH:mm:ss.SSS} %clr(%5p) %clr(%-24.24c{23}){cyan} %m %X%n%wEx");
+                        "logging.pattern.console",
+                        "%clr(%d{HH:mm:ss.SSS}){faint} %replace(%replace(%replace(%replace(%replace(%level){'ERROR','\uD83D\uDCA3'}){'WARN','⚠️'}){'INFO','\uD83D\uDCAC'}){'DEBUG','\uD83D\uDC1B'}){'TRACE','\uD83D\uDC63'} %clr(%m) %X%n%xEx");
             }
         }
         return new MapPropertySource("wolpi-logging-overrides", overrides);

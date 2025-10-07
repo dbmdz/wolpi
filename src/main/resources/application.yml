@@ -3,7 +3,12 @@ spring:
     name: "wolpi"
 logging:
     level:
-        org.springframework.web.servlet: ERROR
+        org.apache: WARN
+        org.springframework: WARN
+        dev.mdz.wolpi: INFO
+        org.springframework.web.servlet:
+          PageNotFound: ERROR
+
 server:
   forward-headers-strategy: framework
 

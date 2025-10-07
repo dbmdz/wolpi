@@ -23,6 +23,8 @@ module wolpi {
     requires spring.core;
     requires spring.web;
     requires spring.webmvc;
+    requires info.picocli;
+    requires org.apache.commons.io;
 
     exports dev.mdz.wolpi;
     exports dev.mdz.wolpi.config;
@@ -46,4 +48,8 @@ module wolpi {
             spring.core;
     opens dev.mdz.wolpi.extension to
             spring.core;
+    opens dev.mdz.wolpi.config to
+            spring.core;
+    opens dev.mdz.wolpi.validation to
+            info.picocli;
 }
