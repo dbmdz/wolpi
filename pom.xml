@@ -28,9 +28,12 @@
 
   <properties>
     <java.version>25</java.version>
+    <!-- Must not be updated, 4.8.181 has a bug:
+         https://github.com/classgraph/classgraph/issues/923 -->
+    <classgraph.version>4.8.180</classgraph.version>
+    <guava.version>33.5.0-jre</guava.version>
     <graalvm.version>25.0.0</graalvm.version>
     <jspecify.version>1.0.0</jspecify.version>
-    <guava.version>33.4.8-jre</guava.version>
     <vips-ffm.version>1.9.1</vips-ffm.version>
   </properties>
 
@@ -48,6 +51,11 @@
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>${guava.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.classgraph</groupId>
+      <artifactId>classgraph</artifactId>
+      <version>${classgraph.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>

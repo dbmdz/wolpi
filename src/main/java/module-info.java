@@ -8,6 +8,7 @@ module wolpi {
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.dataformat.toml;
     requires com.google.common;
+    requires io.github.classgraph;
     requires java.net.http;
     requires org.apache.commons.pool2;
     requires org.apache.tomcat.embed.core;

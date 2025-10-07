@@ -10,7 +10,6 @@ import app.photofox.vipsffm.enums.VipsDirection;
 import app.photofox.vipsffm.enums.VipsInterpretation;
 import app.photofox.vipsffm.enums.VipsOperationRelational;
 import app.photofox.vipsffm.enums.VipsSize;
-import com.google.common.reflect.ClassPath;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
@@ -19,16 +18,22 @@ import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ImageSource;
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ClassInfoList;
+import io.github.classgraph.ScanResult;
 import java.io.IOException;
 import java.lang.foreign.Arena;
+import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /// ImageProcessor is responsible for processing images according to IIIF Image API requests.
@@ -37,7 +42,6 @@ import org.springframework.stereotype.Component;
 /// encoding via libvips in an efficient way.
 @Component
 public class ImageProcessor {
-
     private final Arena vipsArena;
     private final WolpiConfig wolpiConfig;
 
@@ -58,22 +62,19 @@ public class ImageProcessor {
     private static Map<String, List<VipsOption>> determineEncodingOptions(Map<String, Map<String, Object>> options) {
         // Build a cache for all possible Vips enum values so we can look up enum values
         Map<String, VNamedEnum> vipsEnumCache = new HashMap<>();
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        Set<Class<? extends VNamedEnum>> subTypes;
-        try {
-            //noinspection unchecked
-            subTypes = ClassPath.from(cl).getTopLevelClassesRecursive("app.photofx.vipsffm.enums").stream()
-                    .map(ClassPath.ClassInfo::load)
-                    .filter(c -> !c.isInterface() && !c.isAnnotation() && VNamedEnum.class.isAssignableFrom(c))
-                    .map(c -> (Class<? extends VNamedEnum>) c)
-                    .collect(Collectors.toSet());
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load Vips enum classes for encoding option parsing", e);
+        HashSet<Class<?>> subTypes;
+        try (ScanResult scanResult = new ClassGraph()
+                .enableAllInfo()
+                .acceptPackages("app.photofox.vipsffm.enums")
+                .scan()) {
+            ClassInfoList classInfos = scanResult.getClassesImplementing("app.photofox.vipsffm.VNamedEnum");
+            subTypes = new HashSet<>(classInfos.loadClasses());
         }
 
-        for (Class<? extends VNamedEnum> enumClass : subTypes) {
+        for (Class<?> enumClass : subTypes) {
             for (var constant : enumClass.getEnumConstants()) {
-                vipsEnumCache.put(constant.getName(), constant);
+                var enumVal = (VNamedEnum) constant;
+                vipsEnumCache.put(enumVal.getName(), enumVal);
             }
         }
 
