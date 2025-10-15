@@ -1,5 +1,7 @@
 package dev.mdz.wolpi.validation;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.PyPiInstaller;
@@ -37,24 +39,32 @@ public class ImageApiValidator {
 
     private final ExtensionRegistry extensionRegistry;
     private final PyPiInstaller pyPiInstaller;
+    private final ObjectMapper objectMapper;
 
     // These are lazy-initialized when first needed
     private @Nullable List<ValidationTest> allTests = null;
     private @Nullable Path venvPath = null;
 
-    public ImageApiValidator(PyPiInstaller pyPiInstaller, ExtensionRegistry extensionRegistry) {
+    public ImageApiValidator(PyPiInstaller pyPiInstaller, ExtensionRegistry extensionRegistry, ObjectMapper mapper) {
         this.pyPiInstaller = pyPiInstaller;
         this.extensionRegistry = extensionRegistry;
+        this.objectMapper = mapper;
     }
 
     /// Install the validator package into a new virtual environment and discover all tests in it
     void installValidator() {
-        log.info("Installing iiif-validator-ng package for IIIF Image API validation...");
-        try {
-            this.venvPath = this.pyPiInstaller.install("iiif-validator-ng", VALIDATOR_VERSION, null, true);
-        } catch (PackageInstallException e) {
-            log.error("Failed to install iiif-validator-ng package for IIIF Image API validation, cannot proceed.", e);
-            throw new RuntimeException(e);
+        if (!VALIDATOR_VERSION.equals(this.pyPiInstaller.getVersion("iiif-validator-ng"))) {
+            log.info("Installing iiif-validator-ng package for IIIF Image API validation...");
+            try {
+                this.venvPath = this.pyPiInstaller.install("iiif-validator-ng", VALIDATOR_VERSION, null, true);
+            } catch (PackageInstallException e) {
+                log.error(
+                        "Failed to install iiif-validator-ng package for IIIF Image API validation, cannot proceed.",
+                        e);
+                throw new RuntimeException(e);
+            }
+        } else {
+            this.venvPath = this.pyPiInstaller.getVenv("iiif-validator-ng");
         }
         this.allTests = this.discoverAllTests();
     }
@@ -90,6 +100,16 @@ public class ImageApiValidator {
         return true;
     }
 
+    /// Validate the given extension in the context of the current application configuration.
+    ///
+    /// This will auto-detect the features supported by the current configuration and only run
+    /// the tests that are applicable to the current configuration.
+    ///
+    /// If there were test failures, details will be logged at `ERROR` level.
+    ///
+    /// @param ext  The extension to validate
+    /// @param port The local server port Wolpi is currently listening on
+    /// @return `true` if all tests passed with the extension enabled, `false` if any test failed
     boolean validateExtension(LoadedExtension ext, int port) {
         log.info(
                 "Running IIIF Image API validation tests with extension '{}'...",
@@ -112,10 +132,7 @@ public class ImageApiValidator {
             if (allFailures.isEmpty()) {
                 continue;
             }
-            log.error(
-                    "Extension '{}' caused IIF Image API v{} validation failures:",
-                    ext.extensionInfo().name(),
-                    version.value());
+            log.error("Extension '{}' caused IIF Image API v{} validation failures:", ext, version.value());
             for (var entry : allFailures) {
                 var test = entry.getKey();
                 for (var failure : entry.getValue()) {
@@ -349,6 +366,22 @@ public class ImageApiValidator {
     ///
     /// @return List of all available tests
     private List<ValidationTest> discoverAllTests() {
+        Path venv = this.venvPath;
+        assert venv != null;
+        Path cachedTests = this.venvPath.resolve("cached_tests-%s.json".formatted(VALIDATOR_VERSION));
+        if (Files.exists(cachedTests)) {
+            var typeRef = new TypeReference<List<ValidationTest>>() {};
+            try {
+                return objectMapper.readValue(cachedTests.toFile(), typeRef);
+            } catch (IOException e) {
+                log.warn(
+                        "Failed to read cached test list from {}, will re-discover tests",
+                        cachedTests.toAbsolutePath(),
+                        e);
+            }
+        }
+        log.info("Discovering available IIIF Image API validation tests...");
+        List<ValidationTest> tests;
         try (var context = this.getValidationContext()) {
             var pyTestSet = context.eval(
                     "python",
@@ -362,12 +395,20 @@ public class ImageApiValidator {
               all_tests.add(test)
           list(all_tests)
           """);
-            List<ValidationTest> tests = new ArrayList<>();
+            tests = new ArrayList<>();
             for (int i = 0; i < pyTestSet.getArraySize(); i++) {
                 var pyClass = pyTestSet.getArrayElement(i);
                 tests.add(ValidationTest.fromPyClass(pyClass));
             }
-            return tests;
         }
+        try {
+            objectMapper.writeValue(cachedTests.toFile(), tests);
+        } catch (IOException e) {
+            log.warn(
+                    "Failed to write cached test list to {}, will re-discover tests next time",
+                    cachedTests.toAbsolutePath(),
+                    e);
+        }
+        return tests;
     }
 }

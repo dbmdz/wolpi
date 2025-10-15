@@ -2,19 +2,16 @@ package dev.mdz.wolpi.validation;
 
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
-import dev.mdz.wolpi.extension.RuntimeContext;
+import dev.mdz.wolpi.extension.NpmInstaller;
+import dev.mdz.wolpi.extension.PyPiInstaller;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.validation.CliRunner.ValidationCommand;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
+import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
-import org.apache.commons.io.monitor.FileAlterationListenerAdaptor;
-import org.apache.commons.io.monitor.FileAlterationObserver;
-import org.apache.commons.pool2.KeyedObjectPool;
-import org.jspecify.annotations.Nullable;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -43,19 +40,21 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
     private final IFactory picoCliFactory;
 
-    public CliRunner(
-            IFactory picoCliFactory,
-            KeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
-            ExtensionRegistry registry) {
+    Consumer<Integer> exitHandler = System::exit;
+
+    public CliRunner(IFactory picoCliFactory) {
         this.picoCliFactory = picoCliFactory;
     }
 
     @Override
     public void run(String... args) throws Exception {
         // Pass over to picocli if "validate" command is given
-        if (Arrays.stream(args).anyMatch(arg -> arg.equals("validate"))) {
-            int exitCode = new CommandLine(this, picoCliFactory).execute(args);
-            System.exit(exitCode);
+        if (Arrays.asList(args).contains("validate")) {
+            var filteredArgs = Arrays.stream(args)
+                    .filter(arg -> !arg.startsWith("--spring.") && !arg.startsWith("-D") && !arg.startsWith("--wolpi."))
+                    .toArray(String[]::new);
+            int exitCode = new CommandLine(this, picoCliFactory).execute(filteredArgs);
+            exitHandler.accept(exitCode);
         }
         // Otherwise, just run the Spring boot default startup sequence
     }
@@ -72,18 +71,17 @@ public class CliRunner implements CommandLineRunner, Runnable {
     @Component
     @Command(name = "validate", description = "Validate a local Wolpi extension")
     public static class ValidationCommand implements Runnable, ApplicationListener<WebServerInitializedEvent> {
-        private static final Set<String> WATCHED_FILE_EXTENSIONS = Set.of(".js", ".mjs", ".py");
-
         private final ExtensionRegistry extensionRegistry;
-        private final KeyedObjectPool<LoadedExtension, RuntimeContext> extensionPool;
         private final ImageApiValidator imageApiValidator;
+        private final PyPiInstaller pyPiInstaller;
+        private final NpmInstaller npmInstaller;
 
         @Parameters(
                 index = "0",
                 arity = "1",
                 description = "Path to the Wolpi extension directory to validate",
                 paramLabel = "<extension-path>")
-        private @Nullable File extensionLocation;
+        private File extensionLocation;
 
         @Option(
                 names = {"-w", "--watch"},
@@ -91,30 +89,51 @@ public class CliRunner implements CommandLineRunner, Runnable {
         private boolean watch = false;
 
         private int serverPort = -1;
+        Consumer<Integer> exitHandler = System::exit;
 
         public ValidationCommand(
                 ExtensionRegistry extensionRegistry,
-                KeyedObjectPool<LoadedExtension, RuntimeContext> extensionPool,
-                ImageApiValidator imageApiValidator) {
+                ImageApiValidator imageApiValidator,
+                PyPiInstaller pyPiInstaller,
+                NpmInstaller npmInstaller) {
             this.extensionRegistry = extensionRegistry;
-            this.extensionPool = extensionPool;
             this.imageApiValidator = imageApiValidator;
+            this.pyPiInstaller = pyPiInstaller;
+            this.npmInstaller = npmInstaller;
         }
 
         @Override
         public void run() {
+            if (watch && Files.isDirectory(extensionLocation.toPath())) {
+                if (Files.exists(extensionLocation.toPath().resolve("pyproject.toml"))
+                        && !pyPiInstaller.supportsPackageLiveReload()) {
+                    log.error(
+                            "Watching local Python packages requires a standalone GraalPy executable, which is not available on the PATH. Please make sure a `graalpy` executable is installed and available on the PATH.");
+                    exitHandler.accept(1);
+                } else if (Files.exists(extensionLocation.toPath().resolve("package.json"))
+                        && !npmInstaller.supportsPackageLiveReload()) {
+                    log.error(
+                            "Watching local NPM packages requires NPM version 10 or higher. Please upgrade your NPM installation.");
+                    exitHandler.accept(1);
+                }
+            }
             imageApiValidator.installValidator();
-            var ext = new ExtensionConfig(extensionLocation.toPath(), null, null, null);
+            var ext = new ExtensionConfig(extensionLocation.toPath(), null, null, null, watch);
             LoadedExtension loadedExt = null;
 
             try {
+                log.info(
+                        "Installing extension from {}{}",
+                        extensionLocation.getAbsolutePath(),
+                        watch ? " in editable mode" : "");
                 loadedExt = extensionRegistry.loadExtension(ext);
             } catch (ExtensionLoadException e) {
-                log.error("Failed to load extension from {}", extensionLocation, e);
+                log.error("Failed to load extension from {}: {}", extensionLocation, e.getMessage());
             }
 
             if (loadedExt == null) {
-                System.exit(1);
+                exitHandler.accept(1);
+                assert false; // exitHandler will always exit
             }
 
             if (watch) {
@@ -122,7 +141,7 @@ public class CliRunner implements CommandLineRunner, Runnable {
                     validateContinuously(loadedExt, extensionLocation);
                 } catch (Exception e) {
                     log.error("Failed to watch extension location {}", extensionLocation, e);
-                    System.exit(1);
+                    exitHandler.accept(1);
                 }
             } else {
                 log.info(
@@ -131,7 +150,7 @@ public class CliRunner implements CommandLineRunner, Runnable {
                         serverPort);
                 if (!validate(loadedExt)) {
                     log.error("Extension validation failed.");
-                    System.exit(1);
+                    exitHandler.accept(1);
                 } else {
                     log.info("Extension validation successful.");
                 }
@@ -148,87 +167,25 @@ public class CliRunner implements CommandLineRunner, Runnable {
         /// Monitor an extension file or directory for modifications and run the validation test
         /// suite against the extension on every change.
         private void validateContinuously(LoadedExtension ext, File location) throws Exception {
-            FileAlterationObserver observer = FileAlterationObserver.builder()
-                    .setFile(extensionLocation.isFile() ? extensionLocation.getParentFile() : extensionLocation)
-                    .setFileFilter(f -> extensionLocation.isFile()
-                            ? f.equals(extensionLocation)
-                            : (f.isFile() && WATCHED_FILE_EXTENSIONS.stream().anyMatch(f.getName()::endsWith)))
-                    .get();
-            observer.addListener(new FileAlterationListenerAdaptor() {
-                private final AtomicLong lastChange = new AtomicLong(-1);
-
-                @Override
-                public void onFileChange(File file) {
-                    long now = System.nanoTime();
-                    if (now - lastChange.get() < 500_000_000) {
-                        // Ignore changes within the last 500ms to avoid double-processing
-                        return;
+            extensionRegistry.addReloadCallback(ext.config(), (updatedExtension) -> {
+                log.info(
+                        "File change detected in {}, re-validating extension...",
+                        updatedExtension.extensionInfo().name());
+                try {
+                    if (!validate(updatedExtension)) {
+                        log.warn("Extension validation failed.");
                     } else {
-                        lastChange.set(now);
+                        log.info("Extension validation successful.");
                     }
-                    LoadedExtension updatedExtension = ext;
-                    log.info("File change detected in {}, re-validating extension...", file.getAbsolutePath());
-                    // If the extension is a single-file extension, we need to reload the extension
-                    // to pick up changes. For multi-file extensions, we just clear the pool
-                    // since the changes will be picked up automatically when a new context is created.
-                    if (extensionLocation.isFile()) {
-                        try {
-                            updatedExtension = extensionRegistry.loadExtension(
-                                    new ExtensionConfig(extensionLocation.toPath(), null, null, null));
-                        } catch (ExtensionLoadException e) {
-                            log.error("Failed to reload extension after file change, skipping validation.", e);
-                            return;
-                        }
-                    }
-                    // Clear up idle contexts to ensure changes are picked up when running the
-                    // validation test suite.
-                    if (extensionPool.getNumActive() > 0) {
-                        log.info("Waiting for active contexts to be returned, please close all browser tabs...");
-                        while (extensionPool.getNumActive() > 0) {
-                            // We need to wait for all active contexts to be returned before we can clear
-                            // the pool, otherwise we run the risk of old contexts being used in the
-                            // validation.
-                            try {
-                                Thread.sleep(100);
-                            } catch (InterruptedException e) {
-                                log.error(
-                                        "Interrupted while waiting for active contexts to be returned, skipping validation.",
-                                        e);
-                                Thread.currentThread().interrupt();
-                                return;
-                            }
-                        }
-                    }
-                    try {
-                        extensionPool.clear();
-                    } catch (Exception e) {
-                        log.error("Failed to clear extension context pool, skipping verification.", e);
-                        return;
-                    }
-                    try {
-                        if (!validate(updatedExtension)) {
-                            log.warn("Extension validation failed.");
-                        } else {
-                            log.info("Extension validation successful.");
-                        }
-                    } catch (Exception e) {
-                        log.error("Error during extension validation", e);
-                    }
+                } catch (Exception e) {
+                    log.error("Error during extension validation", e);
                 }
             });
-
-            log.info("Watching extension {} for changes, press Ctrl+C to exit.", location);
-            while (true) {
-                try {
-                    observer.checkAndNotify();
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                } catch (Exception e) {
-                    log.error("Error while monitoring extension files", e);
-                    break;
-                }
+            log.info("Watching {} for changes, press Ctrl-C to exit.", location.getAbsolutePath());
+            try {
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
 

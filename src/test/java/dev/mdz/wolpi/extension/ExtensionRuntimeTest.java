@@ -139,7 +139,7 @@ public class ExtensionRuntimeTest {
         Path pyExtPath = Path.of("src/test/resources/py-extension");
         Path pySitePkgPath = tempDir.resolve("venv/lib/python3.11/site-packages");
         lenient()
-                .when(pyPiInstaller.installExtensionFromLocalDirectory(pyExtPath))
+                .when(pyPiInstaller.installExtensionFromLocalDirectory(pyExtPath, false))
                 .thenReturn("py-extension");
         lenient().when(pyPiInstaller.getVenvSitePackages("py-extension")).thenReturn(pySitePkgPath);
         lenient()
@@ -361,8 +361,8 @@ public class ExtensionRuntimeTest {
     @DisplayName("Context Management Tests")
     class ContextManagementTests {
         private static final List<ExtensionConfig> exts = List.of(
-                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of()),
-                new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of()));
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false),
+                new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
 
         @Test
         @DisplayName("Should borrow contexts from pool for extensions")
@@ -407,7 +407,7 @@ public class ExtensionRuntimeTest {
 
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
-        var registry = new ExtensionRegistry(config, httpClient, pyPiInstaller, npmInstaller, buildProperties);
+        var registry = new ExtensionRegistry(config, httpClient, pyPiInstaller, npmInstaller, buildProperties, null);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 
@@ -439,7 +439,8 @@ public class ExtensionRuntimeTest {
                         }),
                 null,
                 null,
-                cfg);
+                cfg,
+                false);
     }
 
     private ExtensionConfig getTestResolverExtension(String prefix, TestResolvingType resolvingType) {
@@ -448,7 +449,8 @@ public class ExtensionRuntimeTest {
                     case FILESYSTEM, BINARY, CUSTOM -> "src/test/resources/js-extension/index.js";
                     case HTTP -> "src/test/resources/py-extension/single.py";
                 });
-        return new ExtensionConfig(path, null, null, Map.of("prefix", prefix, "resolvingType", resolvingType.name()));
+        return new ExtensionConfig(
+                path, null, null, Map.of("prefix", prefix, "resolvingType", resolvingType.name()), false);
     }
 
     private enum TestResolvingType {

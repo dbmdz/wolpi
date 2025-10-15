@@ -215,6 +215,25 @@ public class NpmInstaller {
         return info.version();
     }
 
+    /// Check if the installer supports live reloading of packages.
+    ///
+    /// This is only the case if the configured npm executable is version 10 or higher. Older
+    /// vesions do not create a symbolic link when installing from a local directory, so changes
+    /// to the source code are not reflected in the installed package.
+    public boolean supportsPackageLiveReload() {
+        if (npmPath == null) {
+            return false;
+        }
+        try {
+            var version = CommandRunner.runCommand(npmPath, null, Duration.ofSeconds(10), "--version")
+                    .trim();
+            int major = Integer.parseInt(version.split("\\.")[0]);
+            return major >= 10;
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Failed to get npm version", e);
+        }
+    }
+
     public record PackageJsonInfo(String name, String version, Path esmEntryPoint) {}
 
     private void verifyInstalledPackage(String packageName) throws ExtensionLoadException {

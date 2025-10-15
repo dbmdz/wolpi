@@ -11,6 +11,9 @@ const TEST_JPG = new Uint8Array([
 
 export default {
   info() {
+    const System = Java.type("java.lang.System")
+    // CHANGE THIS LINE FOR TESTS
+    console.log("Einer erneute Änderung");
     return {
       name: "JavaScript Test Extension",
       apiVersion: 1,
@@ -19,6 +22,9 @@ export default {
   },
 
   authorize(identifier, headers, clientIp) {
+    if (!wolpi.config()) {
+      return true;
+    }
     const {
       allowedIds,
       forbiddenIds,
@@ -45,6 +51,9 @@ export default {
   resolve(identifier, eTag, lastModified) {
     if (eTag === "not-modified") {
       return { notModified: true };
+    }
+    if (!wolpi.config()) {
+      return null;
     }
     const { prefix, resolvingType } = wolpi.config();
     if (prefix && identifier.indexOf(prefix) !== 0) {

@@ -82,7 +82,7 @@ class PyPiInstallerTest {
         Path packageDir = tempDir.resolve("my-package");
         Files.createDirectories(packageDir);
         Path pyproject = packageDir.resolve("pyproject.toml");
-        Files.writeString(pyproject, "[project]\nname = \"my-package\"");
+        Files.writeString(pyproject, "[project]\nname = \"my-package\"\nversion=\"0.1.0\"\n");
 
         Path distInfoDir =
                 pypiDir.resolve("my-package", "lib", "python3.11", "site-packages", "my_package-0.1.0.dist-info");
@@ -97,7 +97,7 @@ class PyPiInstallerTest {
             Files.createDirectories(distInfoDir);
             Files.writeString(distInfoDir.resolve("entry_points.txt"), "[wolpi]\nmy-ext = my_pkg.main:get_extension");
 
-            String packageName = installer.installExtensionFromLocalDirectory(packageDir);
+            String packageName = installer.installExtensionFromLocalDirectory(packageDir, false);
             assertThat(packageName).isEqualTo("my-package");
         }
     }
@@ -346,7 +346,7 @@ class PyPiInstallerTest {
     void shouldThrowWhenPyprojectTomlIsMissingWhenInstallingFromLocalDirectory() {
         Path dir = pypiDir.resolve("no-pyproject");
         assertThat(dir.toFile().mkdirs()).isTrue();
-        assertThatThrownBy(() -> installer.installExtensionFromLocalDirectory(dir))
+        assertThatThrownBy(() -> installer.installExtensionFromLocalDirectory(dir, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("pyproject.toml");
     }

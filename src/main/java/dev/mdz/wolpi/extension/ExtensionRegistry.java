@@ -11,12 +11,15 @@ import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.JSLoadedExtension;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
+import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
+import dev.mdz.wolpi.extension.util.FileAlterationMonitor.AlterationEvent;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -28,8 +31,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.graalvm.polyglot.Source;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.info.BuildProperties;
@@ -53,9 +60,12 @@ import org.springframework.stereotype.Component;
 /// - Packages must define a `wolpi-ext` entry point in their `pyproject.toml` or `setup.py` that
 /// points to a callable that returns an object with the hooks as methods.
 @Component
-public class ExtensionRegistry {
+public class ExtensionRegistry implements AutoCloseable {
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+    /// Map of extension configurations to their most recent loaded instances
+    private final Map<ExtensionConfig, LoadedExtension> loadedExtensions = new ConcurrentHashMap<>();
 
     /// Map of hooks to the list of extensions that implement them
     private final Map<ExtensionHooks, List<LoadedExtension>> implementedHooks;
@@ -64,21 +74,38 @@ public class ExtensionRegistry {
     /// contains all extensions except the one that is under test.
     private final Set<LoadedExtension> disabledExtensions = new HashSet<>();
 
+    /// Callbacks for reloads of extensions when their source files change.
+    private final Map<ExtensionConfig, List<Consumer<LoadedExtension>>> reloadCallbacks = new ConcurrentHashMap<>();
+
     private final HttpClient httpClient;
     private final PyPiInstaller pyInstaller;
     private final NpmInstaller jsInstaller;
     private final String wolpiVersion;
+    private final @Nullable FileAlterationMonitor fileMonitor;
+    private final GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool;
 
     public ExtensionRegistry(
             WolpiConfig cfg,
             HttpClient httpClient,
             PyPiInstaller pyInstaller,
             NpmInstaller jsInstaller,
-            BuildProperties buildProps) {
+            BuildProperties buildProps,
+            GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool) {
         this.httpClient = httpClient;
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
         this.wolpiVersion = buildProps.getVersion();
+        this.extensionContextPool = extensionContextPool;
+
+        FileAlterationMonitor monitor;
+        try {
+            monitor = new FileAlterationMonitor();
+            monitor.start();
+        } catch (IOException e) {
+            log.warn("Failed to initialize file monitoring, live-reloading of extensions disabled.", e);
+            monitor = null;
+        }
+        this.fileMonitor = monitor;
 
         this.implementedHooks = new ConcurrentHashMap<>();
         if (cfg.extensions().isEmpty()) {
@@ -95,7 +122,10 @@ public class ExtensionRegistry {
                                     "Extension '{}' loaded.",
                                     loaded.extensionInfo().name());
                         } catch (ExtensionLoadException e) {
-                            log.error("Failed to load extension from {}", ext, e);
+                            log.error("Failed to load extension from {}: {}", ext, e.getMessage());
+                            log.debug("Error details:", e);
+                        } catch (RuntimeException e) {
+                            log.error("Unexpected error while loading extension from " + ext, e);
                         }
                     })
                     .forEach(pool::submit);
@@ -111,6 +141,34 @@ public class ExtensionRegistry {
     /// @return the loaded extension
     /// @throws ExtensionLoadException if loading the extension fails
     public LoadedExtension loadExtension(ExtensionConfig config) throws ExtensionLoadException {
+        return this.loadExtension(config, null);
+    }
+
+    /// Load an extension based on its definition in the provided configuration.
+    ///
+    /// If an earlier version of the extension with the same name is already loaded, it is
+    /// replaced with the new version.
+    ///
+    /// @param config extension definition from the Wolpi configuration
+    /// @param lastModified optional last modified timestamp of the extension source, used to
+    ///                     determine if a reload is necessary when live-reloading is enabled.
+    ///                     Should only be set if the load is performed as part of a live-reload
+    ///                     operation, otherwise it should be null.
+    /// @return the loaded extension
+    /// @throws ExtensionLoadException if loading the extension fails
+    private LoadedExtension loadExtension(ExtensionConfig config, @Nullable Instant lastModified)
+            throws ExtensionLoadException {
+        if (loadedExtensions.containsKey(config)) {
+            var loadedExt = loadedExtensions.get(config);
+            var lastModifiedExt = loadedExt.lastModified();
+            if (!config.liveReload()
+                    || lastModified == null
+                    || (lastModifiedExt != null && lastModifiedExt.isAfter(lastModified))) {
+                log.debug("Extension from {} is already loaded and up to date, skipping reload.", config);
+                return loadedExt;
+            }
+        }
+
         LoadedExtension ext;
         if (config.path() != null) {
             Path path = config.path().toAbsolutePath().normalize();
@@ -120,37 +178,66 @@ public class ExtensionRegistry {
             if (!Files.isReadable(path)) {
                 throw new ExtensionLoadException("Extension path is not readable: " + path);
             }
-            if (path.toString().endsWith(".js")) {
-                ext = loadJsExtension(config);
+            if (path.toString().endsWith(".js") || path.toString().endsWith(".mjs")) {
+                ext = loadJsExtension(config, lastModified);
             } else if (path.toString().endsWith(".py")) {
-                ext = loadPythonExtension(config);
+                ext = loadPythonExtension(config, lastModified);
             } else if (!Files.isDirectory(path)) {
                 throw new ExtensionLoadException("Extension path must be a directory or a .js/.py file: " + path);
             } else if (Files.exists(path.resolve("pyproject.toml"))) {
-                ext = loadPythonExtension(config);
+                ext = loadPythonExtension(config, lastModified);
             } else if (Files.exists(path.resolve("package.json"))) {
-                ext = loadJsExtension(config);
+                ext = loadJsExtension(config, lastModified);
             } else {
                 throw new ExtensionLoadException(
                         "Extension path must contain a package.json (for JS) or pyproject.toml (for Python): " + path);
             }
         } else if (config.npm() != null) {
-            ext = loadJsExtension(config);
+            ext = loadJsExtension(config, null);
         } else if (config.pypi() != null) {
-            ext = loadPythonExtension(config);
+            ext = loadPythonExtension(config, null);
         } else {
             throw new IllegalArgumentException("Invalid extension configuration.");
+        }
+
+        // Set up live-reloading if enabled and supported, and we have the initial load (i.e. not a
+        // timestamp from a reload)
+        if (config.liveReload() && fileMonitor != null && lastModified == null) {
+            if (config.path() == null) {
+                log.warn(
+                        "{}: Live reloading can only be enabled for local extensions, setting will be ignored.",
+                        ext.extensionInfo().name());
+            } else {
+                var extName = ext.extensionInfo().name();
+                Predicate<Path> liveReloadFilter =
+                        switch (ext) {
+                            case JSLoadedExtension _ ->
+                                path -> path.toString().endsWith(".js")
+                                        || path.toString().endsWith(".mjs");
+                            case PythonLoadedExtension _ ->
+                                path -> path.toString().endsWith(".py");
+                            default -> path -> true;
+                        };
+                try {
+                    fileMonitor.monitor(config.path(), evt -> this.onReload(extName, config, evt), liveReloadFilter);
+                } catch (IOException e) {
+                    log.warn(
+                            "Failed to set up live-reloading for extension {}, disabling live-reload for it.",
+                            extName,
+                            e);
+                }
+            }
         }
 
         // First, remove the extension from all hooks to avoid duplication with older versions
         for (List<LoadedExtension> exts : implementedHooks.values()) {
             exts.stream()
-                    .filter(e ->
-                            e.extensionInfo().name().equals(ext.extensionInfo().name()))
+                    .filter(e -> e.config().equals(ext.config()))
                     .findFirst()
                     .map(exts::remove);
         }
         // Then add it
+        loadedExtensions.put(config, ext);
         for (ExtensionHooks hook : ext.implementedHooks()) {
             implementedHooks
                     .computeIfAbsent(hook, (k) -> new CopyOnWriteArrayList<>())
@@ -172,20 +259,25 @@ public class ExtensionRegistry {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
         if (!providedHooks.contains(ExtensionHooks.INFO)) {
-            throw new ExtensionLoadException("Extension does not provide the 'info' hook, cannot load.");
+            throw new ExtensionLoadException("Extension does not provide the mandatory 'info' hook, cannot load.");
         }
         if (!providedHooks.contains(ExtensionHooks.CLEANUP)) {
-            throw new ExtensionLoadException("Extension does not provide the 'cleanup' hook, cannot load.");
+            throw new ExtensionLoadException("Extension does not provide the mandatory 'cleanup' hook, cannot load.");
         }
         return providedHooks;
     }
 
     /// Load a Python extension based on its definition in the configuration.
     ///
-    /// @param config extension definition from the Wolpi configuration
+    /// @param config extension definition from the Wolpi configurations
+    /// @param lastModified optional last modified timestamp of the extension source, used to
+    ///                     determine if a reload is necessary when live-reloading is enabled.
+    ///                     Should only be set if the load is performed as part of a live-reload
+    ///                     operation, otherwise it should be null.
     /// @return the loaded extension
     /// @throws ExtensionLoadException if loading the extension fails
-    private LoadedExtension loadPythonExtension(ExtensionConfig config) throws ExtensionLoadException {
+    private LoadedExtension loadPythonExtension(ExtensionConfig config, @Nullable Instant lastModified)
+            throws ExtensionLoadException {
         boolean isLocalFile = config.path() != null && Files.isRegularFile(config.path());
         boolean isLocalPackage = config.path() != null && Files.isDirectory(config.path());
         boolean isPyPi = config.pypi() != null;
@@ -198,7 +290,7 @@ public class ExtensionRegistry {
 
         try {
             if (isLocalPackage) {
-                packageName = pyInstaller.installExtensionFromLocalDirectory(config.path());
+                packageName = pyInstaller.installExtensionFromLocalDirectory(config.path(), config.liveReload());
                 sitePackagesPath = pyInstaller.getVenvSitePackages(packageName);
                 if (sitePackagesPath == null) {
                     throw new ExtensionLoadException(
@@ -226,7 +318,8 @@ public class ExtensionRegistry {
                 throw new IllegalArgumentException("Invalid Python extension configuration.");
             }
         } catch (PackageInstallException e) {
-            throw new ExtensionLoadException("Failed to install Python extension package", e);
+            throw new ExtensionLoadException(
+                    "Failed to install Python extension package: %s".formatted(e.getMessage()), e);
         }
 
         Path venvPath;
@@ -235,10 +328,29 @@ public class ExtensionRegistry {
                 // For packages, we have to import the function returning the implementation
                 // from the entrypoint module.
                 venvPath = sitePackagesPath.getParent().getParent().getParent();
-                source = Source.newBuilder(
-                                "python",
-                                "from %s import %s\n".formatted(entryPoint.module(), entryPoint.function()),
-                                "%s.py".formatted(packageName))
+                String code;
+                if (config.liveReload()) {
+                    // When live-reloading is enabled, we have to reload the module/invalidate
+                    // the module cache to pick up changes.
+                    code =
+                            """
+                            import importlib
+                            import sys
+
+                            if '%s' in sys.modules:
+                                importlib.reload(sys.modules['%s'])
+
+                            from %s import %s
+                            """
+                                    .formatted(
+                                            entryPoint.module(),
+                                            entryPoint.module(),
+                                            entryPoint.module(),
+                                            entryPoint.function());
+                } else {
+                    code = "from %s import %s\n".formatted(entryPoint.module(), entryPoint.function());
+                }
+                source = Source.newBuilder("python", code, "%s.py".formatted(packageName))
                         .build();
             } else {
                 // Simple python files can be loaded directly.
@@ -257,23 +369,31 @@ public class ExtensionRegistry {
         var guestCtx = new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
 
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null)) {
+            var hooks = getExtensionHooks(ctx);
             return new PythonLoadedExtension(
+                    config,
                     source,
                     ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class),
                     extensionVersion,
-                    getExtensionHooks(ctx),
+                    hooks,
                     entryPoint,
                     venvPath,
-                    guestCtx);
+                    guestCtx,
+                    lastModified);
         }
     }
 
     /// Load a JavaScript extension based on its definition in the configuration.
     ///
     /// @param config extension definition from the Wolpi configuration
+    /// @param lastModified optional last modified timestamp of the extension source, used to
+    ///                     determine if a reload is necessary when live-reloading is enabled.
+    ///                     Should only be set if the load is performed as part of a live-reload
+    ///                     operation, otherwise it should be null.
     /// @return the loaded extension
     /// @throws ExtensionLoadException if loading the extension fails
-    private LoadedExtension loadJsExtension(ExtensionConfig config) throws ExtensionLoadException {
+    private LoadedExtension loadJsExtension(ExtensionConfig config, @Nullable Instant lastModified)
+            throws ExtensionLoadException {
 
         String packageName = null;
         Path entryPoint;
@@ -307,7 +427,32 @@ public class ExtensionRegistry {
 
         Source source;
         try {
-            source = Source.newBuilder("js", entryPoint.toFile())
+            String modulePath = entryPoint.toAbsolutePath().toString();
+            if (lastModified != null) {
+                // When reloading, we have to bypass the module cache to pick up changes.
+                modulePath += "?t=" + lastModified.toEpochMilli();
+            }
+            // This is a bit convoluted and could be so much easier if top-level await + dynamic
+            // imports were working, but alas, they are not [1]. So instead, we do a wildcard import
+            // then re-export everything under the `hook` name.
+            //
+            // [1]: See this issue: https://github.com/oracle/graaljs/issues/938
+            source = Source.newBuilder(
+                            "js",
+                            """
+                            import * as allExports from '%s';
+                            const mergedExports = { ...allExports };
+                            if (mergedExports.default) {
+                                // If there is a default export, copy its properties to the top level
+                                Object.assign(mergedExports, mergedExports.default);
+                                delete mergedExports.default;
+                            }
+                            // Can't export already defined names in GraalJS, so we have to
+                            // create a new object and export that.
+                            export const hooks = { ...mergedExports };
+                            """
+                                    .formatted(modulePath),
+                            "wolpi-extension.js")
                     .mimeType("application/javascript+module")
                     .build();
         } catch (IOException e) {
@@ -330,12 +475,15 @@ public class ExtensionRegistry {
 
         var guestCtx = new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx)) {
+            var hooks = getExtensionHooks(ctx);
             return new JSLoadedExtension(
+                    config,
                     source,
                     ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class),
                     extensionVersion,
-                    getExtensionHooks(ctx),
-                    guestCtx);
+                    hooks,
+                    guestCtx,
+                    lastModified);
         }
     }
 
@@ -375,6 +523,48 @@ public class ExtensionRegistry {
     public TemporarilyIsolatedRegistry temporarilyIsolateExtension(LoadedExtension ext) {
         this.getExtensions().stream().filter(e -> e != ext).forEach(this.disabledExtensions::add);
         return new TemporarilyIsolatedRegistry(this);
+    }
+
+    /// Callback for when a file change is detected in an extension's source file/directory.
+    private void onReload(String extName, ExtensionConfig config, AlterationEvent evt) {
+        log.info("Change detected in extension {}, reloading...", extName);
+        // First, clear the runtime context pool for the extension to ensure no stale contexts are
+        // kept around
+        var currentlyLoadedExt = loadedExtensions.get(config);
+        try {
+            extensionContextPool.clear(currentlyLoadedExt, false);
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to clear runtime context pool for extension {}, stale contexts may still be alive!",
+                    extName,
+                    e);
+        }
+        try {
+            var newExt = loadExtension(config, evt.timestamp());
+            log.info("Extension '{}' reloaded.", newExt.extensionInfo().name());
+            // Notify any listeners about the reload
+            reloadCallbacks.getOrDefault(config, List.of()).forEach(cb -> cb.accept(newExt));
+        } catch (ExtensionLoadException e) {
+            log.error("Failed to reload extension from {}", config, e);
+        }
+    }
+
+    /// Register a callback to be called when the given extension is reloaded.
+    ///
+    /// @param config the extension configuration to register the callback for
+    /// @param callback the callback to be called when the extension is reloaded, will be called
+    ///                 in the thread that detected the file change
+    public void addReloadCallback(ExtensionConfig config, Consumer<LoadedExtension> callback) {
+        this.reloadCallbacks
+                .computeIfAbsent(config, (k) -> new CopyOnWriteArrayList<>())
+                .add(callback);
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (this.fileMonitor != null) {
+            this.fileMonitor.stop();
+        }
     }
 
     /// AutoCloseable that re-enables all extensions when closed, used for temporarily isolating an

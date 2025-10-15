@@ -111,38 +111,48 @@ public class PyPiInstaller {
     ///
     /// @param localPackageDir  path to the local package directory
     /// @param skipDependencies if true, do not install dependencies of the package
-    public void installFromLocalDirectory(Path localPackageDir, boolean skipDependencies)
+    public void installFromLocalDirectory(Path localPackageDir, boolean skipDependencies, boolean editable)
             throws PackageInstallException {
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
             throw new IllegalArgumentException(
                     "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);
         }
-        String packageName = parsePackageNameFromPyproject(localPackageDir);
-        Path existingSitePackages = getVenvSitePackages(packageName);
+        ParsedPackage pkgInfo = parsePyprojectToml(localPackageDir);
+        Path existingSitePackages = getVenvSitePackages(pkgInfo.name());
         if (existingSitePackages != null) {
-            log.debug("Package '{}' already installed, skipping installation", packageName);
-            return;
+            boolean isInstalledEditable = Files.exists(existingSitePackages.resolve(
+                    "__editable__.%s-%s.pth".formatted(pkgInfo.name().replace('-', '_'), pkgInfo.version())));
+            if (editable && isInstalledEditable || (!editable && !isInstalledEditable)) {
+                log.debug("Package '{}' already installed, skipping installation", pkgInfo.name());
+                return;
+            }
         }
-        Path venvPath = ensureVenv(packageName);
+        Path venvPath = ensureVenv(pkgInfo.name());
         runPip(
                 venvPath,
                 "install",
                 skipDependencies ? "--no-deps" : "",
-                "-e", // editable, i.e. local modifications are reflected in the installed package
+                editable ? "-e" : "", // editable, i.e. local modifications are reflected in the installed package
                 localPackageDir.toAbsolutePath().toString());
     }
 
     /// Install a Wolpi extension package from a local directory containing a `pyproject.toml` file.
     ///
     /// @return the name of the installed package as specified in `pyproject.toml`
-    public String installExtensionFromLocalDirectory(Path localPackageDir)
+    public String installExtensionFromLocalDirectory(Path localPackageDir, boolean editable)
             throws PackageInstallException, ExtensionLoadException {
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
             throw new IllegalArgumentException(
                     "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);
         }
+        if (editable && !supportsPackageLiveReload()) {
+            log.warn(
+                    "Editable installation requested, but the current Python executable does not support it, please configure GraalPy for package installation. Disabling live reload for {}",
+                    localPackageDir);
+            editable = false;
+        }
         String packageName = parsePackageNameFromPyproject(localPackageDir);
-        installFromLocalDirectory(localPackageDir, false);
+        installFromLocalDirectory(localPackageDir, false, editable);
         verifyInstalledExtension(packageName);
         return packageName;
     }
@@ -236,8 +246,25 @@ public class PyPiInstaller {
         }
     }
 
-    /// Parse the pyproject.toml in the package directory to extract the package name.
-    private String parsePackageNameFromPyproject(Path localPackageDir) throws PackageInstallException {
+    /// Check if the installer supports live reloading of packages.
+    ///
+    /// This is only the case if the configured Python executable is GraalPy, as the editable
+    /// installation with CPython doesn't seeem to work with GraalPy.
+    public boolean supportsPackageLiveReload() {
+        if (pythonPath == null) {
+            throw new IllegalStateException("Python executable not configured or not found.");
+        }
+        try {
+            return CommandRunner.runCommand(pythonPath, null, processTimeout, "--version")
+                    .trim()
+                    .toLowerCase()
+                    .contains("graalpy");
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private ParsedPackage parsePyprojectToml(Path localPackageDir) throws PackageInstallException {
         Path pyproject = localPackageDir.resolve("pyproject.toml");
         Map<String, Object> toml;
         try {
@@ -248,11 +275,26 @@ public class PyPiInstaller {
         if (toml.containsKey("project")) {
             @SuppressWarnings("unchecked")
             Map<String, Object> project = (Map<String, Object>) toml.get("project");
-            if (project.containsKey("name")) {
-                return (String) project.get("name");
+            var name = (String) project.get("name");
+            var version = (String) project.get("version");
+            if (name != null && version != null) {
+                return new ParsedPackage(name, version);
             }
         }
-        throw new PackageInstallException("Could not find package name in pyproject.toml: " + pyproject);
+        throw new PackageInstallException("Could not parse name and version from pyproject.toml: " + pyproject);
+    }
+
+    /// Parse the pyproject.toml in the package directory to extract the package name.
+    private String parsePackageNameFromPyproject(Path localPackageDir) throws PackageInstallException {
+        return parsePyprojectToml(localPackageDir).name();
+    }
+
+    public @Nullable Path getVenv(String packageName) {
+        var p = baseDir.resolve(packageName);
+        if (Files.isDirectory(p)) {
+            return p;
+        }
+        return null;
     }
 
     /// Create a new virtual environment for the given package if it does not already exist.
@@ -326,4 +368,6 @@ public class PyPiInstaller {
 
     /// Definition of the `wolpi-ext` entry point from package metadata
     public record EntryPoint(String module, String function) {}
+
+    private record ParsedPackage(String name, String version) {}
 }

@@ -3,7 +3,7 @@ import org.jspecify.annotations.NullMarked;
 // Declare all classes in this module as null-marked, i.e. all parameters, return types and field
 // values are non-null by default unless annotated with @Nullable.
 @NullMarked
-module wolpi {
+open module wolpi {
     requires app.photofox.vipsffm;
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.dataformat.toml;
@@ -42,14 +42,4 @@ module wolpi {
     exports dev.mdz.wolpi.model;
     exports dev.mdz.wolpi.validation;
     exports dev.mdz.wolpi.validation.model;
-
-    // Needed to allow proxying of RuntimeContext by Spring AOP for request-scoped bean
-    opens dev.mdz.wolpi to
-            spring.core;
-    opens dev.mdz.wolpi.extension to
-            spring.core;
-    opens dev.mdz.wolpi.config to
-            spring.core;
-    opens dev.mdz.wolpi.validation to
-            info.picocli;
 }

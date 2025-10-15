@@ -77,7 +77,7 @@ public class Wolpi implements WebMvcConfigurer {
 
     /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
     @Bean("contextPool")
-    public KeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool(WolpiConfig wolpiConfig) {
+    public GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool(WolpiConfig wolpiConfig) {
         var cfg = new GenericKeyedObjectPoolConfig<RuntimeContext>();
         cfg.setMaxIdlePerKey(wolpiConfig.extensionPool().maxIdle());
         cfg.setMaxTotalPerKey(wolpiConfig.extensionPool().maxTotal());

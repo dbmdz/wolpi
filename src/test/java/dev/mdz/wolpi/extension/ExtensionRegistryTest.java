@@ -125,7 +125,7 @@ class ExtensionRegistryTest {
                 throw new RuntimeException(e);
             }
         });
-        when(pyPiInstaller.installExtensionFromLocalDirectory(source)).thenReturn("py-extension");
+        when(pyPiInstaller.installExtensionFromLocalDirectory(source, false)).thenReturn("py-extension");
         when(pyPiInstaller.getVenvSitePackages("py-extension")).thenReturn(libPath);
         when(pyPiInstaller.getWolpiEntryPoint("py-extension"))
                 .thenReturn(new EntryPoint("py_extension", "wolpi_extension"));
@@ -147,10 +147,10 @@ class ExtensionRegistryTest {
             Path path, PkgSource npm, PkgSource pypi, Map<String, Object> cfg) {
         List<ExtensionConfig> exts = new ArrayList<>();
         if (path != null || npm != null || pypi != null) {
-            exts.add(new ExtensionConfig(path, npm, pypi, cfg));
+            exts.add(new ExtensionConfig(path, npm, pypi, cfg, false));
         }
         WolpiConfig wolpiConfig =
                 new WolpiConfig(Path.of("/data"), null, null, null, null, null, exts, null, null, null);
-        return new ExtensionRegistry(wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties);
+        return new ExtensionRegistry(wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties, null);
     }
 }

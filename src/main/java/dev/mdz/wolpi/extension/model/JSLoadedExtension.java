@@ -1,5 +1,7 @@
 package dev.mdz.wolpi.extension.model;
 
+import dev.mdz.wolpi.config.ExtensionConfig;
+import java.time.Instant;
 import java.util.Set;
 import org.graalvm.polyglot.Source;
 import org.jspecify.annotations.Nullable;
@@ -8,9 +10,11 @@ import org.jspecify.annotations.Nullable;
 ///
 /// No extra fields beyond the ones in [LoadedExtension].
 public record JSLoadedExtension(
-    Source source,
-    ExtensionInfo extensionInfo,
-    @Nullable String extensionVersion,
-    Set<ExtensionHooks> implementedHooks,
-    @Nullable ExtensionGuestContext guestContext)
-    implements LoadedExtension {}
+        ExtensionConfig config,
+        Source source,
+        ExtensionInfo extensionInfo,
+        @Nullable String extensionVersion,
+        Set<ExtensionHooks> implementedHooks,
+        @Nullable ExtensionGuestContext guestContext,
+        @Nullable Instant lastModified)
+        implements LoadedExtension {}

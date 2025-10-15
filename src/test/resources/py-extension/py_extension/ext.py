@@ -1,8 +1,11 @@
 import time
-from datetime import datetime
+
+import java
 
 class TestExtension:
   def info(self):
+    System = java.type("java.lang.System")
+    # CHANGE THIS LINE FOR TESTS
     return {
       "name": "Test Python Extension",
       "apiVersion": 1,
@@ -13,7 +16,9 @@ class TestExtension:
     pass
 
   def authorize(self, identifier: str, headers: dict, client_ip: str) -> bool:
-    wolpi_cfg = wolpi.config()
+    if wolpi.config() is None:
+      return True
+    wolpi_cfg = dict(wolpi.config())
     if (allowed_ids := wolpi_cfg.get("allowedIds")) is not None:
       return identifier in allowed_ids
     elif (forbidden_ids := wolpi_cfg.get("forbiddenIds")) is not None:
@@ -25,6 +30,8 @@ class TestExtension:
     return True
 
   def resolve(self, identifier, etag, last_modified):
+    if wolpi.config() is None:
+      return None
     wolpi_cfg = wolpi.config()
     prefix = wolpi_cfg.get("prefix")
     if prefix:

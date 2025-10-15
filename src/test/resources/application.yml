@@ -81,3 +81,11 @@ wolpi:
       max-width: 0
       max-height: 0
       max-area: 0
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "test-cli-isolated"
+wolpi:
+  data-directory: "/tmp/wolpi-data-isolated"

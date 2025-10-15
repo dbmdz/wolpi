@@ -50,7 +50,8 @@ public class GraalContextSupplier {
 
     private static final HostAccess hostAccess = buildHostAccess();
 
-    private static Engine graalEngine = Engine.newBuilder("python", "js").build();
+    private static Engine graalEngine =
+            Engine.newBuilder("python", "js").allowExperimentalOptions(true).build();
 
     private GraalContextSupplier() {}
 
@@ -99,7 +100,11 @@ public class GraalContextSupplier {
                 .engine(graalEngine)
                 .allowIO(IOAccess.newBuilder().fileSystem(new ESMFileSystem()).build())
                 .useSystemExit(false) // Disallow `exit()` calls from JS extensions
+                .allowExperimentalOptions(true)
                 .option("js.esm-eval-returns-exports", "true")
+                .option("js.top-level-await", "true")
+                .option("js.text-encoding", "true") // allow TextEncoder/TextDecoder
+                .option("js.worker", "true") // allow threading via Worker API
                 .build();
         if (wolpiCtx != null) {
             ctx.getBindings("js").putMember("wolpi", wolpiCtx.forJS());
