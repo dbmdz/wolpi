@@ -3,6 +3,7 @@ package dev.mdz.wolpi.controller;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsError;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
 import dev.mdz.wolpi.iiif.IIIFImageInfo;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
@@ -51,18 +52,21 @@ public class IIIFImageAPIController {
     private final ImageProcessor processor;
     private final ImageRequestParser imageRequestParser;
     private final IIIFComplianceRegistry complianceRegistry;
+    private final ExtensionRuntime extensionRuntime;
 
     public IIIFImageAPIController(
             WolpiConfig config,
             ImageLoader loader,
             ImageProcessor processor,
             ImageRequestParser imageRequestParser,
-            IIIFComplianceRegistry complianceRegistry) {
+            IIIFComplianceRegistry complianceRegistry,
+            ExtensionRuntime extensionRuntime) {
         this.config = config;
         this.loader = loader;
         this.processor = processor;
         this.imageRequestParser = imageRequestParser;
         this.complianceRegistry = complianceRegistry;
+        this.extensionRuntime = extensionRuntime;
     }
 
     /// Handle OPTIONS requests for the /info.json endpoint
@@ -144,8 +148,13 @@ public class IIIFImageAPIController {
                     .body(Map.of("error", "Could not read image information"));
         }
 
-        Map<String, Object> rawInfo = new IIIFImageInfo(imageInfo, config.iiif(), complianceRegistry)
+        Map<String, Object> infoJson = new IIIFImageInfo(imageInfo, config.iiif(), complianceRegistry)
                 .toJSON(version, request.getRequestURL().toString().replace("/info.json", ""));
+
+        var augmented = extensionRuntime.augmentInfoJson(identifier, infoJson, version);
+        if (augmented != null) {
+            infoJson = augmented;
+        }
 
         if (config.iiif().features().jsonLdMediaType()) {
             outHeaders.setContentType(
@@ -155,7 +164,7 @@ public class IIIFImageAPIController {
             outHeaders.setContentType(MediaType.APPLICATION_JSON);
         }
         setCacheHeaders(outHeaders, source);
-        return ResponseEntity.ok().headers(outHeaders).body(rawInfo);
+        return ResponseEntity.ok().headers(outHeaders).body(infoJson);
     }
 
     /// Handle OPTIONS requests for the image processing endpoint

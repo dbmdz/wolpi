@@ -15,6 +15,7 @@ import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
@@ -398,6 +399,21 @@ public class ExtensionRuntimeTest {
                 assertThat(contextPool.getNumActive()).isEqualTo(2);
                 assertThat(contextPool.getNumIdle()).isZero();
             }
+        }
+    }
+
+    @Test
+    @DisplayName("Should augment info.json if extensions implement hook")
+    void shouldAugmentInfoJson() {
+        var exts = List.of(
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false),
+                new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+            var info = runtime.augmentInfoJson("someIdentifier", Map.of("id", "python-id"), IIIFVersion.V3);
+            assertThat(info).isNotNull();
+            assertThat(info.get("augmentedFromPython")).isEqualTo("someIdentifier-3");
+            assertThat(info.get("augmentedFromJS")).isEqualTo("someIdentifier-3");
+            assertThat(info.get("id")).isEqualTo("python-id");
         }
     }
 

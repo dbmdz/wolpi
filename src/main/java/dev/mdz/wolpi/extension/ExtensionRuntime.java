@@ -4,6 +4,7 @@ import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
+import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
@@ -22,6 +23,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import org.apache.commons.pool2.KeyedObjectPool;
+import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jspecify.annotations.Nullable;
@@ -40,7 +42,6 @@ import org.slf4j.LoggerFactory;
 /// component without having to rely on CGLIB proxies, which don't work well with the Java module
 /// system.
 public interface ExtensionRuntime extends AutoCloseable {
-
     /// Check if the request with the given identifier, headers and client IP is authorized to access
     /// the image with the given identifier.
     ///
@@ -71,10 +72,29 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// @return the resolved [ImageSource], or `null` if no extension
     @Nullable ImageSource resolve(String identifier, @Nullable String eTag, @Nullable Instant lastModified);
 
+    /// Allow extensions to augment the standard info.json data for an identifier.
+    ///
+    /// If multiple extensions implement this hook, they are called in the order they were registered
+    /// (i.e. the order in the configuration). Each extension receives the result of the
+    /// previous extension (or the standard info.json data if no previous extension augmented it)
+    /// and may return a modified version of it. If an extension returns `null`, the
+    /// result of the previous extension is passed to the next one.
+    ///
+    /// If no extension returns a non-null value, `null` is returned.
+    ///
+    /// @param identifier        the identifier of the image
+    /// @param standardInfoJson  the standard info.json data as a map
+    /// @param version           the IIIF version being requested, determines if the input
+    ///                          data is in v2 or v3 format
+    /// @return the augmented info.json data, or `null` if no extension modified it
+    public @Nullable Map<String, Object> augmentInfoJson(
+            String identifier, Map<String, Object> standardInfoJson, IIIFVersion version);
+
     @Override
     public void close();
 
     class ExtensionRuntimeImpl implements ExtensionRuntime, AutoCloseable {
+        static final TypeLiteral<Map<String, Object>> InfoJson = new TypeLiteral<>() {};
 
         private static final Logger log =
                 LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -277,6 +297,37 @@ public interface ExtensionRuntime extends AutoCloseable {
                         e);
                 return null;
             }
+        }
+
+        public @Nullable Map<String, Object> augmentInfoJson(
+                String identifier, Map<String, Object> standardInfoJson, IIIFVersion iiifVersion) {
+            List<LoadedExtension> infoJsonExts = registry.getExtensions(ExtensionHooks.INFO_JSON);
+            Map<String, Object> augmented = null;
+            for (LoadedExtension ext : infoJsonExts) {
+                RuntimeContext ctx = ensureRuntimeContext(ext);
+                try (var lease = ctx.enter()) {
+                    Value extObj = lease.extension();
+                    Value infoJsonFn = PolyglotHelpers.getDictOrObjectMember("augmentInfoJson", extObj, true);
+                    assert infoJsonFn != null && infoJsonFn.canExecute();
+                    var dict = augmented == null ? standardInfoJson : augmented;
+                    Value result = infoJsonFn.execute(
+                            identifier,
+                            ctx.getLang() == Language.JAVASCRIPT ? ProxyObject.fromMap(dict) : dict,
+                            iiifVersion.value());
+                    if (result == null || result.isNull()) {
+                        continue;
+                    }
+                    try {
+                        augmented = result.as(InfoJson);
+                    } catch (ClassCastException e) {
+                        log.warn(
+                                "Extension returned invalid value {} from infoJson hook, cannot convert to info.json data structure",
+                                result,
+                                e);
+                    }
+                }
+            }
+            return augmented;
         }
 
         /// Close this [ExtensionRuntimeImpl], returning all borrowed [RuntimeContext]s to the pool.

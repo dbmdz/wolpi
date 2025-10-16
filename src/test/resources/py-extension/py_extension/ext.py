@@ -47,6 +47,11 @@ class TestExtension:
       "url": f"https://example.com/resource/{identifier}",
     }
 
+  def augment_info_json(self, identifier: str, info_json: dict, iiif_version: int) -> dict:
+    return {
+      **info_json,
+      "augmentedFromPython": f"{identifier}-{iiif_version}"
+    }
 
 def entry():
   return TestExtension()

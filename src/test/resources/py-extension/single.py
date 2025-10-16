@@ -19,3 +19,6 @@ def authorize(identifier: str, headers: dict, client_ip: str) -> bool:
 
 def resolve(identifier: str, etag: str | None, last_modified: datetime | None) -> str | None:
     return ext.resolve(identifier, etag, last_modified)
+
+def augment_info_json(identifier: str, info_json: dict, iiif_version: int) -> dict:
+    return ext.augment_info_json(identifier, info_json, iiif_version)

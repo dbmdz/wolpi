@@ -101,6 +101,14 @@ export default {
       }
     }
   },
+
+  augmentInfoJson(identifier, infoJson, iiifVersion) {
+    return {
+      ...infoJson,
+      augmentedFromJS: `${identifier}-${iiifVersion}`
+    };
+  },
+
   cleanup() {
   }
 }
