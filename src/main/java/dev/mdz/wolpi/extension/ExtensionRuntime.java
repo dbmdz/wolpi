@@ -305,26 +305,13 @@ public interface ExtensionRuntime extends AutoCloseable {
             Map<String, Object> augmented = null;
             for (LoadedExtension ext : infoJsonExts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
-                try (var lease = ctx.enter()) {
-                    Value extObj = lease.extension();
-                    Value infoJsonFn = PolyglotHelpers.getDictOrObjectMember("augmentInfoJson", extObj, true);
-                    assert infoJsonFn != null && infoJsonFn.canExecute();
-                    var dict = augmented == null ? standardInfoJson : augmented;
-                    Value result = infoJsonFn.execute(
-                            identifier,
-                            ctx.getLang() == Language.JAVASCRIPT ? ProxyObject.fromMap(dict) : dict,
-                            iiifVersion.value());
-                    if (result == null || result.isNull()) {
-                        continue;
-                    }
-                    try {
-                        augmented = result.as(InfoJson);
-                    } catch (ClassCastException e) {
-                        log.warn(
-                                "Extension returned invalid value {} from infoJson hook, cannot convert to info.json data structure",
-                                result,
-                                e);
-                    }
+                var rv = ctx.runHook(
+                        ExtensionHooks.INFO_JSON,
+                        identifier,
+                        PolyglotHelpers.toGuest(augmented != null ? augmented : standardInfoJson, ctx.getLang()),
+                        iiifVersion.value());
+                if (rv != null && !rv.isNull()) {
+                    augmented = rv.as(InfoJson);
                 }
             }
             return augmented;

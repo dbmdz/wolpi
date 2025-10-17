@@ -107,7 +107,7 @@ public class GraalContextSupplier {
                 .option("js.worker", "true") // allow threading via Worker API
                 .build();
         if (wolpiCtx != null) {
-            ctx.getBindings("js").putMember("wolpi", wolpiCtx.forJS());
+            ctx.getBindings("js").putMember("wolpi", wolpiCtx);
         }
         return ctx;
     }

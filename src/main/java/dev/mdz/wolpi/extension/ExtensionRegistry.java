@@ -9,6 +9,7 @@ import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.JSLoadedExtension;
+import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
@@ -366,7 +367,8 @@ public class ExtensionRegistry implements AutoCloseable {
             extensionVersion = "unknown";
         }
 
-        var guestCtx = new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
+        var guestCtx = new ExtensionGuestContext(
+                wolpiVersion, extensionVersion, httpClient, PolyglotHelpers.toGuest(config.config(), Language.PYTHON));
 
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null)) {
             var hooks = getExtensionHooks(ctx);
@@ -473,7 +475,11 @@ public class ExtensionRegistry implements AutoCloseable {
             extensionVersion = "unknown";
         }
 
-        var guestCtx = new ExtensionGuestContext(wolpiVersion, extensionVersion, httpClient, config.config());
+        var guestCtx = new ExtensionGuestContext(
+                wolpiVersion,
+                extensionVersion,
+                httpClient,
+                PolyglotHelpers.toGuest(config.config(), Language.JAVASCRIPT));
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx)) {
             var hooks = getExtensionHooks(ctx);
             return new JSLoadedExtension(
