@@ -258,10 +258,20 @@ public class PyPiInstaller {
             throw new IllegalStateException("Python executable not configured or not found.");
         }
         try {
-            return CommandRunner.runCommand(pythonPath, null, processTimeout, "--version")
+            var version = CommandRunner.runCommand(pythonPath, null, processTimeout, "--version")
                     .trim()
-                    .toLowerCase()
-                    .contains("graalpy");
+                    .toLowerCase();
+            if (!version.contains("graalpy")) {
+                return false;
+            }
+            if (!version.contains("native %s".formatted(EXPECTED_GRAALPY_VERSION))) {
+                log.warn(
+                        "GraalPy version mismatch: expected version {}, but found version string: {}. Editable installations are not supported.",
+                        EXPECTED_GRAALPY_VERSION,
+                        version);
+                return false;
+            }
+            return true;
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }

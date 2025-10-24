@@ -108,7 +108,8 @@ public class CliRunner implements CommandLineRunner, Runnable {
                 if (Files.exists(extensionLocation.toPath().resolve("pyproject.toml"))
                         && !pyPiInstaller.supportsPackageLiveReload()) {
                     log.error(
-                            "Watching local Python packages requires a standalone GraalPy executable, which is not available on the PATH. Please make sure a `graalpy` executable is installed and available on the PATH.");
+                            "Watching local Python packages requires a standalone GraalPy {} executable, which is not available on the PATH. Please make sure a `graalpy` executable is installed and available on the PATH.",
+                            PyPiInstaller.EXPECTED_GRAALPY_VERSION);
                     exitHandler.accept(1);
                 } else if (Files.exists(extensionLocation.toPath().resolve("package.json"))
                         && !npmInstaller.supportsPackageLiveReload()) {
