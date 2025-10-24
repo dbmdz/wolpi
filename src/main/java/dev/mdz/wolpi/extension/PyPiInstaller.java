@@ -42,6 +42,8 @@ import org.springframework.stereotype.Component;
 /// [1] [Download from `oracle/graalpython`](https://github.com/oracle/graalpython/releases)
 @Component
 public class PyPiInstaller {
+    public static final String EXPECTED_GRAALPY_VERSION = "25";
+
     private static final Logger log =
             org.slf4j.LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
