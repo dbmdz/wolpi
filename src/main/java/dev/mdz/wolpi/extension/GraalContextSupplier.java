@@ -1,6 +1,8 @@
 package dev.mdz.wolpi.extension;
 
 import app.photofox.vipsffm.VipsHelper;
+import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.extension.mapping.RecordValueMapper;
 import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
@@ -24,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -31,9 +34,11 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
 import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Component;
 
 /// Supplies GraalVM polyglot contexts for executing extension code and configures them with the
 /// appropriate type mappings.
+@Component
 public class GraalContextSupplier {
     private static final List<Class<? extends Record>> MAPPED_RECORDS = List.of(
             CacheInfo.class,
@@ -47,13 +52,25 @@ public class GraalContextSupplier {
             SourceNotModified.class,
             ValidationSuccess.class,
             ValidationFailure.class);
+    private static final Pattern URI_PATTERN = Pattern.compile("^https?://.*$");
 
-    private static final HostAccess hostAccess = buildHostAccess();
+    private final HostAccess hostAccess;
 
-    private static Engine graalEngine =
-            Engine.newBuilder("python", "js").allowExperimentalOptions(true).build();
+    private Engine graalEngine;
 
-    private GraalContextSupplier() {}
+    public GraalContextSupplier(@Nullable WolpiConfig config) {
+        this.hostAccess = buildHostAccess();
+        var engineBuilder = Engine.newBuilder("python", "js").allowExperimentalOptions(true);
+        if (config != null) {
+            ExtensionDebugConfig debugCfg = config.extensionDebug();
+            if (debugCfg != null && debugCfg.enabled()) {
+                engineBuilder.option("dap", "%s:%s".formatted(debugCfg.host(), debugCfg.port()));
+                engineBuilder.option("dap.Suspend", debugCfg.suspend() ? "true" : "false");
+                engineBuilder.option("dap.WaitAttached", debugCfg.waitAttached() ? "true" : "false");
+            }
+        }
+        this.graalEngine = engineBuilder.build();
+    }
 
     /// Configure host access for GraalVM polyglot contexts.
     ///
@@ -72,13 +89,17 @@ public class GraalContextSupplier {
         }
         builder.targetTypeMapping(
                 Value.class, ResolvedImage.class, ResolvedImageMapper::canMap, ResolvedImageMapper::map);
-        builder.targetTypeMapping(Value.class, URI.class, Value::isString, v -> {
-            try {
-                return new URI(v.asString());
-            } catch (URISyntaxException e) {
-                return null;
-            }
-        });
+        builder.targetTypeMapping(
+                Value.class,
+                URI.class,
+                v -> v.isString() && URI_PATTERN.matcher(v.asString()).matches(),
+                v -> {
+                    try {
+                        return new URI(v.asString());
+                    } catch (URISyntaxException e) {
+                        return null;
+                    }
+                });
         builder.targetTypeMapping(Value.class, Instant.class, Value::isString, v -> Instant.parse(v.asString()));
         builder.targetTypeMapping(Value.class, Path.class, Value::isString, v -> Path.of(v.asString()));
         // For `TypedArray` objects in JS we need to access the `ArrayBuffer` inside the `TypedArray` to
@@ -93,7 +114,7 @@ public class GraalContextSupplier {
     /// @param wolpiCtx optional Wolpi context to make available to the extension as a global variable
     ///                 `wolpi`, or `null` if it is not available for this context
     /// @return the new GraalVM polyglot context, initialized for use by Wolpi extensions
-    public static Context getJsContext(@Nullable ExtensionGuestContext wolpiCtx) {
+    public Context getJsContext(@Nullable ExtensionGuestContext wolpiCtx) {
         var ctx = Context.newBuilder("js")
                 .allowHostAccess(hostAccess)
                 .allowHostClassLookup(c -> true)
@@ -119,7 +140,7 @@ public class GraalContextSupplier {
     /// @param wolpiCtx   optional Wolpi context to make available to the extension as a global
     ///                   variable `wolpi`, or `null` if it is not available for this context
     /// @return the new GraalVM polyglot context, initialized for use by Wolpi extensions
-    public static Context getPythonContext(@Nullable Path venvPath, @Nullable ExtensionGuestContext wolpiCtx) {
+    public Context getPythonContext(@Nullable Path venvPath, @Nullable ExtensionGuestContext wolpiCtx) {
         var builder = Context.newBuilder("python")
                 .engine(graalEngine)
                 .allowHostAccess(hostAccess)
@@ -127,7 +148,9 @@ public class GraalContextSupplier {
                 .allowIO(IOAccess.ALL)
                 .useSystemExit(false) // Disallow `exit()` calls from Python extensions
                 .allowCreateThread(true)
+                .allowCreateProcess(true)
                 .allowExperimentalOptions(true)
+                .allowNativeAccess(true)
                 .option("python.IsolateNativeModules", "true");
         if (venvPath != null) {
             Path pythonExecutable = Stream.of("graalpy", "python3", "python")
@@ -178,7 +201,7 @@ public class GraalContextSupplier {
     /// There should never be a need to call this method outside test classes that have a per-class
     /// lifecycle. The caches in the Engine are absolutely vital for performance and should not be
     /// discarded during normal operation.
-    public static void resetEngine() {
+    public void resetEngine() {
         graalEngine.close();
         graalEngine = Engine.newBuilder("python", "js").build();
     }

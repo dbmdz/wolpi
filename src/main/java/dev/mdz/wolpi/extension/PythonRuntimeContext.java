@@ -21,18 +21,19 @@ public class PythonRuntimeContext extends RuntimeContext {
             Source source,
             @Nullable EntryPoint entryPoint,
             @Nullable Path venvPath,
-            @Nullable ExtensionGuestContext extensionGuestContext)
+            @Nullable ExtensionGuestContext extensionGuestContext,
+            GraalContextSupplier contextSupplier)
             throws ExtensionLoadException {
         this.source = source;
         this.entryPoint = entryPoint;
         this.venvPath = venvPath;
         this.guestContext = extensionGuestContext;
-        super();
+        super(contextSupplier);
     }
 
     @Override
-    protected Context getGraalContext() {
-        return GraalContextSupplier.getPythonContext(venvPath, guestContext);
+    protected Context getGraalContext(GraalContextSupplier contextSupplier) {
+        return contextSupplier.getPythonContext(venvPath, guestContext);
     }
 
     /// Evaluates the extension source and returns the object containing its hooks.

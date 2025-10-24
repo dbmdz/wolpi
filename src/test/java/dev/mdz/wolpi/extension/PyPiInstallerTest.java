@@ -48,6 +48,7 @@ class PyPiInstallerTest {
                 null,
                 Collections.emptyList(),
                 null,
+                null,
                 new PackagingConfig(null, pythonPath, Duration.ofSeconds(5)),
                 Collections.emptyMap());
         installer = new PyPiInstaller(config, new ObjectMapper());
@@ -130,6 +131,7 @@ class PyPiInstallerTest {
                 null,
                 null,
                 Collections.emptyList(),
+                null,
                 null,
                 new PackagingConfig(null, null, Duration.ofSeconds(5)),
                 Collections.emptyMap());

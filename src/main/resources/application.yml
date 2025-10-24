@@ -52,6 +52,20 @@ wolpi:
     # Needs to be set to a GraalPython executable if using Python extensions
     # with native dependencies
     # python-executable: "/usr/local/bin/graalpy"
+
+  # Extension Debugging via Debug Adapter Protocol
+  debug-extensions:
+    # Enable or disable extension debugging, global setting for
+    # all extensions and languages
+    enabled: false
+    # Host and port to listen on for debugger connections
+    host: localhost
+    port: 4711
+    # Suspend execution at first source line
+    suspend: false
+    # Only begin executing after a debugger has connected
+    waitAttached: false
+
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"
     info-json: "public, max-age=604800, must-revalidate"

@@ -48,6 +48,7 @@ class NpmInstallerTest {
                 null,
                 Collections.emptyList(),
                 null,
+                null,
                 new PackagingConfig(npmPath, null, Duration.ofSeconds(5)),
                 Collections.emptyMap());
         installer = new NpmInstaller(config, new ObjectMapper());
@@ -134,6 +135,7 @@ class NpmInstallerTest {
                 null,
                 null,
                 Collections.emptyList(),
+                null,
                 null,
                 new PackagingConfig(null, null, Duration.ofSeconds(5)),
                 Collections.emptyMap());

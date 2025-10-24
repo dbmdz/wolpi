@@ -78,6 +78,7 @@ public class ExtensionRegistry implements AutoCloseable {
     /// Callbacks for reloads of extensions when their source files change.
     private final Map<ExtensionConfig, List<Consumer<LoadedExtension>>> reloadCallbacks = new ConcurrentHashMap<>();
 
+    private final GraalContextSupplier contextSupplier;
     private final HttpClient httpClient;
     private final PyPiInstaller pyInstaller;
     private final NpmInstaller jsInstaller;
@@ -91,12 +92,14 @@ public class ExtensionRegistry implements AutoCloseable {
             PyPiInstaller pyInstaller,
             NpmInstaller jsInstaller,
             BuildProperties buildProps,
-            GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool) {
+            GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
+            GraalContextSupplier contextSupplier) {
         this.httpClient = httpClient;
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
         this.wolpiVersion = buildProps.getVersion();
         this.extensionContextPool = extensionContextPool;
+        this.contextSupplier = contextSupplier;
 
         FileAlterationMonitor monitor;
         try {
@@ -370,7 +373,7 @@ public class ExtensionRegistry implements AutoCloseable {
         var guestCtx = new ExtensionGuestContext(
                 wolpiVersion, extensionVersion, httpClient, PolyglotHelpers.toGuest(config.config(), Language.PYTHON));
 
-        try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null)) {
+        try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             return new PythonLoadedExtension(
                     config,
@@ -480,7 +483,7 @@ public class ExtensionRegistry implements AutoCloseable {
                 extensionVersion,
                 httpClient,
                 PolyglotHelpers.toGuest(config.config(), Language.JAVASCRIPT));
-        try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx)) {
+        try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             return new JSLoadedExtension(
                     config,

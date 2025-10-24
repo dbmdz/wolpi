@@ -14,16 +14,26 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
 /// is returned to the pool, and closes the GraalVM Polyglot context when the context is destroyed.
 public class RuntimeContextPooledObjectFactory extends BaseKeyedPooledObjectFactory<LoadedExtension, RuntimeContext> {
 
+    private final GraalContextSupplier contextSupplier;
+
+    public RuntimeContextPooledObjectFactory(GraalContextSupplier contextSupplier) {
+        this.contextSupplier = contextSupplier;
+    }
+
     /// Uses the callback on the [LoadedExtension] to create the [RuntimeContext].
     @Override
     public RuntimeContext create(LoadedExtension ext) throws Exception {
         switch (ext) {
             case JSLoadedExtension jsExt -> {
-                return new JSRuntimeContext(jsExt.source(), jsExt.guestContext());
+                return new JSRuntimeContext(jsExt.source(), jsExt.guestContext(), contextSupplier);
             }
             case PythonLoadedExtension pyExt -> {
                 return new PythonRuntimeContext(
-                        pyExt.source(), pyExt.entryPoint(), pyExt.virtualEnvironment(), pyExt.guestContext());
+                        pyExt.source(),
+                        pyExt.entryPoint(),
+                        pyExt.virtualEnvironment(),
+                        pyExt.guestContext(),
+                        contextSupplier);
             }
         }
     }

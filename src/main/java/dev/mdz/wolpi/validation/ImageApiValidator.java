@@ -39,15 +39,21 @@ public class ImageApiValidator {
 
     private final ExtensionRegistry extensionRegistry;
     private final PyPiInstaller pyPiInstaller;
+    private final GraalContextSupplier contextSupplier;
     private final ObjectMapper objectMapper;
 
     // These are lazy-initialized when first needed
     private @Nullable List<ValidationTest> allTests = null;
     private @Nullable Path venvPath = null;
 
-    public ImageApiValidator(PyPiInstaller pyPiInstaller, ExtensionRegistry extensionRegistry, ObjectMapper mapper) {
+    public ImageApiValidator(
+            PyPiInstaller pyPiInstaller,
+            ExtensionRegistry extensionRegistry,
+            GraalContextSupplier contextSupplier,
+            ObjectMapper mapper) {
         this.pyPiInstaller = pyPiInstaller;
         this.extensionRegistry = extensionRegistry;
+        this.contextSupplier = contextSupplier;
         this.objectMapper = mapper;
     }
 
@@ -82,7 +88,7 @@ public class ImageApiValidator {
         if (this.venvPath == null) {
             this.installValidator();
         }
-        var ctx = GraalContextSupplier.getPythonContext(venvPath, null);
+        var ctx = contextSupplier.getPythonContext(venvPath, null);
         installPyVipsShim(ctx);
         return ctx;
     }
@@ -94,10 +100,11 @@ public class ImageApiValidator {
     /// @param port the local server port to run the tests against
     /// @return `true` if all tests passed with all extensions, `false` if any test failed
     public boolean runStartupExtensionValidation(int port) {
+        boolean allPassed = true;
         for (var ext : extensionRegistry.getExtensions()) {
-            validateExtension(ext, port);
+            allPassed = allPassed && validateExtension(ext, port);
         }
-        return true;
+        return allPassed;
     }
 
     /// Validate the given extension in the context of the current application configuration.

@@ -41,6 +41,9 @@ class WolpiApplicationTests {
     @Autowired
     protected ImageApiValidator imageApiValidator;
 
+    @Autowired
+    private GraalContextSupplier graalContextSupplier;
+
     // Keep a Graal Python Context alive for the duration of all tests to speed things up
     // considerably (~2sec overhead per test otherwise!)
     @BeforeAll
@@ -56,7 +59,7 @@ class WolpiApplicationTests {
         // FIXME: This test class seems to somehow mess up the Graal Engine's internal state, but
         //        only when running in Surefire (IDEA works fine). Resetting the engine seems to fix
         //        it, but I have no idea what the root cause is.
-        GraalContextSupplier.resetEngine();
+        graalContextSupplier.resetEngine();
     }
 
     @DisplayName("Run official IIIF Image API validation test suite")

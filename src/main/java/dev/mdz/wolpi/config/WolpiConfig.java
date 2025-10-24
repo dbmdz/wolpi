@@ -36,6 +36,7 @@ public record WolpiConfig(
         @NestedConfigurationProperty CacheControlHeaders cacheControlHeaders,
         @NestedConfigurationProperty List<ExtensionConfig> extensions,
         @NestedConfigurationProperty ExtensionPoolConfig extensionPool,
+        @NestedConfigurationProperty ExtensionDebugConfig extensionDebug,
         @NestedConfigurationProperty PackagingConfig packaging,
         Map<String, Map<String, Object>> encodingOptions) {
 
@@ -73,6 +74,26 @@ public record WolpiConfig(
     ///                 block until a context is returned to the pool. Set this to the expected
     ///                 maximum number of concurrent requests.
     public record ExtensionPoolConfig(int maxIdle, int maxTotal) {}
+
+    ///  Configures debugging  for Wolpi extensions.
+    ///
+    /// If enabled, Wolpi will start a debug server that allows attaching via the Debug Adapter
+    /// Protocol (e.g. from VSCode or other IDEs).
+    ///
+    /// @param enabled Whether to enable the debug server.
+    /// @param host Host to listen on for debug connections, defaults to localhost.
+    /// @param port Port to listen on for debug connections, defaults to 4711.
+    /// @param suspend If true, the extension will suspend execution at the very first source line,
+    ///                disabled by default.
+    /// @param waitAttached If true, the extension will wait for a debugger to attach before
+    ///                     starting extension code execution, disabled by default.
+    ///
+    public record ExtensionDebugConfig(
+            @DefaultValue("false") boolean enabled,
+            @DefaultValue("localhost") String host,
+            @DefaultValue("4711") int port,
+            @DefaultValue("false") boolean suspend,
+            @DefaultValue("false") boolean waitAttached) {}
 
     /// Configuration for the embedded HTTP server.
     ///

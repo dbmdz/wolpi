@@ -23,13 +23,13 @@ public abstract class RuntimeContext implements AutoCloseable {
     /// context, while still preventing access from multiple threads at the same time.
     private final ReentrantLock contextLock = new ReentrantLock();
 
-    protected RuntimeContext() throws ExtensionLoadException {
-        this.langContext = getGraalContext();
+    protected RuntimeContext(GraalContextSupplier contextSupplier) throws ExtensionLoadException {
+        this.langContext = getGraalContext(contextSupplier);
         this.extensionObject = getExtensionObject();
     }
 
     /// @return The underlying GraalVM Polyglot context
-    protected abstract Context getGraalContext() throws ExtensionLoadException;
+    protected abstract Context getGraalContext(GraalContextSupplier contextSupplier) throws ExtensionLoadException;
 
     /// @return The Polyglot [Value] that has the extension hooks as members
     protected abstract Value getExtensionObject() throws ExtensionLoadException;

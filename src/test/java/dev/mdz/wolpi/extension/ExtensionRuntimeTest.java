@@ -9,6 +9,7 @@ import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.CacheControlHeaders;
+import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionPoolConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
@@ -80,8 +81,9 @@ public class ExtensionRuntimeTest {
     @Mock
     private PyPiInstaller pyPiInstaller;
 
-    private KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool =
-            new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(), new GenericKeyedObjectPoolConfig<>() {
+    private KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool = new GenericKeyedObjectPool<>(
+            new RuntimeContextPooledObjectFactory(new GraalContextSupplier(null)),
+            new GenericKeyedObjectPoolConfig<>() {
                 {
                     setMaxIdlePerKey(2);
                     setMaxTotalPerKey(4);
@@ -138,6 +140,7 @@ public class ExtensionRuntimeTest {
                 mock(CacheControlHeaders.class),
                 new ArrayList<>(),
                 mock(ExtensionPoolConfig.class),
+                new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 mock(PackagingConfig.class),
                 Map.of());
 
@@ -458,7 +461,14 @@ public class ExtensionRuntimeTest {
 
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
-        var registry = new ExtensionRegistry(config, httpClient, pyPiInstaller, npmInstaller, buildProperties, null);
+        var registry = new ExtensionRegistry(
+                config,
+                httpClient,
+                pyPiInstaller,
+                npmInstaller,
+                buildProperties,
+                null,
+                new GraalContextSupplier(config));
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.ExtensionConfig.PkgSource;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -149,8 +150,25 @@ class ExtensionRegistryTest {
         if (path != null || npm != null || pypi != null) {
             exts.add(new ExtensionConfig(path, npm, pypi, cfg, false));
         }
-        WolpiConfig wolpiConfig =
-                new WolpiConfig(Path.of("/data"), null, null, null, null, null, exts, null, null, null);
-        return new ExtensionRegistry(wolpiConfig, httpClient, pyPiInstaller, npmInstaller, buildProperties, null);
+        WolpiConfig wolpiConfig = new WolpiConfig(
+                Path.of("/data"),
+                null,
+                null,
+                null,
+                null,
+                null,
+                exts,
+                null,
+                new ExtensionDebugConfig(false, "localhost", 4711, false, false),
+                null,
+                null);
+        return new ExtensionRegistry(
+                wolpiConfig,
+                httpClient,
+                pyPiInstaller,
+                npmInstaller,
+                buildProperties,
+                null,
+                new GraalContextSupplier(wolpiConfig));
     }
 }

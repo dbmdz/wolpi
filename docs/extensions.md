@@ -6,6 +6,31 @@ the standard processing pipelines with extra syntax or entirely custom behavior.
 
 ## General Concepts
 
+## Limitation: Do not violate the IIIF Specification!
+
+Wolpi's Extension API allows customization of pretty much every aspect of the image processing pipeline.
+With great power comes a bit of responsibility, though: Wolpi is designed to be a IIIF-compliant
+image server, and extensions must not violate the IIIF specification. This means that extensions
+must ensure that every part of the official IIIF Image API specification is adhered to, including
+parameter parsing, behavior, and error handling. On startup, Wolpi runs every enabled extension
+through the IIIF Image API conformance tests to ensure compliance, and refuses to start if any
+extension causes a violation.
+
+Practically, as an extension developer, this means:
+- If possible, gate your custom logic behind syntax that does not conflict with IIIF syntax. For
+  example, if you  want to implement a custom cropping behavior, use a custom syntax that is not
+  valid IIIF syntax (e.g., `customCrop:x,y,w,h` instead of `x,y,w,h`).
+- In some cases you may want to implement custom behavior that replaces standard IIIF behavior
+  (e.g., a custom scaling algorithm). In these cases, ensure that your implementation adheres
+  to the IIIF specification in terms of parameter parsing, behavior, and error handling.
+- Run your extension against the IIIF Image API conformance tests to ensure compliance, you can
+  do this with the `validate` subcommand of the Wolpi application:
+  ```bash
+  java -jar wolpi.jar validate path/to/your/extension-pkg
+  ```
+  You can add `-w` to automatically run the tests whenever the extension code changes.
+
+
 ### Hooks
 
 Wolpi extensions work by implementing one or more "hooks". A hook is a function that is called by
@@ -43,7 +68,7 @@ Every extension **must** implement the `cleanup` hook, even if it does nothing. 
 after the response has been sent to the client and must be used to clean up any state that was
 accumulated during the processing of a request and should not persist between requests.
 
-### The `wolpi` Global
+## The `wolpi` Global
 
 Extensions have access to a `wolpi` global object, which provides access to the Wolpi context. This
 includes the extension's configuration, which can be accessed via `wolpi.config()`.
@@ -59,7 +84,7 @@ interface WolpiContext {
 }
 ```
 
-### Extension Lifecycle
+## Extension Lifecycle
 
 Extensions in Wolpi are kept in a pool after they have been loaded, so that they can be reused for
 multiple subsequent requests without having to run expensive initialization code for each request.
@@ -288,3 +313,80 @@ def extension():
     'resolve': resolve
   }
 ```
+
+## Developing Extensions
+
+### Installing local Extensions with live reload enabled
+To make development easier, Wolpi supports installing local extensions with live reload enabled.
+This allows you to make changes to your extension code and have them automatically picked up by Wolpi
+without having to restart the entire Wolpi application.
+
+Simply set the `live-reload: true` option in the extension definition in `application.yml`:
+
+```yaml
+wolpi:
+  extensions:
+    - path: /path/to/your/extension.js
+      live-reload: true
+```
+
+This feature comes with some caveats:
+- **General:** Only changes to the *source files* are picked up. If you make modifications to your
+  `package.json` or `pyproject.toml`, you will have to restart Wolpi to have them take effect.
+- **Python:** You need to have a standalone GraalPy installation for this to work and configure
+  Wolpi to use it for installing Python extensions, either by putting the `graalpy` executable on
+  your `$PATH` or by setting the `wolpi.packaging.python-executable` configuration option. The
+  major version of GraalPy must match the one used in Wolpi (currently: **25**)
+- **JavaScript:** The `npm` executable used must be at least version 10.
+
+For easy installation of these dependencies, we recommend using a tool like [mise](https://mise.jdx.dev/).
+
+### Debugging Extensions
+Wolpi provides support for the "Advanced Debugging Protocol" (ADP), which allows you to connect a
+debugger to it and set breakpoints, step through code, and inspect variables inside your extensions.
+
+To enable debugging, set the `wolpi.debug` section in `application.yml`:
+
+```yaml
+wolpi:
+  extension-debug:
+    # Enable or disable extension debugging, global setting for
+    # all extensions and languages
+    enabled: true
+    # Host and port to listen on for debugger connections
+    host: localhost
+    port: 4711
+    # Suspend execution at first source line
+    suspend: false
+    # Only begin executing after a debugger has connected
+    waitAttached: false
+```
+
+Then, open the directory with your extensions in Visual Studio Code and create the following
+launch configuration:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to JS Extensions",
+            "debugServer": 4711,
+            "request": "attach",
+            "type": "node"
+        },
+        {
+            "name": "Attach to Python Extensions",
+            "debugServer": 4711,
+            "request": "attach",
+            "type": "debugpy",
+            "pathMappings": [
+            ]
+        }
+    ]
+}
+```
+
+Start up Wolpi, then start the debugger in VS Code using the "Attach to JS Extensions" or
+"Attach to Python Extensions" configuration. You should see the application threads and be able to
+set breakpoints and step through your extension code.

@@ -13,15 +13,17 @@ public class JSRuntimeContext extends RuntimeContext {
     private final Source source;
     private final @Nullable ExtensionGuestContext guestContext;
 
-    public JSRuntimeContext(Source source, @Nullable ExtensionGuestContext guestContext) throws ExtensionLoadException {
+    public JSRuntimeContext(
+            Source source, @Nullable ExtensionGuestContext guestContext, GraalContextSupplier contextSupplier)
+            throws ExtensionLoadException {
         this.source = source;
         this.guestContext = guestContext;
-        super();
+        super(contextSupplier);
     }
 
     @Override
-    protected Context getGraalContext() {
-        return GraalContextSupplier.getJsContext(guestContext);
+    protected Context getGraalContext(GraalContextSupplier contextSupplier) {
+        return contextSupplier.getJsContext(guestContext);
     }
 
     /// Evaluates the extension source and returns the object containing its hooks.

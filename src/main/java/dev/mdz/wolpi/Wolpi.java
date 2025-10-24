@@ -7,6 +7,7 @@ import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.extension.ExtensionRuntime.ExtensionRuntimeImpl;
+import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.RuntimeContext;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
@@ -77,13 +78,14 @@ public class Wolpi implements WebMvcConfigurer {
 
     /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
     @Bean("contextPool")
-    public GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool(WolpiConfig wolpiConfig) {
+    public GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool(
+            WolpiConfig wolpiConfig, GraalContextSupplier contextSupplier) {
         var cfg = new GenericKeyedObjectPoolConfig<RuntimeContext>();
         cfg.setMaxIdlePerKey(wolpiConfig.extensionPool().maxIdle());
         cfg.setMaxTotalPerKey(wolpiConfig.extensionPool().maxTotal());
         // Disable bean self-registration via JMX
         cfg.setJmxEnabled(false);
-        return new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(), cfg);
+        return new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(contextSupplier), cfg);
     }
 
     /// Pool to run extension code in parallel, used for auth and resolving to reduce latency.
