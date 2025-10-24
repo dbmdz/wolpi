@@ -13,7 +13,6 @@ export default {
   info() {
     const System = Java.type("java.lang.System")
     // CHANGE THIS LINE FOR TESTS
-    console.log("Einer erneute Änderung");
     return {
       name: "JavaScript Test Extension",
       apiVersion: 1,

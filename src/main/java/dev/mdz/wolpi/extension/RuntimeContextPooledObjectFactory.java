@@ -23,10 +23,7 @@ public class RuntimeContextPooledObjectFactory extends BaseKeyedPooledObjectFact
             }
             case PythonLoadedExtension pyExt -> {
                 return new PythonRuntimeContext(
-                        pyExt.source(),
-                        pyExt.entryPoint(),
-                        pyExt.virtualEnvironment(),
-                        pyExt.guestContext());
+                        pyExt.source(), pyExt.entryPoint(), pyExt.virtualEnvironment(), pyExt.guestContext());
             }
         }
     }

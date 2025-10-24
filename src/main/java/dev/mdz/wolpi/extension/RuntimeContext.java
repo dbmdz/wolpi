@@ -9,6 +9,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
+import org.jspecify.annotations.Nullable;
 
 /// Runtime context of an extension, contains all the state that is bound to the lifetime of a
 /// single request.
@@ -43,7 +44,7 @@ public abstract class RuntimeContext implements AutoCloseable {
     /// @param args The arguments to pass to the hook
     /// @return The result of the hook execution
     /// @throws IllegalStateException if the hook is not implemented in the extension
-    public Value runHook(ExtensionHooks hook, Object... args) {
+    public @Nullable Value runHook(ExtensionHooks hook, @Nullable Object... args) {
         return run(ext -> hook.getValidNames().stream()
                 .flatMap(name -> Optional.ofNullable(PolyglotHelpers.getDictOrObjectMember(name, ext, true)).stream())
                 .filter(Value::canExecute)

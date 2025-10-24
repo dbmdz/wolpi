@@ -314,7 +314,7 @@ public interface ExtensionRuntime extends AutoCloseable {
                     augmented = rv.as(InfoJson);
                 }
             }
-            return augmented;
+            return (Map<String, Object>) PolyglotHelpers.toHost(augmented);
         }
 
         /// Close this [ExtensionRuntimeImpl], returning all borrowed [RuntimeContext]s to the pool.

@@ -235,7 +235,7 @@ public class ExtensionRegistry implements AutoCloseable {
             exts.stream()
                     .filter(e -> e.config().equals(ext.config()))
                     .findFirst()
-                    .map(exts::remove);
+                    .ifPresent(exts::remove);
         }
         // Then add it
         loadedExtensions.put(config, ext);

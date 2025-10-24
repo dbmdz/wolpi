@@ -3,13 +3,17 @@ package dev.mdz.wolpi.extension.util;
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Converter;
 import dev.mdz.wolpi.extension.model.Language;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyArray;
 import org.graalvm.polyglot.proxy.ProxyHashMap;
+import org.graalvm.polyglot.proxy.ProxyIterator;
 import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jspecify.annotations.Nullable;
 
@@ -89,7 +93,7 @@ public class PolyglotHelpers {
     public static Set<String> dictOrMemberKeys(Value source) {
         if (source.hasHashEntries()) {
             var it = source.getHashKeysIterator();
-            Set<String> keys = new java.util.HashSet<>();
+            Set<String> keys = new HashSet<>();
             while (it.hasIteratorNextElement()) {
                 keys.add(it.getIteratorNextElement().asString());
             }
@@ -130,5 +134,60 @@ public class PolyglotHelpers {
             case List<?> list -> list.stream().map(v -> toGuest(v, lang)).toList();
             default -> obj;
         };
+    }
+
+    /// Convert a Polyglot guest object to a host Java object, converting `ProxyObject`s and
+    /// `ProxyHashMap`s to `Map<String, Object>` and `Map<Object, Object>` respectively.
+    ///
+    /// This method is mainly intended to convert guest objects received from JavaScript or Python
+    /// extensions into Java [Map] and [List] values that are easy to work with in Java.
+    public static @Nullable Object toHost(@Nullable Object obj) {
+        // NOTE: Yeah, we could have written a custom Jackson serializer, but this is more
+        //       general and useful for unit tests as well
+        switch (obj) {
+            case ProxyObject proxyObj -> {
+                Map<String, Object> hostMap = new HashMap<>();
+                ProxyArray keys = (ProxyArray) proxyObj.getMemberKeys();
+                for (int i = 0; i < keys.getSize(); i++) {
+                    String key = keys.get(i).toString();
+                    Object value = proxyObj.getMember(key);
+                    var hostVal = toHost(value);
+                    if (hostVal != null) {
+                        hostMap.put(key, hostVal);
+                    }
+                }
+                return hostMap;
+            }
+            case ProxyHashMap proxyHashMap -> {
+                Map<String, Object> hostMap = new HashMap<>();
+                ProxyIterator entries = (ProxyIterator) proxyHashMap.getHashEntriesIterator();
+                while (entries.hasNext()) {
+                    var entry = (ProxyArray) entries.getNext();
+                    String key = entry.get(0).toString();
+                    Object value = entry.get(1);
+                    var hostVal = toHost(value);
+                    if (hostVal != null) {
+                        hostMap.put(key, hostVal);
+                    }
+                }
+                return hostMap;
+            }
+            case Map<?, ?> map -> {
+                Map<Object, Object> hostMap = new HashMap<>();
+                for (var entry : map.entrySet()) {
+                    var hostVal = toHost(entry.getValue());
+                    if (hostVal != null) {
+                        hostMap.put(entry.getKey(), hostVal);
+                    }
+                }
+                return hostMap;
+            }
+            case Collection<?> list -> {
+                return list.stream().map(PolyglotHelpers::toHost).toList();
+            }
+            case null, default -> {
+                return obj;
+            }
+        }
     }
 }

@@ -45,6 +45,8 @@ public class PyPiInstaller {
     private static final Logger log =
             org.slf4j.LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+    public static final String EXPECTED_GRAALPY_VERSION = "25";
+
     private final Path baseDir;
     private final @Nullable Path pythonPath;
     private final Duration processTimeout;
@@ -147,7 +149,8 @@ public class PyPiInstaller {
         }
         if (editable && !supportsPackageLiveReload()) {
             log.warn(
-                    "Editable installation requested, but the current Python executable does not support it, please configure GraalPy for package installation. Disabling live reload for {}",
+                    "Editable installation requested, but the current Python executable does not support it, please configure GraalPy {} for package installation. Disabling live reload for {}",
+                    EXPECTED_GRAALPY_VERSION,
                     localPackageDir);
             editable = false;
         }

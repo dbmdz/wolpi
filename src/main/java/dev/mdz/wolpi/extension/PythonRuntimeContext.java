@@ -31,7 +31,7 @@ public class PythonRuntimeContext extends RuntimeContext {
     }
 
     @Override
-    protected Context getGraalContext(GraalContextSupplier contextSupplier) {
+    protected Context getGraalContext() {
         return GraalContextSupplier.getPythonContext(venvPath, guestContext);
     }
 
