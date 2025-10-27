@@ -105,17 +105,23 @@ public class PolyglotHelpers {
         }
     }
 
-    /// Convert value to a Polyglot guest object, converting `Map<?, ?>` values to [ProxyObject]s
+    /// Convert value to a Polyglot guest object, converting collection values to a
+    /// language-appropriate representation.
     ///
-    /// This method is mainly intended to pass Java [Map] and [List] values with [Map] members to
-    /// the guest in a way that is easy to consume from JavaScript or Python.
     ///
-    /// If `obj` is a `Map`, it is converted to a `ProxyObject` with all keys converted to `String`s
-    /// and all values recursively converted using this method.
+    /// If `obj` is a [Map] it is converted recursively to a guest object representation appropriate
+    /// for the target language (→ [ProxyObject] for JS, [ProxyHashMap] for Python).
     ///
-    /// If `obj` is a `List`, all elements are recursively converted using this method.
+    /// If `obj` is a [List], it is converted recursively to a [List] of guest objects, applying
+    /// the same conversion rules to its elements.
     ///
     /// All other values are returned as-is.
+    ///
+    /// @param obj The object to convert, [Map] and [List] values are converted recursively, all
+    ///            other values are returned as-is.
+    /// @param lang The target guest language, used to determine whether to convert `Map`s to
+    ///             [ProxyObject]s (JavaScript) or [ProxyHashMap]s (Python).
+    /// @return The converted guest object, or the original object if no conversion was necessary
     public static @Nullable Object toGuest(@Nullable Object obj, Language lang) {
         if (obj == null) {
             return obj;
@@ -124,7 +130,11 @@ public class PolyglotHelpers {
             case Map<?, ?> map -> {
                 Map<String, Object> guestMap = new HashMap<>();
                 for (var entry : map.entrySet()) {
-                    guestMap.put(entry.getKey().toString(), toGuest(entry.getValue(), lang));
+                    var mapped = toGuest(entry.getValue(), lang);
+                    if (mapped == null) {
+                        continue;
+                    }
+                    guestMap.put(entry.getKey().toString(), mapped);
                 }
                 yield switch (lang) {
                     case JAVASCRIPT -> ProxyObject.fromMap(guestMap);
@@ -136,8 +146,8 @@ public class PolyglotHelpers {
         };
     }
 
-    /// Convert a Polyglot guest object to a host Java object, converting `ProxyObject`s and
-    /// `ProxyHashMap`s to `Map<String, Object>` and `Map<Object, Object>` respectively.
+    /// Convert a Polyglot guest object to a host Java object, converting [ProxyObject]s and
+    /// [ProxyHashMap]s to [Map].
     ///
     /// This method is mainly intended to convert guest objects received from JavaScript or Python
     /// extensions into Java [Map] and [List] values that are easy to work with in Java.
