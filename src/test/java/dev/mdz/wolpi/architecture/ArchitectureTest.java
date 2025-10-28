@@ -43,7 +43,7 @@ public class ArchitectureTest {
             .whereLayer("IIIF")
             .mayOnlyBeAccessedByLayers("Controller", "Image Processing", "Extension Management")
             .whereLayer("Extension Management")
-            .mayOnlyBeAccessedByLayers("App", "Image Processing", "Controller")
+            .mayOnlyBeAccessedByLayers("App", "Image Processing")
             .whereLayer("Image Processing")
             .mayOnlyBeAccessedByLayers("Controller")
             .whereLayer("Model")

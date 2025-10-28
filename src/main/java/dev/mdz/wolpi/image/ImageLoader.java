@@ -7,8 +7,12 @@ import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VSource;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
+import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
+import dev.mdz.wolpi.iiif.IIIFImageInfo;
+import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
@@ -65,11 +69,24 @@ public class ImageLoader {
     /// extension can handle the request.
     private final Path imageBaseDirectory;
 
-    public ImageLoader(WolpiConfig cfg, Arena arena, HttpClient httpClient, ExtensionRuntime extensionRuntime) {
+    /// Tracks which IIIF compliance levels are supported, used for info.json generation
+    private final IIIFComplianceRegistry complianceRegistry;
+
+    /// IIIF settings from the configuration
+    private final IIIFConfig iiifConfig;
+
+    public ImageLoader(
+            WolpiConfig cfg,
+            Arena arena,
+            HttpClient httpClient,
+            ExtensionRuntime extensionRuntime,
+            IIIFComplianceRegistry complianceRegistry) {
         this.arena = arena;
         this.httpClient = httpClient;
         this.imageBaseDirectory = cfg.imageBaseDir();
+        this.iiifConfig = cfg.iiif();
         this.extensionRuntime = extensionRuntime;
+        this.complianceRegistry = complianceRegistry;
     }
 
     /// Check if access to the image is authorized.
@@ -178,6 +195,24 @@ public class ImageLoader {
             log.warn("Failed to load image to obtain image information for id={}", source.identifier(), e);
             return null;
         }
+    }
+
+    /// Generate IIIF Image API info.json for the given image information and version.
+    ///
+    /// Will pass the info.json generation through suitable loaded extensions to allow them to augment
+    /// the output.
+    ///
+    /// @param identifier The identifier of the image to generate the info.json for.
+    /// @param imageInfo The image information to generate the info.json for.
+    /// @param version The IIIF Image API version to generate the info.json for.
+    /// @param imageBaseUrl The base URL of the image, used to construct the `id`/`@id` field
+    /// @return A map representing the info.json structure, possibly augmented by extensions
+    public Map<String, Object> getImageInfoJson(
+            String identifier, ImageInfo imageInfo, IIIFVersion version, String imageBaseUrl) {
+        Map<String, Object> infoJson =
+                new IIIFImageInfo(imageInfo, iiifConfig, complianceRegistry).toJSON(version, imageBaseUrl);
+        var augmented = extensionRuntime.augmentInfoJson(identifier, infoJson, version);
+        return augmented != null ? augmented : infoJson;
     }
 
     /// Load an image from a source, applying shrink-on-load according to the target size.

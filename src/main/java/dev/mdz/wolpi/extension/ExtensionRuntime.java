@@ -87,8 +87,7 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// @param version           the IIIF version being requested, determines if the input
     ///                          data is in v2 or v3 format
     /// @return the augmented info.json data, or `null` if no extension modified it
-    public @Nullable Map<String, Object> augmentInfoJson(
-            String identifier, Map<String, Object> standardInfoJson, IIIFVersion version);
+    @Nullable Map<String, Object> augmentInfoJson(String identifier, Map<String, Object> standardInfoJson, IIIFVersion version);
 
     @Override
     public void close();
