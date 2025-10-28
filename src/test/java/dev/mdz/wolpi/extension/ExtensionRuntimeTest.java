@@ -1,6 +1,6 @@
 package dev.mdz.wolpi.extension;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static dev.mdz.wolpi.testutil.WolpiAssertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
@@ -16,11 +16,15 @@ import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
+import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
+import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.SourceNotModified;
+import dev.mdz.wolpi.testutil.VImageHelpers;
+import java.awt.Color;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.net.URI;
@@ -414,6 +418,37 @@ public class ExtensionRuntimeTest {
             assertThat(info.get("augmentedFromPython")).isEqualTo("someIdentifier-3");
             assertThat(info.get("augmentedFromJS")).isEqualTo("someIdentifier-3");
             assertThat(info.get("id")).isEqualTo("python-id");
+        }
+    }
+
+    @Test
+    @DisplayName("Should execute preprocess hooks on image")
+    void shouldExecutePreprocessHooks() {
+        var exts = List.of(
+                new ExtensionConfig(
+                        Path.of("src/test/resources/py-extension/single.py"),
+                        null,
+                        null,
+                        Map.of("watermarkColor", "#FF0000"),
+                        false),
+                new ExtensionConfig(
+                        Path.of("src/test/resources/js-extension/index.js"),
+                        null,
+                        null,
+                        Map.of("watermarkColor", "#0000FF"),
+                        false));
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
+            VImage processed = runtime.preProcessImage(
+                    img,
+                    "watermarked:some-id",
+                    new ImageInfo(500, 500, List.of(), List.of()),
+                    ImageRequest.full("watermarked:some-id", IIIFVersion.V3));
+
+            assertThat(processed)
+                    .hasDimensions(500, 500)
+                    .regionEquals(0, 0, VImageHelpers.createEmptyImage(testArena, 100, 100, Color.red))
+                    .regionEquals(0, 100, VImageHelpers.createEmptyImage(testArena, 100, 100, Color.blue));
         }
     }
 

@@ -1,10 +1,12 @@
 package dev.mdz.wolpi.extension;
 
+import app.photofox.vipsffm.VImage;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
+import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
@@ -88,6 +90,22 @@ public interface ExtensionRuntime extends AutoCloseable {
     ///                          data is in v2 or v3 format
     /// @return the augmented info.json data, or `null` if no extension modified it
     @Nullable Map<String, Object> augmentInfoJson(String identifier, Map<String, Object> standardInfoJson, IIIFVersion version);
+
+    /// Allow extensions to pre-process an image before further processing.
+    ///
+    /// If multiple extensions implement this hook, they are called in the order they were registered
+    /// (i.e. the order in the configuration). Each extension receives the image as modified
+    /// by the previous extension (or the original image if no previous extension modified it)
+    /// and may return a modified version of it. The result from the last extension is returned.
+    ///
+    /// If no extensions are registered for this hook, `null` is returned.
+    ///
+    /// @param image       the image to pre-process
+    /// @param identifier  the identifier of the image
+    /// @param info        the image info metadata based on the original input image
+    /// @param request     the image request parameters
+    /// @return the pre-processed image or `null` if no processing was done
+    @Nullable VImage preProcessImage(VImage image, String identifier, ImageInfo info, ImageRequest request);
 
     @Override
     public void close();
@@ -314,6 +332,25 @@ public interface ExtensionRuntime extends AutoCloseable {
                 }
             }
             return (Map<String, Object>) PolyglotHelpers.toHost(augmented);
+        }
+
+        @Override
+        @Nullable public VImage preProcessImage(VImage image, String identifier, ImageInfo info, ImageRequest request) {
+            List<LoadedExtension> preprocessExts = registry.getExtensions(ExtensionHooks.PREPROCESS_IMAGE);
+            VImage processed = null;
+            for (LoadedExtension ext : preprocessExts) {
+                RuntimeContext ctx = ensureRuntimeContext(ext);
+                var rv = ctx.runHook(
+                        ExtensionHooks.PREPROCESS_IMAGE,
+                        processed == null ? image : processed,
+                        identifier,
+                        info,
+                        request);
+                if (rv != null && !rv.isNull()) {
+                    processed = rv.as(VImage.class);
+                }
+            }
+            return processed;
         }
 
         /// Close this [ExtensionRuntimeImpl], returning all borrowed [RuntimeContext]s to the pool.

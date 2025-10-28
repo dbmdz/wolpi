@@ -1,6 +1,11 @@
+import re
 import time
 
 import java
+
+COLOR_PAT = re.compile(r"^#(?P<red>[0-9a-fA-F]{2})(?P<green>[0-9a-fA-F]{2})(?P<blue>[0-9a-fA-F]{2})$")
+
+VipsOption = java.type("app.photofox.vipsffm.VipsOption")
 
 class TestExtension:
   def info(self):
@@ -52,6 +57,23 @@ class TestExtension:
       **info_json,
       "augmentedFromPython": f"{identifier}-{iiif_version}"
     }
+
+  def pre_process_image(self, image, identifier: str, image_info, image_request):
+    if not identifier.startswith("watermarked:"):
+      return None
+    cfg = wolpi.config() or {}
+    if watermark_color := cfg.get("watermarkColor"):
+      match = COLOR_PAT.match(watermark_color)
+      if match:
+        red = int(match.group("red"), 16)
+        green = int(match.group("green"), 16)
+        blue = int(match.group("blue"), 16)
+      else:
+        red, green, blue = 1.0, 0, 0
+      image.drawRect([red, green, blue], 0, 0, 100, 100, VipsOption.Boolean("fill", True))
+      return image
+    else:
+      return None
 
 def entry():
   return TestExtension()

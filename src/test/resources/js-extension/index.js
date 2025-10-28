@@ -8,6 +8,9 @@ const TEST_JPG = new Uint8Array([
   0x01, 0x01, 0x11, 0x00, 0xff, 0xcc, 0x00, 0x06, 0x00, 0x10, 0x10, 0x05, 0xff, 0xda, 0x00, 0x08,
   0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xd2, 0xcf, 0x20, 0xff, 0xd9
 ]);
+const COLOR_PAT = /^#(?<red>[0-9a-fA-F]{2})(?<green>[0-9a-fA-F]{2})(?<blue>[0-9a-fA-F]{2})$/;
+
+const VipsOption = Java.type("app.photofox.vipsffm.VipsOption");
 
 export default {
   info() {
@@ -106,6 +109,27 @@ export default {
       ...infoJson,
       augmentedFromJS: `${identifier}-${iiifVersion}`
     };
+  },
+
+  preProcessImage(image, identifier, imageInfo, imageRequest) {
+    if (!identifier.startsWith("watermarked:")) {
+      return null;
+    }
+    const { watermarkColor } = wolpi.config() ?? {};
+    if (!watermarkColor) {
+      return null;
+    }
+    const match = COLOR_PAT.exec(watermarkColor);
+    let color = [1.0, 0, 0];
+    if (match) {
+      color = [
+        parseInt(match.groups.red, 16),
+        parseInt(match.groups.green, 16),
+        parseInt(match.groups.blue, 16)
+      ];
+    }
+    image.drawRect(color, 0, 100, 100, 100, VipsOption.Boolean("fill", true));
+    return image;
   },
 
   cleanup() {

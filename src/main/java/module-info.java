@@ -25,6 +25,7 @@ open module wolpi {
     requires spring.webmvc;
     requires info.picocli;
     requires org.apache.commons.io;
+    requires java.desktop; // only for test assertions
 
     exports dev.mdz.wolpi;
     exports dev.mdz.wolpi.config;
