@@ -30,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -297,7 +298,10 @@ public class IIIFImageAPIController {
 
         // Encode the processed image to the requested output format and return it to the client
         try {
-            var encoded = processor.encodeImage(processedImage, request.formatSpec());
+            var encoded = processor.encodeImage(processedImage, imageInfo, request);
+            if (encoded.extraHeaders() != null) {
+                outHeaders.addAll(MultiValueMap.fromMultiValue(encoded.extraHeaders()));
+            }
             return ResponseEntity.ok()
                     .headers(outHeaders)
                     .contentType(MediaType.parseMediaType(encoded.contentType()))

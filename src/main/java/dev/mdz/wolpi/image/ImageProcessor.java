@@ -19,6 +19,7 @@ import dev.mdz.wolpi.iiif.model.CropRectangle;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.EncodedImage;
+import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ImageSource;
 import io.github.classgraph.ClassGraph;
@@ -255,10 +256,19 @@ public class ImageProcessor {
     }
 
     /// Encode an image to a target format.
-    public EncodedImage encodeImage(VImage image, String suffix) throws IOException {
-        if (!wolpiConfig.iiif().formats().allowed().contains(suffix.toLowerCase())) {
+    public EncodedImage encodeImage(VImage image, ImageInfo info, ImageRequest request) throws IOException {
+        String suffix = request.formatSpec().toLowerCase();
+
+        if (!wolpiConfig.iiif().formats().allowed().contains(suffix)) {
             throw new IllegalArgumentException("Unsupported output format: " + suffix);
         }
+
+        var extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
+        if (extensionEncoded != null) {
+            return new EncodedImage(
+                    extensionEncoded.data(), extensionEncoded.contentType(), extensionEncoded.extraHeaders());
+        }
+
         List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
 
         // Force 1bit output for bitonal images in PNG and GIF formats
@@ -281,6 +291,6 @@ public class ImageProcessor {
             buf = writeTarget.getBlob();
         }
         return new EncodedImage(
-                buf.asArenaScopedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix));
+                buf.asArenaScopedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
     }
 }

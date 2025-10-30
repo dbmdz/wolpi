@@ -82,5 +82,17 @@ class TestExtension:
     width, height = image_request.sizeSpec().replace("custom:", "").split(",")
     return image.thumbnailImage(int(width), VipsOption.Int("height", int(height)), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
+  def pre_format(self, image, identifier: str, image_info, image_request):
+    if image_request.formatSpec() != "pixl":
+      return None
+    print("Converting image to PIXL format")
+    return {
+      "data": b'PIXLDATA',
+      "contentType": "image/vnd.pixl",
+      "extraHeaders": {
+        "X-Wolpi-Encoding-Source": identifier
+      }
+    }
+
 def entry():
   return TestExtension()

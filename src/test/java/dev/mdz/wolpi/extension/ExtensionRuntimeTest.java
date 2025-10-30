@@ -20,6 +20,7 @@ import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
+import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -30,11 +31,13 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -453,6 +456,30 @@ public class ExtensionRuntimeTest {
                     .regionEquals(0, 0, VImageHelpers.createEmptyImage(testArena, 100, 100, Color.red))
                     .regionEquals(0, 100, VImageHelpers.createEmptyImage(testArena, 100, 100, Color.blue));
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"xyz,eHl6", "pixl,UElYTERBVEE="})
+    @DisplayName("Should execute format hooks on image")
+    void shouldExecuteFormatHooks(String format, String expectedDataBase64) {
+        ByteBuffer expectedData = ByteBuffer.wrap(Base64.getDecoder().decode(expectedDataBase64));
+        try (var runtime = getRuntimeWithSingleFileExtensions()) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 10, 10, Color.yellow);
+            EncodedImage encoded = runtime.preFormat(
+                    img,
+                    "image-" + format,
+                    new ImageInfo(10, 10, List.of(), List.of()),
+                    new ImageRequest("image-" + format, IIIFVersion.V3, "full", "full", "0", "default", format));
+            assertThat(encoded).isNotNull();
+            assertThat(encoded.data()).isEqualByComparingTo(expectedData);
+        }
+    }
+
+    private ExtensionRuntime getRuntimeWithSingleFileExtensions() {
+        var exts = List.of(
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false),
+                new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
+        return getRuntimeWithExtensions(exts);
     }
 
     @Test

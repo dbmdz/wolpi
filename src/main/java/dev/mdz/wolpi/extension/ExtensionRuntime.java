@@ -8,6 +8,7 @@ import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.CacheInfo;
+import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.ResolvedImage;
@@ -125,11 +126,27 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// @param info        the image info metadata based on the original input image
     /// @param request     the image request parameters
     /// @return the scaled image or `null` if no scaling was done
-
     @Nullable VImage preScale(VImage image, String identifier, ImageInfo info, ImageRequest request);
 
+    /// Allow extensions to customize the encoding of the processed image.
+    ///
+    /// If multiple extensions implement this hook, they are called in the order they were registered
+    /// (i.e. the order in the configuration). Each extension receives the image as processed
+    /// so far, and may return an [EncodedImage] indicating whether it encoded
+    /// the image or not. The first extension to indicate that it encoded the image
+    /// wins, and no further extensions are called.
+    ///
+    /// If no extension encodes the image, `null` is returned.
+    ///
+    /// @param image          the image to encode
+    /// @param identifier     the identifier of the image
+    /// @param info           the image info metadata based on the original input image
+    /// @param request        the image request parameters
+    /// @return an [EncodedImage] if an extension encoded the image, or `null` otherwise
+    @Nullable EncodedImage preFormat(VImage image, String identifier, ImageInfo info, ImageRequest request);
+
     @Override
-    public void close();
+    void close();
 
     class ExtensionRuntimeImpl implements ExtensionRuntime, AutoCloseable {
         static final TypeLiteral<Map<String, Object>> InfoJson = new TypeLiteral<>() {};
@@ -399,6 +416,19 @@ public interface ExtensionRuntime extends AutoCloseable {
                 var rv = ctx.runHook(ExtensionHooks.SCALE, image, identifier, info, request);
                 if (rv != null && !rv.isNull()) {
                     return rv.as(VImage.class);
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public @Nullable EncodedImage preFormat(VImage image, String identifier, ImageInfo info, ImageRequest request) {
+            List<LoadedExtension> formatExts = registry.getExtensions(ExtensionHooks.FORMAT);
+            for (LoadedExtension ext : formatExts) {
+                RuntimeContext ctx = ensureRuntimeContext(ext);
+                var rv = ctx.runHook(ExtensionHooks.FORMAT, image, identifier, info, request);
+                if (rv != null && !rv.isNull()) {
+                    return rv.as(EncodedImage.class);
                 }
             }
             return null;

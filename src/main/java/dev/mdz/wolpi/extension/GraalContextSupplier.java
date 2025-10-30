@@ -9,6 +9,7 @@ import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
+import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -22,6 +23,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -51,7 +53,8 @@ public class GraalContextSupplier {
             BinaryResolvedImage.class,
             SourceNotModified.class,
             ValidationSuccess.class,
-            ValidationFailure.class);
+            ValidationFailure.class,
+            EncodedImage.class);
     private static final Pattern URI_PATTERN = Pattern.compile("^https?://.*$");
 
     private final HostAccess hostAccess;
@@ -106,6 +109,18 @@ public class GraalContextSupplier {
         // get the actual bytes
         builder.targetTypeMapping(Value.class, byte[].class, v -> v.hasMember("buffer"), v -> v.getMember("buffer")
                 .as(byte[].class));
+        builder.targetTypeMapping(
+                Value.class,
+                ByteBuffer.class,
+                v -> v.hasMember("buffer"),
+                v -> ByteBuffer.wrap(v.getMember("buffer").as(byte[].class)));
+        // Python `bytes` objects are mapped directly to byte[] by GraalVM, so we can map those directly to ByteBuffer
+        // here
+        builder.targetTypeMapping(
+                Value.class,
+                ByteBuffer.class,
+                v -> v.getMetaObject().getMetaSimpleName().equals("bytes"),
+                v -> ByteBuffer.wrap(v.as(byte[].class)));
         return builder.build();
     }
 

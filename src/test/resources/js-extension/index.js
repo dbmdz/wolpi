@@ -132,6 +132,19 @@ export default {
     return image;
   },
 
+  preFormat(image, identifier, imageInfo, imageRequest) {
+    if (imageRequest.formatSpec() !== "xyz") {
+      return null;
+    }
+    return {
+      data: new Uint8Array([0x78, 0x79, 0x7a]),
+      contentType: "image/vnd.xyz",
+      extraHeaders: {
+        "X-Wolpi-Encoding-Source": identifier
+      }
+    };
+  },
+
   cleanup() {
   }
 }
