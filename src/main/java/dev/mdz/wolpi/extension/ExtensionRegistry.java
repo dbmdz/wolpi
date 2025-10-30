@@ -286,7 +286,7 @@ public class ExtensionRegistry implements AutoCloseable {
         boolean isLocalPackage = config.path() != null && Files.isDirectory(config.path());
         boolean isPyPi = config.pypi() != null;
 
-        String packageName = null;
+        String packageName;
         String extensionVersion = null;
         final Source source;
         EntryPoint entryPoint;
@@ -316,6 +316,7 @@ public class ExtensionRegistry implements AutoCloseable {
                 entryPoint = pyInstaller.getWolpiEntryPoint(config.pypi().pkg());
                 extensionVersion = config.pypi().version();
             } else if (isLocalFile) {
+                packageName = config.path().getFileName().toString().split("\\.")[0];
                 entryPoint = null;
                 sitePackagesPath = null;
             } else {
@@ -371,7 +372,11 @@ public class ExtensionRegistry implements AutoCloseable {
         }
 
         var guestCtx = new ExtensionGuestContext(
-                wolpiVersion, extensionVersion, httpClient, PolyglotHelpers.toGuest(config.config(), Language.PYTHON));
+                wolpiVersion,
+                extensionVersion,
+                httpClient,
+                new ExtensionLogger(packageName),
+                PolyglotHelpers.toGuest(config.config(), Language.PYTHON));
 
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
@@ -400,7 +405,7 @@ public class ExtensionRegistry implements AutoCloseable {
     private LoadedExtension loadJsExtension(ExtensionConfig config, @Nullable Instant lastModified)
             throws ExtensionLoadException {
 
-        String packageName = null;
+        String packageName;
         Path entryPoint;
         try {
             if (config.path() != null) {
@@ -409,6 +414,7 @@ public class ExtensionRegistry implements AutoCloseable {
                     packageName = jsInstaller.installExtensionFromLocalDirectory(config.path());
                     entryPoint = jsInstaller.getWolpiEntryPoint(packageName);
                 } else if (Files.isRegularFile(config.path())) {
+                    packageName = config.path().getFileName().toString().split("\\.")[0];
                     entryPoint = config.path();
                 } else {
                     throw new ExtensionLoadException(
@@ -482,6 +488,7 @@ public class ExtensionRegistry implements AutoCloseable {
                 wolpiVersion,
                 extensionVersion,
                 httpClient,
+                new ExtensionLogger(packageName),
                 PolyglotHelpers.toGuest(config.config(), Language.JAVASCRIPT));
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
