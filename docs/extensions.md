@@ -345,7 +345,7 @@ For easy installation of these dependencies, we recommend using a tool like [mis
 Wolpi provides support for the "Advanced Debugging Protocol" (ADP), which allows you to connect a
 debugger to it and set breakpoints, step through code, and inspect variables inside your extensions.
 
-To enable debugging, set the `wolpi.debug` section in `application.yml`:
+To enable debugging, set the `wolpi.extension-debug` section in `application.yml`:
 
 ```yaml
 wolpi:
