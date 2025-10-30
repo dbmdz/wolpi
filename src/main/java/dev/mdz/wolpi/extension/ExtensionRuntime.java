@@ -44,6 +44,9 @@ import org.slf4j.LoggerFactory;
 /// component without having to rely on CGLIB proxies, which don't work well with the Java module
 /// system.
 public interface ExtensionRuntime extends AutoCloseable {
+    /// Check if there are any extensions registered for the given hook.
+    boolean hasExtensionsForHook(ExtensionHooks extensionHooks);
+
     /// Check if the request with the given identifier, headers and client IP is authorized to access
     /// the image with the given identifier.
     ///
@@ -92,6 +95,8 @@ public interface ExtensionRuntime extends AutoCloseable {
     @Nullable Map<String, Object> augmentInfoJson(String identifier, Map<String, Object> standardInfoJson, IIIFVersion version);
 
     /// Allow extensions to pre-process an image before further processing.
+    ///
+    /// The image returned from this hook must have the same dimensions as the input image.
     ///
     /// If multiple extensions implement this hook, they are called in the order they were registered
     /// (i.e. the order in the configuration). Each extension receives the image as modified
@@ -151,6 +156,11 @@ public interface ExtensionRuntime extends AutoCloseable {
                             e);
                 }
             });
+        }
+
+        @Override
+        public boolean hasExtensionsForHook(ExtensionHooks hook) {
+            return !registry.getExtensions(hook).isEmpty();
         }
 
         @Override
@@ -336,9 +346,9 @@ public interface ExtensionRuntime extends AutoCloseable {
 
         @Override
         @Nullable public VImage preProcessImage(VImage image, String identifier, ImageInfo info, ImageRequest request) {
-            List<LoadedExtension> preprocessExts = registry.getExtensions(ExtensionHooks.PREPROCESS_IMAGE);
+            List<LoadedExtension> exts = registry.getExtensions(ExtensionHooks.PREPROCESS_IMAGE);
             VImage processed = null;
-            for (LoadedExtension ext : preprocessExts) {
+            for (LoadedExtension ext : exts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
                 var rv = ctx.runHook(
                         ExtensionHooks.PREPROCESS_IMAGE,
@@ -346,9 +356,21 @@ public interface ExtensionRuntime extends AutoCloseable {
                         identifier,
                         info,
                         request);
-                if (rv != null && !rv.isNull()) {
-                    processed = rv.as(VImage.class);
+                if (rv == null || rv.isNull()) {
+                    continue;
                 }
+                VImage tmp = rv.as(VImage.class);
+                if (tmp.getWidth() != image.getWidth() || tmp.getHeight() != image.getHeight()) {
+                    log.warn(
+                            "Preprocessing hook in extension {} returned image with different dimensions ({}x{}) than input image ({}x{}), ignoring result.",
+                            ext.extensionInfo().name(),
+                            tmp.getWidth(),
+                            tmp.getHeight(),
+                            image.getWidth(),
+                            image.getHeight());
+                    continue;
+                }
+                processed = tmp;
             }
             return processed;
         }

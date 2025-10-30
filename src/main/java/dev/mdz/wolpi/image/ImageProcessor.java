@@ -11,6 +11,8 @@ import app.photofox.vipsffm.enums.VipsInterpretation;
 import app.photofox.vipsffm.enums.VipsOperationRelational;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
@@ -23,7 +25,6 @@ import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
 import java.io.IOException;
 import java.lang.foreign.Arena;
-import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -32,8 +33,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /// ImageProcessor is responsible for processing images according to IIIF Image API requests.
@@ -49,13 +48,20 @@ public class ImageProcessor {
     private final ImageLoader loader;
 
     private final Map<String, List<VipsOption>> formatEncodingOptions;
+    private final ExtensionRuntime extensionRuntime;
 
-    public ImageProcessor(Arena vipsArena, WolpiConfig wolpiConfig, ImageLoader loader, ImageRequestParser parser) {
+    public ImageProcessor(
+            Arena vipsArena,
+            WolpiConfig wolpiConfig,
+            ImageLoader loader,
+            ImageRequestParser parser,
+            ExtensionRuntime extensionRuntime) {
         this.vipsArena = vipsArena;
         this.wolpiConfig = wolpiConfig;
         this.loader = loader;
         this.parser = parser;
         this.formatEncodingOptions = determineEncodingOptions(wolpiConfig.encodingOptions());
+        this.extensionRuntime = extensionRuntime;
     }
 
     /// Convert the encoding options from the config into VipsOption lists for each format.
@@ -149,10 +155,13 @@ public class ImageProcessor {
     /// @param request     unparsed IIIF Image API request
     public VImage processImage(ImageSource imageSource, ImageRequest request)
             throws IOException, InterruptedException, NotImplementedException {
-        // Preload the image (just the header) if neccessary to determine the native dimensiosn
+        // Preload the image (just the header) if necessary to determine the native dimensions or
+        // to run through pre-processing
         VImage image = null;
         ImageSize sourceSize;
-        if (imageSource.imageInfo() != null) {
+        // We need to load the image if an extension intends to preprocess it
+        boolean mayBePreProcessed = extensionRuntime.hasExtensionsForHook(ExtensionHooks.PREPROCESS_IMAGE);
+        if (!mayBePreProcessed && imageSource.imageInfo() != null) {
             sourceSize = new ImageSize(
                     imageSource.imageInfo().nativeWidth(),
                     imageSource.imageInfo().nativeHeight());
@@ -161,8 +170,8 @@ public class ImageProcessor {
             sourceSize = new ImageSize(image.getWidth(), image.getHeight());
         }
 
-        // Crop and Scale
-        if (parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
+        if (!mayBePreProcessed
+                && parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
             // Fast path: No cropping, only downscaling, we can make use of libvips' "shrink-on-load"
             // feature for supported image formats like JP2 and TIFF.
             // Benchmarks showed that this is the only case among the common IIIF use cases, where
@@ -173,12 +182,19 @@ public class ImageProcessor {
             if (image == null) {
                 image = loader.loadImage(imageSource);
             }
+
+            var preprocessed =
+                    extensionRuntime.preProcessImage(image, request.identifier(), imageSource.imageInfo(), request);
+            if (preprocessed == null) {
+                preprocessed = image;
+            }
+
             var cropRectangle = parser.parseRegion(request.cropSpec(), sourceSize);
             VImage cropped;
             if (cropRectangle.width() == sourceSize.width() && cropRectangle.height() == sourceSize.height()) {
-                cropped = image;
+                cropped = preprocessed;
             } else {
-                cropped = image.extractArea(
+                cropped = preprocessed.extractArea(
                         cropRectangle.x(), cropRectangle.y(), cropRectangle.width(), cropRectangle.height());
                 sourceSize = new ImageSize(cropRectangle.width(), cropRectangle.height());
             }
@@ -193,6 +209,8 @@ public class ImageProcessor {
                         VipsOption.Int("height", scaledSize.height()),
                         VipsOption.Enum("size", VipsSize.SIZE_FORCE));
             }
+
+            // Use the scaled image for further processing
             image = scaled;
         }
 
