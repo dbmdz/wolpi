@@ -6,6 +6,7 @@ import java
 COLOR_PAT = re.compile(r"^#(?P<red>[0-9a-fA-F]{2})(?P<green>[0-9a-fA-F]{2})(?P<blue>[0-9a-fA-F]{2})$")
 
 VipsOption = java.type("app.photofox.vipsffm.VipsOption")
+VipsSize = java.type("app.photofox.vipsffm.enums.VipsSize")
 
 class TestExtension:
   def info(self):
@@ -74,6 +75,10 @@ class TestExtension:
       return image
     else:
       return None
+
+  def pre_scale(self, image, identifier: str, image_info, image_request):
+    width, height = image_request.sizeSpec().split(",")
+    return image.thumbnailImage(int(width), VipsOption.Int("height", int(height)), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
 def entry():
   return TestExtension()

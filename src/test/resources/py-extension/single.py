@@ -25,3 +25,6 @@ def augment_info_json(identifier: str, info_json: dict, iiif_version: int) -> di
 
 def pre_process_image(image, identifier: str, image_info, iiif_request):
     return ext.pre_process_image(image, identifier, image_info, iiif_request)
+
+def pre_scale(image, identifier: str, image_info, iiif_request):
+    return ext.pre_scale(image, identifier, image_info, iiif_request)

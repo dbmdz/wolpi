@@ -15,6 +15,7 @@ import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
+import dev.mdz.wolpi.iiif.model.CropRectangle;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.EncodedImage;
@@ -199,15 +200,9 @@ public class ImageProcessor {
                 sourceSize = new ImageSize(cropRectangle.width(), cropRectangle.height());
             }
 
-            var scaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);
-            VImage scaled;
-            if (cropRectangle.width() == scaledSize.width() || cropRectangle.height() == scaledSize.height()) {
-                scaled = cropped;
-            } else {
-                scaled = cropped.thumbnailImage(
-                        scaledSize.width(),
-                        VipsOption.Int("height", scaledSize.height()),
-                        VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+            VImage scaled = extensionRuntime.preScale(cropped, request.identifier(), imageSource.imageInfo(), request);
+            if (scaled == null) {
+                scaled = scaleImage(cropped, cropRectangle, request, sourceSize);
             }
 
             // Use the scaled image for further processing
@@ -245,6 +240,18 @@ public class ImageProcessor {
         } else {
             return rotated;
         }
+    }
+
+    private VImage scaleImage(VImage cropped, CropRectangle cropRectangle, ImageRequest request, ImageSize sourceSize)
+            throws NotImplementedException {
+        var scaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);
+        if (cropRectangle.width() == scaledSize.width() || cropRectangle.height() == scaledSize.height()) {
+            return cropped;
+        }
+        return cropped.thumbnailImage(
+                scaledSize.width(),
+                VipsOption.Int("height", scaledSize.height()),
+                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
     }
 
     /// Encode an image to a target format.
