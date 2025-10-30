@@ -90,7 +90,7 @@ class TestExtension:
       "data": b'PIXLDATA',
       "contentType": "image/vnd.pixl",
       "extraHeaders": {
-        "X-Wolpi-Encoding-Source": identifier
+        "X-Wolpi-Encoding-Source": [identifier]
       }
     }
 

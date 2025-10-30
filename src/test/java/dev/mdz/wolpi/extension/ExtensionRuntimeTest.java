@@ -472,6 +472,11 @@ public class ExtensionRuntimeTest {
                     new ImageRequest("image-" + format, IIIFVersion.V3, "full", "full", "0", "default", format));
             assertThat(encoded).isNotNull();
             assertThat(encoded.data()).isEqualByComparingTo(expectedData);
+            var headers = encoded.extraHeaders();
+            assertThat(headers).isNotNull();
+            var sourceEntry = headers.get("X-Wolpi-Encoding-Source");
+            assertThat(sourceEntry).isNotNull().hasSize(1);
+            assertThat(sourceEntry).containsExactly("image-" + format);
         }
     }
 

@@ -140,7 +140,7 @@ export default {
       data: new Uint8Array([0x78, 0x79, 0x7a]),
       contentType: "image/vnd.xyz",
       extraHeaders: {
-        "X-Wolpi-Encoding-Source": identifier
+        "X-Wolpi-Encoding-Source": [identifier]
       }
     };
   },
