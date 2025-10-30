@@ -77,7 +77,9 @@ class TestExtension:
       return None
 
   def pre_scale(self, image, identifier: str, image_info, image_request):
-    width, height = image_request.sizeSpec().split(",")
+    if not image_request.sizeSpec().startswith("custom:"):
+        return None
+    width, height = image_request.sizeSpec().replace("custom:", "").split(",")
     return image.thumbnailImage(int(width), VipsOption.Int("height", int(height)), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
 def entry():

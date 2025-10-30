@@ -466,7 +466,7 @@ public class ExtensionRuntimeTest {
                     img,
                     "some-image",
                     new ImageInfo(500, 500, List.of(), List.of()),
-                    new ImageRequest("some-image", IIIFVersion.V3, null, "20,100", null, null, null));
+                    new ImageRequest("some-image", IIIFVersion.V3, null, "custom:20,100", null, null, null));
             assertThat(preScaled).hasDimensions(20, 100);
         }
     }
