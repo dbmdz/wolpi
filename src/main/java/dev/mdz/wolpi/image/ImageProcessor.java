@@ -242,7 +242,7 @@ public class ImageProcessor {
     private VImage scaleImage(VImage cropped, ImageRequest request, ImageSize sourceSize)
             throws NotImplementedException {
         var scaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);
-        if (sourceSize.width() == scaledSize.width() || sourceSize.height() == scaledSize.height()) {
+        if (sourceSize.width() == scaledSize.width() && sourceSize.height() == scaledSize.height()) {
             return cropped;
         }
         return cropped.thumbnailImage(
