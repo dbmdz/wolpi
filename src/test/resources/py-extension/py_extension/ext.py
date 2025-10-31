@@ -82,6 +82,12 @@ class TestExtension:
     width, height = image_request.sizeSpec().replace("custom:", "").split(",")
     return image.thumbnailImage(int(width), VipsOption.Int("height", int(height)), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
+  def pre_crop(self, image, identifier: str, image_info, image_request):
+    if not image_request.cropSpec().startswith("custom"):
+        return None
+    x, y, width, height = image_request.cropSpec().replace("custom:", "").split(",")
+    return image.extractArea(int(x), int(y), int(width), int(height))
+
   def pre_format(self, image, identifier: str, image_info, image_request):
     if image_request.formatSpec() != "pixl":
       return None

@@ -15,7 +15,6 @@ import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
-import dev.mdz.wolpi.iiif.model.CropRectangle;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.EncodedImage;
@@ -191,19 +190,16 @@ public class ImageProcessor {
                 preprocessed = image;
             }
 
-            var cropRectangle = parser.parseRegion(request.cropSpec(), sourceSize);
-            VImage cropped;
-            if (cropRectangle.width() == sourceSize.width() && cropRectangle.height() == sourceSize.height()) {
-                cropped = preprocessed;
-            } else {
-                cropped = preprocessed.extractArea(
-                        cropRectangle.x(), cropRectangle.y(), cropRectangle.width(), cropRectangle.height());
-                sourceSize = new ImageSize(cropRectangle.width(), cropRectangle.height());
+            VImage cropped =
+                    extensionRuntime.preCrop(preprocessed, request.identifier(), imageSource.imageInfo(), request);
+            if (cropped == null) {
+                cropped = cropImage(preprocessed, request, sourceSize);
             }
+            sourceSize = new ImageSize(cropped.getWidth(), cropped.getHeight());
 
             VImage scaled = extensionRuntime.preScale(cropped, request.identifier(), imageSource.imageInfo(), request);
             if (scaled == null) {
-                scaled = scaleImage(cropped, cropRectangle, request, sourceSize);
+                scaled = scaleImage(cropped, request, sourceSize);
             }
 
             // Use the scaled image for further processing
@@ -243,16 +239,25 @@ public class ImageProcessor {
         }
     }
 
-    private VImage scaleImage(VImage cropped, CropRectangle cropRectangle, ImageRequest request, ImageSize sourceSize)
+    private VImage scaleImage(VImage cropped, ImageRequest request, ImageSize sourceSize)
             throws NotImplementedException {
         var scaledSize = parser.parseSize(request.version(), request.sizeSpec(), sourceSize);
-        if (cropRectangle.width() == scaledSize.width() || cropRectangle.height() == scaledSize.height()) {
+        if (sourceSize.width() == scaledSize.width() || sourceSize.height() == scaledSize.height()) {
             return cropped;
         }
         return cropped.thumbnailImage(
                 scaledSize.width(),
                 VipsOption.Int("height", scaledSize.height()),
                 VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+    }
+
+    private VImage cropImage(VImage preprocessed, ImageRequest request, ImageSize sourceSize) {
+        var cropRectangle = parser.parseRegion(request.cropSpec(), sourceSize);
+        if (cropRectangle.width() == sourceSize.width() && cropRectangle.height() == sourceSize.height()) {
+            return preprocessed;
+        }
+        return preprocessed.extractArea(
+                cropRectangle.x(), cropRectangle.y(), cropRectangle.width(), cropRectangle.height());
     }
 
     /// Encode an image to a target format.

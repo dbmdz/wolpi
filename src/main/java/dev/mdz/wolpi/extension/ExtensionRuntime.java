@@ -128,6 +128,21 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// @return the scaled image or `null` if no scaling was done
     @Nullable VImage preScale(VImage image, String identifier, ImageInfo info, ImageRequest request);
 
+    /// Allow extensions to crop an image.
+    ///
+    /// If multiple extensions implement this hook, they are called in the order they were registered
+    /// (i.e. the order in the configuration). The first extension to return a non-null [VImage]
+    ///  wins, and no further extensions are called.
+    ///
+    /// If no extensions are registered for this hook, `null` is returned.
+    ///
+    /// @param image       the image to crop
+    /// @param identifier  the identifier of the image
+    /// @param info        the image info metadata based on the original input image
+    /// @param request     the image request parameters
+    /// @return the cropped image or `null` if no cropping was done
+    @Nullable VImage preCrop(VImage image, String identifier, ImageInfo info, ImageRequest request);
+
     /// Allow extensions to customize the encoding of the processed image.
     ///
     /// If multiple extensions implement this hook, they are called in the order they were registered
@@ -410,10 +425,20 @@ public interface ExtensionRuntime extends AutoCloseable {
 
         @Override
         public @Nullable VImage preScale(VImage image, String identifier, ImageInfo info, ImageRequest request) {
-            List<LoadedExtension> exts = registry.getExtensions(ExtensionHooks.SCALE);
+            return runHookWithEarlyExit(ExtensionHooks.SCALE, image, identifier, info, request);
+        }
+
+        @Override
+        public @Nullable VImage preCrop(VImage image, String identifier, ImageInfo info, ImageRequest request) {
+            return runHookWithEarlyExit(ExtensionHooks.CROP, image, identifier, info, request);
+        }
+
+        private @Nullable VImage runHookWithEarlyExit(
+                ExtensionHooks hook, VImage image, String identifier, ImageInfo info, ImageRequest request) {
+            List<LoadedExtension> exts = registry.getExtensions(hook);
             for (LoadedExtension ext : exts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
-                var rv = ctx.runHook(ExtensionHooks.SCALE, image, identifier, info, request);
+                var rv = ctx.runHook(hook, image, identifier, info, request);
                 if (rv != null && !rv.isNull()) {
                     return rv.as(VImage.class);
                 }

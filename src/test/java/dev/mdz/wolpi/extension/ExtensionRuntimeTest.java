@@ -5,6 +5,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 import app.photofox.vipsffm.VImage;
+import app.photofox.vipsffm.VipsOption;
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
@@ -500,6 +501,24 @@ public class ExtensionRuntimeTest {
                     new ImageInfo(500, 500, List.of(), List.of()),
                     new ImageRequest("some-image", IIIFVersion.V3, null, "custom:20,100", null, null, null));
             assertThat(preScaled).hasDimensions(20, 100);
+        }
+    }
+
+    @Test
+    @DisplayName("Should execute pre-crop hooks on image")
+    void shouldExecutePreCropHooks() {
+        var exts = List.of(
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false));
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
+            img.drawRect(List.of(255.0, 0.0, 0.0), 50, 60, 100, 200, VipsOption.Boolean("fill", true));
+            VImage preCropped = runtime.preCrop(
+                    img,
+                    "some-image",
+                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageRequest("some-image", IIIFVersion.V3, "custom:50,60,100,200", null, null, null, null));
+            assertThat(preCropped).hasDimensions(100, 200);
+            assertThat(preCropped).equals(VImageHelpers.createEmptyImage(testArena, 100, 200, Color.red));
         }
     }
 
