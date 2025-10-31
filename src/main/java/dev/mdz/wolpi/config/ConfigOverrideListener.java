@@ -62,7 +62,7 @@ public class ConfigOverrideListener implements ApplicationListener<ApplicationEn
             } else if (config.logging().format() == LogFormat.TEXT) {
                 overrides.put(
                         "logging.pattern.console",
-                        "%clr(%d{HH:mm:ss.SSS}){faint} %replace(%replace(%replace(%replace(%replace(%level){'ERROR','\uD83D\uDCA3'}){'WARN','⚠️'}){'INFO','\uD83D\uDCAC'}){'DEBUG','\uD83D\uDC1B'}){'TRACE','\uD83D\uDC63'} %clr(%m) %X%n%xEx");
+                        "%clr(%d{HH:mm:ss.SSS}){faint} %replace(%replace(%replace(%replace(%replace(%level){'ERROR','\uD83D\uDCA3'}){'WARN','⚠️'}){'INFO','\uD83D\uDCAC'}){'DEBUG','\uD83D\uDC1B'}){'TRACE','\uD83D\uDC63'} %magenta(%logger{0}) %clr(%m) %X%n%xEx");
             }
         }
         return new MapPropertySource("wolpi-logging-overrides", overrides);

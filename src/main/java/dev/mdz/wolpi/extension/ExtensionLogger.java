@@ -36,7 +36,7 @@ public class ExtensionLogger {
         if (builder == null) {
             return;
         }
-        details.entrySet().forEach(e -> builder.addKeyValue(e.getKey(), e.getValue()));
+        details.forEach(builder::addKeyValue);
         builder.log(message);
     }
 

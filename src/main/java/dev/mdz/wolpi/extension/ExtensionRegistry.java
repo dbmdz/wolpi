@@ -337,8 +337,7 @@ public class ExtensionRegistry implements AutoCloseable {
                 if (config.liveReload()) {
                     // When live-reloading is enabled, we have to reload the module/invalidate
                     // the module cache to pick up changes.
-                    code =
-                            """
+                    code = """
                             import importlib
                             import sys
 
@@ -346,12 +345,8 @@ public class ExtensionRegistry implements AutoCloseable {
                                 importlib.reload(sys.modules['%s'])
 
                             from %s import %s
-                            """
-                                    .formatted(
-                                            entryPoint.module(),
-                                            entryPoint.module(),
-                                            entryPoint.module(),
-                                            entryPoint.function());
+                            """.formatted(
+                            entryPoint.module(), entryPoint.module(), entryPoint.module(), entryPoint.function());
                 } else {
                     code = "from %s import %s\n".formatted(entryPoint.module(), entryPoint.function());
                 }
@@ -448,9 +443,7 @@ public class ExtensionRegistry implements AutoCloseable {
             // then re-export everything under the `hook` name.
             //
             // [1]: See this issue: https://github.com/oracle/graaljs/issues/938
-            source = Source.newBuilder(
-                            "js",
-                            """
+            source = Source.newBuilder("js", """
                             import * as allExports from '%s';
                             const mergedExports = { ...allExports };
                             if (mergedExports.default) {
@@ -461,9 +454,7 @@ public class ExtensionRegistry implements AutoCloseable {
                             // Can't export already defined names in GraalJS, so we have to
                             // create a new object and export that.
                             export const hooks = { ...mergedExports };
-                            """
-                                    .formatted(modulePath),
-                            "wolpi-extension.js")
+                            """.formatted(modulePath), "wolpi-extension.js")
                     .mimeType("application/javascript+module")
                     .build();
         } catch (IOException e) {

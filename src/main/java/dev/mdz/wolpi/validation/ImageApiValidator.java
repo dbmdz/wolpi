@@ -200,18 +200,15 @@ public class ImageApiValidator {
         }
 
         var shimModuleName = shimLocation.getFileName().toString().replace(".py", "");
-        var code =
-                """
-        import sys
+        var code = """
+                import sys
 
-        sys.path.insert(0, '%s')
+                sys.path.insert(0, '%s')
 
-        import %s
+                import %s
 
-        sys.modules['pyvips'] = %s
-        """
-                        .formatted(
-                                shimLocation.getParent().toAbsolutePath().toString(), shimModuleName, shimModuleName);
+                sys.modules['pyvips'] = %s
+                """.formatted(shimLocation.getParent().toAbsolutePath().toString(), shimModuleName, shimModuleName);
         try {
             context.eval("python", code);
         } finally {
@@ -250,9 +247,7 @@ public class ImageApiValidator {
         }
         Map<ValidationTest, List<ValidationResult>> results = new HashMap<>();
         try (var context = this.getValidationContext()) {
-            var fromPy = context.eval(
-                    "python",
-                    """
+            var fromPy = context.eval("python", """
           from iiif_validator.tests.test import IIIFVersion, TargetServer
           from iiif_validator.validate import run_tests
 
@@ -260,12 +255,8 @@ public class ImageApiValidator {
           for test, results in run_tests(TargetServer('%s', '%s', IIIFVersion.V%d), max_threads=%s):
               all_results[test] = results
           all_results
-          """
-                            .formatted(
-                                    baseUrl,
-                                    testId,
-                                    version.value(),
-                                    maxThreads != null ? maxThreads.toString() : "None"));
+          """.formatted(
+                            baseUrl, testId, version.value(), maxThreads != null ? maxThreads.toString() : "None"));
             var it = fromPy.getHashEntriesIterator();
             while (it.hasIteratorNextElement()) {
                 var entry = it.getIteratorNextElement();
@@ -332,15 +323,12 @@ public class ImageApiValidator {
     public List<ValidationResult> runTest(
             ValidationTest test, String baseUrl, String testId, IIIFVersion version, Context context) {
         List<ValidationResult> results = new ArrayList<>();
-        var result = context.eval(
-                "python",
-                """
+        var result = context.eval("python", """
         from iiif_validator.tests.test import TargetServer, IIIFVersion
         %s as TestClass
 
         TestClass.run(TargetServer('%s', '%s', IIIFVersion.V%d))
-        """
-                        .formatted(test.pythonImportString(), baseUrl, testId, version.value()));
+        """.formatted(test.pythonImportString(), baseUrl, testId, version.value()));
         if (result.getMetaObject().getMetaSimpleName().equals("list")) {
             for (int i = 0; i < result.getArraySize(); i++) {
                 var res = result.getArrayElement(i);
@@ -390,9 +378,7 @@ public class ImageApiValidator {
         log.info("Discovering available IIIF Image API validation tests...");
         List<ValidationTest> tests;
         try (var context = this.getValidationContext()) {
-            var pyTestSet = context.eval(
-                    "python",
-                    """
+            var pyTestSet = context.eval("python", """
           from iiif_validator.tests.test import get_tests, IIIFVersion
 
           all_tests = set()

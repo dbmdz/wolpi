@@ -1,5 +1,7 @@
 import fetchSync from 'wolpi:fetch';
 
+const VALIDATION_ID = '5976299c-b668-11f0-ab84-047bcbb8eed4';
+
 export default {
   info: () => ({
     apiVersion: 1,
@@ -11,7 +13,12 @@ export default {
     // hook calls
   },
   resolve: (identifier, eTag, lastModified) => {
-    const metadataUrl = `https://archive.org/metadata/${identifier}`;
+    if (identifier.startsWith(VALIDATION_ID)) {
+      return;
+    }
+    const log = wolpi.logger();
+    const metadataUrl = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
+    log.info(`Trying to resolve identifier ${identifier} from Internet Archive via ${metadataUrl}`);
     const headers = {};
     if (eTag) {
       headers['If-None-Match'] = eTag;
@@ -20,6 +27,7 @@ export default {
       headers['If-Modified-Since'] = lastModified;
     }
     const response = fetchSync(metadataUrl, { headers });
+    log.info(`Received response with status ${response.status} from Internet Archive for identifier ${identifier}`);
     if (response.status === 304) {
       return { notModified: true };
     }
@@ -46,6 +54,7 @@ export default {
     if (!bestFile) {
       return;
     }
+    log.info(`Resolved identifier ${identifier} to file ${bestFile.name} from ${data.d1}/${data.dir} in Internet Archive`);
     return {
       url: `https://${data.d1}${data.dir}/${bestFile.name}`
     };
