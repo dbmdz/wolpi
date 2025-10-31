@@ -206,16 +206,9 @@ public class ImageProcessor {
             image = scaled;
         }
 
-        VImage rotated = image;
-        var rotation = parser.parseRotation(request.rotationSpec());
-        if (rotation.mirror() || rotation.degrees() != 0.0) {
-            // Apply mirroring and rotation
-            if (rotation.mirror()) {
-                rotated = rotated.flip(VipsDirection.DIRECTION_HORIZONTAL);
-            }
-            if (rotation.degrees() != 0.0) {
-                rotated = rotated.rotate(rotation.degrees());
-            }
+        VImage rotated = extensionRuntime.preRotate(image, request.identifier(), imageSource.imageInfo(), request);
+        if (rotated == null) {
+            rotated = rotateImage(request, image);
         }
 
         String qualitySpec = request.qualitySpec();
@@ -237,6 +230,21 @@ public class ImageProcessor {
         } else {
             return rotated;
         }
+    }
+
+    private VImage rotateImage(ImageRequest request, VImage image) {
+        VImage rotated = image;
+        var rotation = parser.parseRotation(request.rotationSpec());
+        if (rotation.mirror() || rotation.degrees() != 0.0) {
+            // Apply mirroring and rotation
+            if (rotation.mirror()) {
+                rotated = rotated.flip(VipsDirection.DIRECTION_HORIZONTAL);
+            }
+            if (rotation.degrees() != 0.0) {
+                rotated = rotated.rotate(rotation.degrees());
+            }
+        }
+        return rotated;
     }
 
     private VImage scaleImage(VImage cropped, ImageRequest request, ImageSize sourceSize)

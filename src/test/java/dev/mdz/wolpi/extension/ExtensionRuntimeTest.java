@@ -524,6 +524,24 @@ public class ExtensionRuntimeTest {
         }
     }
 
+    @Test
+    @DisplayName("Should execute pre-rotate hooks on image")
+    void shouldExecutePreRotateHooks() {
+        var exts = List.of(
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false));
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
+            img.drawRect(List.of(255.0, 0.0, 0.0), 0, 0, 300, 100);
+            img.set("exif-ifd0-Orientation", 8);
+            VImage preRotated = runtime.preRotate(
+                    img,
+                    "some-image",
+                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageRequest("some-image", IIIFVersion.V3, null, null, "custom:metadata", null, null));
+            assertThat(preRotated).equals(img.rotate(90.0));
+        }
+    }
+
     private ExtensionRuntime getRuntimeWithExtensions(ExtensionConfig... extensions) {
         return getRuntimeWithExtensions(List.of(extensions));
     }

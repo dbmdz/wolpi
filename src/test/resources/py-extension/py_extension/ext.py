@@ -88,6 +88,19 @@ class TestExtension:
     x, y, width, height = image_request.cropSpec().replace("custom:", "").split(",")
     return image.extractArea(int(x), int(y), int(width), int(height))
 
+  def pre_rotate(self, image, identifier: str, image_info, image_request):
+      if not image_request.rotationSpec().startswith("custom"):
+          return None
+      exif_orientation = image.getInt("exif-ifd0-Orientation")
+      rotated = image
+      if exif_orientation == 8:
+          rotated = image.rotate(90.0)
+      elif exif_orientation == 3:
+          rotated = image.rotate(180.0)
+      elif exif_orientation == 6:
+          rotated = image.rotate(270.0)
+      return rotated
+
   def pre_format(self, image, identifier: str, image_info, image_request):
     if image_request.formatSpec() != "pixl":
       return None

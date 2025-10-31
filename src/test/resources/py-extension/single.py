@@ -32,5 +32,8 @@ def pre_scale(image, identifier: str, image_info, iiif_request):
 def pre_crop(image, identifier: str, image_info, iiif_request):
     return ext.pre_crop(image, identifier, image_info, iiif_request)
 
+def pre_rotate(image, identifier: str, image_info, iiif_request):
+    return ext.pre_rotate(image, identifier, image_info, iiif_request)
+
 def pre_format(image, identifier: str, image_info, iiif_request):
     return ext.pre_format(image, identifier, image_info, iiif_request)
