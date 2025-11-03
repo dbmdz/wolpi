@@ -11,6 +11,7 @@ const TEST_JPG = new Uint8Array([
 const COLOR_PAT = /^#(?<red>[0-9a-fA-F]{2})(?<green>[0-9a-fA-F]{2})(?<blue>[0-9a-fA-F]{2})$/;
 
 const VipsOption = Java.type("app.photofox.vipsffm.VipsOption");
+const VipsSize = Java.type("app.photofox.vipsffm.enums.VipsSize")
 
 export default {
   info() {
@@ -143,6 +144,13 @@ export default {
         "X-Wolpi-Encoding-Source": [identifier]
       }
     };
+  },
+
+  preScale(image, identifier, imageInfo, imageRequest) {
+    if (!imageRequest.sizeSpec().startsWith("custom")) {
+      return null;
+    }
+    return image.thumbnailImage(50, VipsOption.Int("height", 50), VipsOption.Enum("size", VipsSize.SIZE_FORCE));
   },
 
   cleanup() {

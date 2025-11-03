@@ -492,7 +492,9 @@ public class ExtensionRuntimeTest {
     @DisplayName("Should execute pre-scale hooks on image")
     void shouldExecutePreScaleHooks() {
         var exts = List.of(
-                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false));
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false),
+                // should never be called
+                new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
             VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
             VImage preScaled = runtime.preScale(

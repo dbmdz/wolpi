@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -118,10 +119,11 @@ public class ExtensionRegistry implements AutoCloseable {
         // Parallelize extension loading to speed up application startup time
         try (ExecutorService pool =
                 Executors.newFixedThreadPool(cfg.extensions().size())) {
-            cfg.extensions().stream()
-                    .<Runnable>map(ext -> () -> {
+            List<Callable<LoadedExtension>> loadingTasks = cfg.extensions().stream()
+                    .<Callable<LoadedExtension>>map(ext -> () -> {
+                        LoadedExtension loaded = null;
                         try {
-                            var loaded = loadExtension(ext);
+                            loaded = loadExtension(ext);
                             log.info(
                                     "Extension '{}' loaded.",
                                     loaded.extensionInfo().name());
@@ -131,9 +133,21 @@ public class ExtensionRegistry implements AutoCloseable {
                         } catch (RuntimeException e) {
                             log.error("Unexpected error while loading extension from " + ext, e);
                         }
+                        return loaded;
                     })
-                    .forEach(pool::submit);
+                    .toList();
+            pool.invokeAll(loadingTasks);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+        cfg.extensions().forEach(ext -> {
+            LoadedExtension loadedExtension = loadedExtensions.get(ext);
+            for (ExtensionHooks hook : loadedExtension.implementedHooks()) {
+                implementedHooks
+                        .computeIfAbsent(hook, (k) -> new CopyOnWriteArrayList<>())
+                        .add(loadedExtension);
+            }
+        });
     }
 
     /// Load an extension based on its definition in the provided configuration.
@@ -242,11 +256,6 @@ public class ExtensionRegistry implements AutoCloseable {
         }
         // Then add it
         loadedExtensions.put(config, ext);
-        for (ExtensionHooks hook : ext.implementedHooks()) {
-            implementedHooks
-                    .computeIfAbsent(hook, (k) -> new CopyOnWriteArrayList<>())
-                    .add(ext);
-        }
         return ext;
     }
 
