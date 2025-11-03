@@ -539,7 +539,7 @@ public class ExtensionRuntimeTest {
                 new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false));
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
             VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
-            img.drawRect(List.of(255.0, 0.0, 0.0), 0, 0, 300, 100);
+            img.drawRect(List.of(255.0, 0.0, 0.0), 0, 0, 300, 100, VipsOption.Boolean("fill", true));
             img.set("exif-ifd0-Orientation", 8);
             VImage preRotated = runtime.preRotate(
                     img,
@@ -575,6 +575,22 @@ public class ExtensionRuntimeTest {
             Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isGreaterThan(4000.0);
             runtime.resolve("timed-resolve", null, null);
             Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isGreaterThan(7000.0);
+        }
+    }
+
+    @Test
+    @DisplayName("Should execute pre-color hooks on image")
+    void shouldExecutePreColorHooks() {
+        var exts = List.of(
+                new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false));
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.black);
+            VImage invertedImage = runtime.preColor(
+                    img,
+                    "some-image",
+                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageRequest("some-image", IIIFVersion.V3, null, null, null, "custom:invert", null));
+            assertThat(invertedImage).equals(VImageHelpers.createEmptyImage(testArena, 500, 500, Color.white));
         }
     }
 

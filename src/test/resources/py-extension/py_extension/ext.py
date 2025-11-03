@@ -9,6 +9,10 @@ COLOR_PAT = re.compile(r"^#(?P<red>[0-9a-fA-F]{2})(?P<green>[0-9a-fA-F]{2})(?P<b
 
 VipsOption = java.type("app.photofox.vipsffm.VipsOption")
 VipsSize = java.type("app.photofox.vipsffm.enums.VipsSize")
+Arena = java.type("java.lang.foreign.Arena")
+VImage = java.type("app.photofox.vipsffm.VImage")
+VipsBandFormat = java.type("app.photofox.vipsffm.enums.VipsBandFormat")
+MemorySegment = java.type("java.lang.foreign.MemorySegment")
 
 class TestExtension:
   def info(self):
@@ -102,6 +106,11 @@ class TestExtension:
       elif exif_orientation == 6:
           rotated = image.rotate(270.0)
       return rotated
+
+  def pre_color(self, image, identifier: str, image_info, image_request):
+      if not image_request.qualitySpec().startswith("custom"):
+          return None
+      return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
 
   def pre_format(self, image, identifier: str, image_info, image_request):
     if image_request.formatSpec() != "pixl":

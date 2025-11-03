@@ -158,6 +158,21 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// @return the rotated image or `null` if image has not been rotated
     @Nullable VImage preRotate(VImage image, String identifier, ImageInfo info, ImageRequest request);
 
+    /// Allow extensions to change the image quality.
+    ///
+    /// If multiple extensions implement this hook, they are called in the order they were registered
+    /// (i.e. the order in the configuration). The first extension to return a non-null [VImage]
+    ///  wins, and no further extensions are called.
+    ///
+    /// If no extensions are registered for this hook, `null` is returned.
+    ///
+    /// @param image       the image to change
+    /// @param identifier  the identifier of the image
+    /// @param info        the image info metadata based on the original input image
+    /// @param request     the image request parameters
+    /// @return the changed image or `null` if image has not been changed
+    @Nullable VImage preColor(VImage image, String identifier, ImageInfo info, ImageRequest request);
+
     /// Allow extensions to customize the encoding of the processed image.
     ///
     /// If multiple extensions implement this hook, they are called in the order they were registered
@@ -464,6 +479,11 @@ public interface ExtensionRuntime extends AutoCloseable {
         @Override
         public @Nullable VImage preRotate(VImage image, String identifier, ImageInfo info, ImageRequest request) {
             return runHookWithEarlyExit(ExtensionHooks.ROTATE, image, identifier, info, request);
+        }
+
+        @Override
+        public @Nullable VImage preColor(VImage image, String identifier, ImageInfo info, ImageRequest request) {
+            return runHookWithEarlyExit(ExtensionHooks.COLOR, image, identifier, info, request);
         }
 
         @Override

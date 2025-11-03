@@ -211,6 +211,16 @@ public class ImageProcessor {
             rotated = rotateImage(request, image);
         }
 
+        VImage modifiedImage =
+                extensionRuntime.preColor(rotated, request.identifier(), imageSource.imageInfo(), request);
+        if (modifiedImage == null) {
+            modifiedImage = changeImageQuality(request, rotated);
+        }
+
+        return modifiedImage;
+    }
+
+    private VImage changeImageQuality(ImageRequest request, VImage image) {
         String qualitySpec = request.qualitySpec();
         if (qualitySpec.equalsIgnoreCase("default")) {
             qualitySpec = wolpiConfig.iiif().qualities().defaultQuality();
@@ -226,10 +236,9 @@ public class ImageProcessor {
         // FIXME: There should be high-level API in vips-ffm for this, but there isn't yet
         int sourceInterpretation = VipsHelper.image_get_interpretation(image.getUnsafeStructAddress());
         if (outputInterpretation.getRawValue() != sourceInterpretation) {
-            return rotated.colourspace(outputInterpretation);
-        } else {
-            return rotated;
+            return image.colourspace(outputInterpretation);
         }
+        return image;
     }
 
     private VImage rotateImage(ImageRequest request, VImage image) {
