@@ -12,6 +12,11 @@ logging:
 server:
   forward-headers-strategy: framework
 
+management:
+  endpoint:
+    prometheus:
+      access: read_only
+
 wolpi:
   logging:
     level: info

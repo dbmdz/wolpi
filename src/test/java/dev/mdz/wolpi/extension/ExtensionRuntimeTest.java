@@ -27,6 +27,8 @@ import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.testutil.VImageHelpers;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.awt.Color;
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -49,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -84,6 +87,8 @@ public class ExtensionRuntimeTest {
 
     @Mock
     private PyPiInstaller pyPiInstaller;
+
+    private MeterRegistry meterRegistry;
 
     private KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool = new GenericKeyedObjectPool<>(
             new RuntimeContextPooledObjectFactory(new GraalContextSupplier(null)),
@@ -133,6 +138,9 @@ public class ExtensionRuntimeTest {
     void setUp() throws ExtensionLoadException, PackageInstallException {
         lenient().when(buildProperties.getVersion()).thenReturn("0.1.0");
         testArena = Arena.ofConfined();
+
+        // Create new MeterRegistry
+        this.meterRegistry = new SimpleMeterRegistry();
 
         // Create minimal config to initialize registry
         config = new WolpiConfig(
@@ -542,6 +550,34 @@ public class ExtensionRuntimeTest {
         }
     }
 
+    @Test
+    @DisplayName("Should allow extensions to register and update custom metrics")
+    void shouldAllowExtensionsToRegisterAndUpdateCustomMetrics() {
+        try (var runtime = getRuntimeWithExtensions(
+                List.of(new ExtensionConfig(Path.of("src/test/resources/metrics.js"), null, null, Map.of(), false)))) {
+            var counter = meterRegistry.get("metrics_test_counter").counter();
+            assertThat(counter).isNotNull();
+            var gauge = meterRegistry.get("metrics_test_gauge").gauge();
+            assertThat(gauge).isNotNull();
+            var timer = meterRegistry.get("metrics_test_timer").timer();
+            assertThat(timer).isNotNull();
+
+            runtime.authorize("foo", Map.of(), "");
+            Assertions.assertThat(counter.count()).isEqualTo(1.0);
+            runtime.authorize("increment-four", Map.of(), "");
+            Assertions.assertThat(counter.count()).isEqualTo(5.0);
+            Assertions.assertThat(gauge.value()).isEqualTo(0.0);
+            runtime.authorize("gauge-4", Map.of(), "");
+            Assertions.assertThat(gauge.value()).isEqualTo(4.0);
+
+            Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isEqualTo(0.0);
+            runtime.authorize("timed-4000", Map.of(), "");
+            Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isGreaterThan(4000.0);
+            runtime.resolve("timed-resolve", null, null);
+            Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isGreaterThan(7000.0);
+        }
+    }
+
     private ExtensionRuntime getRuntimeWithExtensions(ExtensionConfig... extensions) {
         return getRuntimeWithExtensions(List.of(extensions));
     }
@@ -555,7 +591,8 @@ public class ExtensionRuntimeTest {
                 npmInstaller,
                 buildProperties,
                 null,
-                new GraalContextSupplier(config));
+                new GraalContextSupplier(config),
+                meterRegistry);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 

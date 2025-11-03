@@ -15,6 +15,7 @@ import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor.AlterationEvent;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.http.HttpClient;
@@ -86,6 +87,7 @@ public class ExtensionRegistry implements AutoCloseable {
     private final String wolpiVersion;
     private final @Nullable FileAlterationMonitor fileMonitor;
     private final GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool;
+    private final MeterRegistry meterRegistry;
 
     public ExtensionRegistry(
             WolpiConfig cfg,
@@ -94,13 +96,15 @@ public class ExtensionRegistry implements AutoCloseable {
             NpmInstaller jsInstaller,
             BuildProperties buildProps,
             GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
-            GraalContextSupplier contextSupplier) {
+            GraalContextSupplier contextSupplier,
+            MeterRegistry meterRegistry) {
         this.httpClient = httpClient;
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
         this.wolpiVersion = buildProps.getVersion();
         this.extensionContextPool = extensionContextPool;
         this.contextSupplier = contextSupplier;
+        this.meterRegistry = meterRegistry;
 
         FileAlterationMonitor monitor;
         try {
@@ -380,20 +384,14 @@ public class ExtensionRegistry implements AutoCloseable {
                 extensionVersion,
                 httpClient,
                 new ExtensionLogger(packageName),
-                PolyglotHelpers.toGuest(config.config(), Language.PYTHON));
+                PolyglotHelpers.toGuest(config.config(), Language.PYTHON),
+                new ExtensionMetrics(meterRegistry));
 
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
+            var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);
             return new PythonLoadedExtension(
-                    config,
-                    source,
-                    ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class),
-                    extensionVersion,
-                    hooks,
-                    entryPoint,
-                    venvPath,
-                    guestCtx,
-                    lastModified);
+                    config, source, info, extensionVersion, hooks, entryPoint, venvPath, guestCtx, lastModified);
         }
     }
 
@@ -489,17 +487,12 @@ public class ExtensionRegistry implements AutoCloseable {
                 extensionVersion,
                 httpClient,
                 new ExtensionLogger(packageName),
-                PolyglotHelpers.toGuest(config.config(), Language.JAVASCRIPT));
+                PolyglotHelpers.toGuest(config.config(), Language.JAVASCRIPT),
+                new ExtensionMetrics(meterRegistry));
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
-            return new JSLoadedExtension(
-                    config,
-                    source,
-                    ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class),
-                    extensionVersion,
-                    hooks,
-                    guestCtx,
-                    lastModified);
+            var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);
+            return new JSLoadedExtension(config, source, info, extensionVersion, hooks, guestCtx, lastModified);
         }
     }
 

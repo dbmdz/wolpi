@@ -10,6 +10,7 @@ open module wolpi {
     requires com.google.common;
     requires io.github.classgraph;
     requires java.net.http;
+    requires micrometer.core;
     requires org.apache.commons.pool2;
     requires org.apache.tomcat.embed.core;
     requires org.graalvm.polyglot;

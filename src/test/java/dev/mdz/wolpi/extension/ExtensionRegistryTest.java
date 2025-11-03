@@ -169,6 +169,7 @@ class ExtensionRegistryTest {
                 npmInstaller,
                 buildProperties,
                 null,
-                new GraalContextSupplier(wolpiConfig));
+                new GraalContextSupplier(wolpiConfig),
+                null);
     }
 }

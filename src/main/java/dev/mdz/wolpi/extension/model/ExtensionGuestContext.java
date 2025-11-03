@@ -1,6 +1,7 @@
 package dev.mdz.wolpi.extension.model;
 
 import dev.mdz.wolpi.extension.ExtensionLogger;
+import dev.mdz.wolpi.extension.ExtensionMetrics;
 import java.net.http.HttpClient;
 import org.jspecify.annotations.Nullable;
 
@@ -14,9 +15,11 @@ import org.jspecify.annotations.Nullable;
 /// @param logger        A logger instance that can be used to log messages to the Wolpi log.
 /// @param config        The configuration object for the extension, as provided in the Wolpi
 ///                      configuration. For JavaScript, a [ProxyObject], for Python a [ProxyHashMap]
+/// @param metrics       Can be used to register metrics from extensions.
 public record ExtensionGuestContext(
         String wolpiVersion,
         String extensionVersion,
         HttpClient httpClient,
         ExtensionLogger logger,
-        @Nullable Object config) {}
+        @Nullable Object config,
+        ExtensionMetrics metrics) {}
