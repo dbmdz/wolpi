@@ -25,7 +25,7 @@ export default {
   },
 
   authorize(identifier, headers, clientIp) {
-    if (!wolpi.config()) {
+    if (!wolpi.config) {
       return true;
     }
     const {
@@ -33,7 +33,7 @@ export default {
       forbiddenIds,
       allowedIps,
       requiredHeaders
-    } = wolpi.config();
+    } = wolpi.config;
     if (allowedIds) {
       return allowedIds.find(id => id === identifier) !== undefined;
     } else if (forbiddenIds) {
@@ -55,10 +55,10 @@ export default {
     if (eTag === "not-modified") {
       return { notModified: true };
     }
-    if (!wolpi.config()) {
+    if (!wolpi.config) {
       return null;
     }
-    const { prefix, resolvingType } = wolpi.config();
+    const { prefix, resolvingType } = wolpi.config;
     if (prefix && identifier.indexOf(prefix) !== 0) {
       return null;
     }
@@ -116,7 +116,7 @@ export default {
     if (!identifier.startsWith("watermarked:")) {
       return null;
     }
-    const { watermarkColor } = wolpi.config() ?? {};
+    const { watermarkColor } = wolpi.config ?? {};
     if (!watermarkColor) {
       return null;
     }

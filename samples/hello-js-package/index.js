@@ -16,7 +16,7 @@ export default {
     if (identifier.startsWith(VALIDATION_ID)) {
       return;
     }
-    const log = wolpi.logger();
+    const log = wolpi.logger;
     const metadataUrl = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
     log.info(`Trying to resolve identifier ${identifier} from Internet Archive via ${metadataUrl}`);
     const headers = {};

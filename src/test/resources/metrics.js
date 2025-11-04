@@ -1,11 +1,11 @@
 export default {
-  counterMetric: wolpi.metrics().counter(
+  counterMetric: wolpi.metrics.counter(
       "metrics_test_counter", "foos", "A counter for testing metrics",
       {"label_a": "value_a", "label_b": "value_b"}),
-  gaugeMetric: wolpi.metrics().gauge(
+  gaugeMetric: wolpi.metrics.gauge(
       "metrics_test_gauge", "foos", "A gauge for testing metrics",
       {"label_c": "value_c", "label_d": "value_d"}),
-  timerMetric: wolpi.metrics().timer(
+  timerMetric: wolpi.metrics.timer(
       "metrics_test_timer", "A timer for testing metrics",
       {"label_e": "value_e", "label_f": "value_f"}),
 

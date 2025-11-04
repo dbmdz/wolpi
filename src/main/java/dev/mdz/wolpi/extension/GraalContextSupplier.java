@@ -7,6 +7,8 @@ import dev.mdz.wolpi.extension.mapping.RecordValueMapper;
 import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
+import dev.mdz.wolpi.extension.model.Language;
+import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.EncodedImage;
@@ -143,7 +145,7 @@ public class GraalContextSupplier {
                 .option("js.worker", "true") // allow threading via Worker API
                 .build();
         if (wolpiCtx != null) {
-            ctx.getBindings("js").putMember("wolpi", wolpiCtx);
+            ctx.getBindings("js").putMember("wolpi", PolyglotHelpers.toGuest(wolpiCtx, Language.JAVASCRIPT));
         }
         return ctx;
     }
@@ -205,7 +207,7 @@ public class GraalContextSupplier {
             // have a user writable truly global scope. We work around this by injecting it into the
             // language's `builtins` module, which defines the stdlib-provided global variables.
             var builtins = ctx.eval("python", "import builtins; builtins");
-            builtins.putMember("wolpi", wolpiCtx);
+            builtins.putMember("wolpi", PolyglotHelpers.toGuest(wolpiCtx, Language.PYTHON));
         }
 
         return ctx;

@@ -22,9 +22,9 @@ class TestExtension:
     pass
 
   def authorize(self, identifier: str, headers: dict, client_ip: str) -> bool:
-    if wolpi.config() is None:
+    if wolpi.config is None:
       return True
-    wolpi_cfg = dict(wolpi.config())
+    wolpi_cfg = dict(wolpi.config)
     if (allowed_ids := wolpi_cfg.get("allowedIds")) is not None:
       return identifier in allowed_ids
     elif (forbidden_ids := wolpi_cfg.get("forbiddenIds")) is not None:
@@ -36,9 +36,9 @@ class TestExtension:
     return True
 
   def resolve(self, identifier, etag, last_modified):
-    if wolpi.config() is None:
+    if wolpi.config is None:
       return None
-    wolpi_cfg = wolpi.config()
+    wolpi_cfg = wolpi.config
     prefix = wolpi_cfg.get("prefix")
     if prefix:
       if not identifier.startswith(prefix):
@@ -62,7 +62,7 @@ class TestExtension:
   def pre_process_image(self, image, identifier: str, image_info, image_request):
     if not identifier.startswith("watermarked:"):
       return None
-    cfg = wolpi.config() or {}
+    cfg = wolpi.config or {}
     if watermark_color := cfg.get("watermarkColor"):
       match = COLOR_PAT.match(watermark_color)
       if match:

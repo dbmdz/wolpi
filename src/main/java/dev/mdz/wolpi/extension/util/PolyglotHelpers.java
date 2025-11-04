@@ -2,6 +2,7 @@ package dev.mdz.wolpi.extension.util;
 
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Converter;
+import dev.mdz.wolpi.extension.mapping.RecordProxy;
 import dev.mdz.wolpi.extension.model.Language;
 import java.util.Collection;
 import java.util.Collections;
@@ -142,6 +143,7 @@ public class PolyglotHelpers {
                 };
             }
             case List<?> list -> list.stream().map(v -> toGuest(v, lang)).toList();
+            case Record r -> new RecordProxy(r, lang);
             default -> obj;
         };
     }

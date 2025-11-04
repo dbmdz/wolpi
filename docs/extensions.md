@@ -71,16 +71,48 @@ accumulated during the processing of a request and should not persist between re
 ## The `wolpi` Global
 
 Extensions have access to a `wolpi` global object, which provides access to the Wolpi context. This
-includes the extension's configuration, which can be accessed via `wolpi.config()`.
+includes the extension's configuration, which can be accessed via `wolpi.config`.
+
 
 ```typescript
 interface WolpiContext {
     // Configuration object/dict for the extension, if present
-    config: () => Record<string, any> | undefined;
+    config: Record<string, any> | undefined;
     // Version specifier for Wolpi
-    wolpiVersion: () => string;
+    wolpiVersion: string;
     // Version specifier for the extension
-    extensionVersion: () => string;
+    extensionVersion: string;
+    // Logger instance for logging messages
+    logger: WolpiLogger;
+    // Metrics object to register custom metrics
+    metrics: WolpiMetrics;
+}
+
+interface WolpiLogger {
+    debug(message: string, keyVals?: {[key: string]: string}): void;
+    info(message: string, keyVals?: {[key: string]: string}): void;
+    warn(message: string, keyVals?: {[key: string]: string}): void;
+    error(message: string, keyVals?: {[key: string]: string}): void;
+}
+
+interface WolpiMetrics {
+  counter(
+      name: string, description?: string, unit?: string,
+      labels?: { [key: string]: string }
+  ): { increment(value?: number): void },
+
+  gauge(
+      name: string, description?: string, unit?: string,
+      labels?: { [key: string]: string }
+  ): { set(value: number): void },
+
+  timer(
+      name: string, description?: string,
+      labels?: { [key: string]: string }
+  ): {
+    record(fn: () => void): void,
+    start(): { stop(): void }
+  }
 }
 ```
 
@@ -151,12 +183,15 @@ export default {
     name: 'hello-world',
     description: 'just a simple resolving proof-of-concept'
   }),
+  cleanup: () => {
+    // no cleanup needed, but method must be present
+  },
   resolve: (identifier) => {
     if (!identifier.startsWith('js-')) {
       return;
     }
     // wolpi.config() returns the configuration object for this extension
-    const { baseDirectory } = wolpi.config();
+    const { baseDirectory } = wolpi.config;
     return {
       path: `${baseDirectory}/${identifier.substring(3)}.jp2`
     }
@@ -241,12 +276,16 @@ def info():
     'description': 'just a simple resolving proof-of-concept'
   }
 
+def cleanup():
+  # no cleanup needed, but method must be present
+  pass
+
 
 def resolve(identifier):
   if not identifier.startswith('py-'):
     return
   identifier = identifier[3:]
-  base_dir = Path(wolpi.config()['baseDirectory'])
+  base_dir = Path(wolpi.config["baseDirectory"])
   for path in base_dir.iterdir():
     if path.stem == identifier and path.suffix in IMAGE_EXTENSIONS:
       return {'path': str(path.absolute())}
@@ -295,9 +334,13 @@ def info():
     'description': 'Resolves images from Wikimedia Commons.'
   }
 
+def cleanup():
+  # no cleanup needed, but method must be present
+  pass
+
 
 def resolve(identifier):
-  api_url = wolpi.config()['apiUrl']
+  api_url = wolpi.config['apiUrl']
   resp = requests.get(f"{api_url}/resolve/{identifier}")
   if resp.status_code != 200:
     return

@@ -9,7 +9,6 @@ import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.JSLoadedExtension;
-import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
@@ -384,7 +383,7 @@ public class ExtensionRegistry implements AutoCloseable {
                 extensionVersion,
                 httpClient,
                 new ExtensionLogger(packageName),
-                PolyglotHelpers.toGuest(config.config(), Language.PYTHON),
+                config.config(),
                 new ExtensionMetrics(meterRegistry));
 
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
@@ -487,7 +486,7 @@ public class ExtensionRegistry implements AutoCloseable {
                 extensionVersion,
                 httpClient,
                 new ExtensionLogger(packageName),
-                PolyglotHelpers.toGuest(config.config(), Language.JAVASCRIPT),
+                config.config(),
                 new ExtensionMetrics(meterRegistry));
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
