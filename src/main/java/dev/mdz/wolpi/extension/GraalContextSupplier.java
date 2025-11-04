@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.graalvm.polyglot.Context;
@@ -37,6 +38,7 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
+import org.graalvm.polyglot.proxy.ProxyObject;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -202,12 +204,25 @@ public class GraalContextSupplier {
         }
         var ctx = builder.build();
 
-        if (wolpiCtx != null) {
-            // Providing a global "wolpi" variable to Python extensions is a bit tricky, as Python doesn't
-            // have a user writable truly global scope. We work around this by injecting it into the
-            // language's `builtins` module, which defines the stdlib-provided global variables.
-            var builtins = ctx.eval("python", "import builtins; builtins");
-            builtins.putMember("wolpi", PolyglotHelpers.toGuest(wolpiCtx, Language.PYTHON));
+        // In Python, the global namespace is reserved for builtins, so we provide access to the
+        // guest context by injecting a module named `wolpi` instead that can be imported by the
+        // extension.
+        ctx.enter();
+        try {
+            Object guestCtx;
+            if (wolpiCtx != null) {
+                guestCtx = PolyglotHelpers.toGuest(wolpiCtx, Language.PYTHON);
+            } else {
+                // If no context is available, the `wolpi` module is just an object with no members
+                guestCtx = ProxyObject.fromMap(Map.of());
+            }
+            ctx.getBindings("python").putMember("__wolpi_module__", guestCtx);
+            ctx.eval("python", """
+                    import sys
+                    sys.modules['wolpi'] = __wolpi_module__
+                    """);
+        } finally {
+            ctx.leave();
         }
 
         return ctx;

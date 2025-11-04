@@ -7,6 +7,8 @@ is returned.
 """
 from pathlib import Path
 
+import wolpi
+
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.jp2', '.tif', '.webp'}
 
 def info():
@@ -25,7 +27,7 @@ def resolve(identifier, etag=None, last_modified=None):
     if not identifier.startswith('py-'):
         return
     identifier = identifier[3:]  # Remove 'py-' prefix
-    # The `wolpi` global provides access to the Wolpi context, including the configuration for the extensions.
+    # The `wolpi` module provides access to the Wolpi context, including the configuration for the extensions.
     base_dir = Path(wolpi.config()['baseDirectory'])
     for path in base_dir.iterdir():
         if path.stem == identifier and path.suffix in IMAGE_EXTENSIONS:

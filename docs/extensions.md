@@ -70,8 +70,10 @@ accumulated during the processing of a request and should not persist between re
 
 ## The `wolpi` Global
 
-Extensions have access to a `wolpi` global object, which provides access to the Wolpi context. This
-includes the extension's configuration, which can be accessed via `wolpi.config`.
+Extensions have access to a `wolpi` object, which provides access to the Wolpi context. This
+includes the extension's configuration, which can be accessed via `wolpi.config`. In JavaScript,
+this object is directly available in the global scope, while in Python, it is available as a
+module `wolpi` that can be imported.
 
 
 ```typescript
@@ -265,6 +267,8 @@ limit compatibility with some packages that use native code.
 ```python
 # helloworld.py
 from pathlib import Path
+
+import wolpi
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.jp2', '.tif', '.webp'}
 

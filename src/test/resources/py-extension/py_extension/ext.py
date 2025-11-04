@@ -3,6 +3,8 @@ import time
 
 import java
 
+import wolpi
+
 COLOR_PAT = re.compile(r"^#(?P<red>[0-9a-fA-F]{2})(?P<green>[0-9a-fA-F]{2})(?P<blue>[0-9a-fA-F]{2})$")
 
 VipsOption = java.type("app.photofox.vipsffm.VipsOption")

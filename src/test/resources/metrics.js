@@ -10,7 +10,6 @@ export default {
       {"label_e": "value_e", "label_f": "value_f"}),
 
   info() {
-    console.log(this.counterMetric);
     return {
       apiVersion: 1,
       name: "Metrics Test Extension",
@@ -23,7 +22,6 @@ export default {
   },
 
   authorize(identifier, headers, clientIp) {
-    console.log(this.counterMetric);
     if (identifier === "increment-four") {
       this.counterMetric.increment(4);
     } else {
@@ -32,7 +30,6 @@ export default {
     if (identifier.startsWith("gauge-")) {
       const parts = identifier.split("-");
       const value = parseFloat(parts[1]);
-      console.log(value);
       this.gaugeMetric.set(value);
     }
     if (identifier.startsWith("timed-")) {

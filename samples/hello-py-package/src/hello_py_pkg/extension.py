@@ -2,6 +2,8 @@ from urllib.parse import quote_plus
 
 import requests
 
+import wolpi
+
 VALIDATION_ID = '5976299c-b668-11f0-ab84-047bcbb8eed4'
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
