@@ -22,8 +22,8 @@ These options can be set under the `http` section to customize Wolpi's HTTP serv
 - `host`: Host or IP to bind the server to, defaults to all interfaces.
 - `port`: Port to bind the server to, defaults to 8080.
 - `base-uri`: Base URI the server is accessible at, used for generating absolute URLs in responses,
-  such as in the profile link header. If not set, the server will  will attempt to determine the base
-  URI from the request headers (`Host` and `X-Forwarded-*`)`
+  such as in the profile link header. If not set, the server will attempt to determine the base
+  URI from the request headers (`Host` and `X-Forwarded-*`)
 
 Wolpi uses a thread-based request handling model (where each request is handled on a separate thread
 from a pool) that you can fine-tune with these settings:
@@ -31,7 +31,7 @@ from a pool) that you can fine-tune with these settings:
 - `min-threads` Minimum number of threads in the server thread pool, defaults to 10
 - `max-threads` Maximum number of threads in the server thread pool, defaults to 200
 - `max-requests-accepted`: Maximum number of requests the server will accept and queue, if the queue
-  is full, requests will be rejected with a 503 error. Defaults to `100`.
+  is full, requests will be rejected with a 503 error. Defaults to 100.
 
 ## Logging configuration
 
@@ -46,7 +46,7 @@ You can customize Wolpi's logging behavior through the `logging` section:
 ## HTTP Caching Headers
 Wolpi's resolving system will set HTTP caching headers (`ETag`, `Last-Modified`) on responses based
 on the information available from the file system or resolving extension. You can customize the
-content of the `Cache-Control` header with `cache-control-headers` opton:
+content of the `Cache-Control` header with `cache-control-headers` option:
 
 - `info-json`: Cache-Control header value for `info.json` responses, defaults to no header being set 
 - `image`: Cache-Control header value for image responses, defaults to no header being set.
@@ -54,7 +54,7 @@ content of the `Cache-Control` header with `cache-control-headers` opton:
 ## Image Encoding options
 
 Encoding options for image processing, such as JPEG quality and PNG  compression level can be
-set under the `image-encoding` section. These options  will be  passed directly to the VIPS *save
+set under the `image-encoding` section. These options will be passed directly to the VIPS `save`
 functions,  see their respective documentation in the [VIPS API][vips-api] (e.g. for
 [JPEG][vips-jpg], [PNG][vips-png] or [WebP][vips-webp]).
 
@@ -119,14 +119,14 @@ You can limit the size of images that Wolpi will return to clients through the `
 ### General Features
 
 These settings control general IIIF Image API features that do not fit into other categories and
-are all set as to-level entries in the `iiif.features` section:
+are all set as top-level entries in the `iiif.features` section:
 
 - `profile-link-header`:   Whether to include the profile link header in responses
 - `json-ld-media-type`:    Whether to use JSON-LD media type for responses
 - `cors`:                  Whether to set the CORS header to `*`
 - `canonical-link-header`: Whether to include a canonical link header in responses
 - `canonical-redirect`:    Whether to redirect to the canonical URL for the image
-- `base-uri-redirect`:     Whether to the info.json endpoint when accessing the base URI
+- `base-uri-redirect`:     Whether to redirect to the info.json endpoint when accessing the base URI
                            without image parameters or `/info.json` suffix.
 ### Cropping/Region Features
 
@@ -173,7 +173,7 @@ section.
 
 You can limit the image formats that users can request through the `iiif.features.formats` section.
 
-- `allowed`: Lit of image formats (as the [extension string from the IIIF Image
+- `allowed`: List of image formats (as the [extension string from the IIIF Image
   API spec][iiif-spec-exts], e.g. `jpg` or `png`). Defaults to all formats defined in the IIIF Image API
     specification except `pdf` (`jpg`, `png`, `tif`, `webp`, `gif`, `jp2`)
 - `preferred`: List of image formats that will be listed as the preferred formats in the `info.json`
