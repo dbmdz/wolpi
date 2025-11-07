@@ -1,0 +1,55 @@
+site_name: 'wolpi: an extensible iiif image server'
+site_url: https://dbmdz.github.io/wolpi
+watch:
+  - ./docs
+copyright: Made with 🐇❤️ in Munich, Germany at the Bavarian State Library
+extra:
+  generator: false
+
+theme:
+  logo: ./img/icon.png
+  name: material
+  features:
+    - header.autohide
+    - content.tabs.link
+    - content.code.annotate
+  palette:
+    # Automatic/Dark/Light mode palette toggles
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+      primary: custom
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+      primary: custom
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+      primary: custom
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - attr_list
+  - admonition
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+
+plugins:
+  - search

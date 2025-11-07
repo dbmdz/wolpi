@@ -2,6 +2,7 @@ package dev.mdz.wolpi.extension.model;
 
 import dev.mdz.wolpi.extension.ExtensionLogger;
 import dev.mdz.wolpi.extension.ExtensionMetrics;
+import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -16,10 +17,13 @@ import org.jspecify.annotations.Nullable;
 /// @param logger        A logger instance that can be used to log messages to the Wolpi log.
 /// @param config        The configuration object for the extension
 /// @param metrics       Can be used to register metrics from extensions.
+/// @param vipsArena     An Arena that can be used for allocating native memory for VIPS image
+///                      processing.
 public record ExtensionGuestContext(
         String wolpiVersion,
         String extensionVersion,
         HttpClient httpClient,
         ExtensionLogger logger,
         @Nullable Map<String, Object> config,
-        ExtensionMetrics metrics) {}
+        ExtensionMetrics metrics,
+        Arena vipsArena) {}

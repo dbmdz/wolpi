@@ -16,6 +16,7 @@ import dev.mdz.wolpi.extension.util.FileAlterationMonitor.AlterationEvent;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
@@ -87,6 +88,7 @@ public class ExtensionRegistry implements AutoCloseable {
     private final @Nullable FileAlterationMonitor fileMonitor;
     private final GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool;
     private final MeterRegistry meterRegistry;
+    private final Arena vipsArena;
 
     public ExtensionRegistry(
             WolpiConfig cfg,
@@ -96,7 +98,8 @@ public class ExtensionRegistry implements AutoCloseable {
             BuildProperties buildProps,
             GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
             GraalContextSupplier contextSupplier,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            Arena vipsArena) {
         this.httpClient = httpClient;
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
@@ -104,6 +107,7 @@ public class ExtensionRegistry implements AutoCloseable {
         this.extensionContextPool = extensionContextPool;
         this.contextSupplier = contextSupplier;
         this.meterRegistry = meterRegistry;
+        this.vipsArena = vipsArena;
 
         FileAlterationMonitor monitor;
         try {
@@ -384,7 +388,8 @@ public class ExtensionRegistry implements AutoCloseable {
                 httpClient,
                 new ExtensionLogger(packageName),
                 config.config(),
-                new ExtensionMetrics(meterRegistry));
+                new ExtensionMetrics(meterRegistry),
+                vipsArena);
 
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
@@ -487,7 +492,8 @@ public class ExtensionRegistry implements AutoCloseable {
                 httpClient,
                 new ExtensionLogger(packageName),
                 config.config(),
-                new ExtensionMetrics(meterRegistry));
+                new ExtensionMetrics(meterRegistry),
+                vipsArena);
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);

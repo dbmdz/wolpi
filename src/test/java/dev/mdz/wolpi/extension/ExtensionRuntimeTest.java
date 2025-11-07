@@ -592,7 +592,8 @@ public class ExtensionRuntimeTest {
                 buildProperties,
                 null,
                 new GraalContextSupplier(config),
-                meterRegistry);
+                meterRegistry,
+                testArena);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 

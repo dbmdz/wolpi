@@ -12,6 +12,7 @@ import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -170,6 +171,7 @@ class ExtensionRegistryTest {
                 buildProperties,
                 null,
                 new GraalContextSupplier(wolpiConfig),
-                null);
+                null,
+                Arena.ofAuto());
     }
 }
