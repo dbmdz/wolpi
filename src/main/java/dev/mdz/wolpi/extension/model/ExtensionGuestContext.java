@@ -18,7 +18,7 @@ import org.jspecify.annotations.Nullable;
 /// @param config        The configuration object for the extension
 /// @param metrics       Can be used to register metrics from extensions.
 /// @param vipsArena     An Arena that can be used for allocating native memory for VIPS image
-///                      processing.
+///                      processing in extension code, needed for e.g. overlay images
 public record ExtensionGuestContext(
         String wolpiVersion,
         String extensionVersion,

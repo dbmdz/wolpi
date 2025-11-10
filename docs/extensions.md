@@ -1121,7 +1121,7 @@ more about the available APIs for image processing.
             `Processing image ${identifier} with dimensions ${width}x${height}`);
 
         // Draw the identifier as a watermark in the bottom-right corner
-        const watermarkText = VImage.text(wolpi.vipsArena, identifier);
+        const watermarkText = VImage.text(wolpi.vipsArena, identifier);// (1)!
         return vimage.insert(
             watermarkText,
             width - watermarkText.width() - 10,
@@ -1129,6 +1129,13 @@ more about the available APIs for image processing.
         );
     }
     ```
+
+    1.  Here we create a new `VImage` object with some text to use as a watermark.
+        We need to pass the `wolpi.vipsArena` memory arena to the [`VImage.text`][text]
+        method to create the image, since the vips bindings we use need to do an allocation 
+        for that.
+
+    [text]: https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html#text(java.lang.foreign.Arena,java.lang.String,app.photofox.vipsffm.VipsOption...)
 
 === "Python"
     ``` python linenums="1"
@@ -1147,10 +1154,17 @@ more about the available APIs for image processing.
             f"Processing image {identifier} with dimensions {width}x{height}")
 
         # Draw the identifier as a watermark in the bottom-right corner
-        watermark_text = VImage.text(wolpi.vipsArena, identifier)
+        watermark_text = VImage.text(wolpi.vipsArena, identifier)# (1)!
         return vimage.insert(
             watermark_text,
             width - watermark_text.width() - 10,
             height - watermark_text.height() - 10
         )
     ```
+
+    1.  Here we create a new `VImage` object with some text to use as a watermark.
+        We need to pass the `wolpi.vipsArena` memory arena to the [`VImage.text`][text]
+        method to create the image, since the vips bindings we use need to do an allocation 
+        for that.
+
+    [text]: https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html#text(java.lang.foreign.Arena,java.lang.String,app.photofox.vipsffm.VipsOption...)
