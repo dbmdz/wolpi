@@ -33,6 +33,7 @@ public record WolpiConfig(
         @NestedConfigurationProperty @Nullable HttpConfig http,
         @NestedConfigurationProperty @Nullable LoggingConfig logging,
         @NestedConfigurationProperty IIIFConfig iiif,
+        // TODO: Implement!
         @NestedConfigurationProperty CacheControlHeaders cacheControlHeaders,
         @NestedConfigurationProperty List<ExtensionConfig> extensions,
         @NestedConfigurationProperty ExtensionPoolConfig extensionPool,
@@ -114,6 +115,7 @@ public record WolpiConfig(
             @DefaultValue("-1") Integer minThreads,
             @DefaultValue("-1") Integer maxThreads,
             @DefaultValue("-1") Integer maxRequestsAccepted,
+            // TODO: Implement!
             @DefaultValue("") String baseUri) {}
 
     /// Configuration for logging.
@@ -121,7 +123,9 @@ public record WolpiConfig(
     /// @param format Format of the log output, either `text` or `json`. Defaults to `text`.
     /// @param level Minimum log level, one of `trace`, `debug`, `info`, `warn`, `error`, or
     ///              `off`. Defaults to `info`.
-    public record LoggingConfig(@DefaultValue("text") LogFormat format, @DefaultValue("info") LogLevel level) {}
+    public record LoggingConfig(
+            @DefaultValue("text") LogFormat format,
+            @DefaultValue("info") LogLevel level) {}
 
     /// Supported log formats.
     public enum LogFormat {

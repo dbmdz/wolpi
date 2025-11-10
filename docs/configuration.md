@@ -21,9 +21,6 @@ These options can be set under the `http` section to customize Wolpi's HTTP serv
 
 - `host`: Host or IP to bind the server to, defaults to all interfaces.
 - `port`: Port to bind the server to, defaults to 8080.
-- `base-uri`: Base URI the server is accessible at, used for generating absolute URLs in responses,
-  such as in the profile link header. If not set, the server will attempt to determine the base
-  URI from the request headers (`Host` and `X-Forwarded-*`).
 
 Wolpi uses a thread-based request handling model (where each request is handled on a separate thread
 from a pool) that you can fine-tune with these settings:
@@ -42,14 +39,6 @@ You can customize Wolpi's logging behavior through the `logging` section:
 - `format`: Log format, either `text` (colored, human-readable) or `json` (structured),
   defaults to `text`
 - `level`: Log level, one of `debug`, `info`, `warn`, `error`, defaults to `info`
-
-## HTTP Caching Headers
-Wolpi's resolving system will set HTTP caching headers (`ETag`, `Last-Modified`) on responses based
-on the information available from the file system or resolving extension. You can customize the
-content of the `Cache-Control` header with the `cache-control-headers` option:
-
-- `info-json`: Cache-Control header value for `info.json` responses, defaults to no header being set.
-- `image`: Cache-Control header value for image responses, defaults to no header being set.
 
 ## Image Encoding options
 
@@ -181,6 +170,20 @@ You can limit the image formats that users can request through the `iiif.feature
 For details on how extensions are configured, refer to the [extensions section in the documentation][exts-doc].
 
 [exts-doc]: ./extensions.md/#extension-configuration
+
+### Extension Pool Configuration
+
+Wolpi runs extensions from a pool of cached extension instances to improve performance (essential, especially with Python
+extensions, where the initialization can take upwards of a second). You can configure the size of this pool through the
+`extensions.pool-size` option.
+
+- `max-total`: Maximum number of extension instances to keep in the pool **per extension**, defaults to 16.
+   If you have many memory-intensive extensions enabled, you might want to lower this to keep  overall memory
+  usage down.
+- `min-idle`: Minimum number of idle extension instances to keep in the pool **per extension**, defaults to 4.
+   This is a value that should be tuned based on your expected concurrency and request rate. Ideally  you would
+   set this to a value that allows handling your normal expected peak concurrency without  having to create new
+   extension instances on demand.
 
 ## Full example configuration
 

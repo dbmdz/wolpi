@@ -27,8 +27,10 @@ Use `mkdocs` with the `mkdocs-material` plugin to build or serve the documentati
 ```bash
 # install uv if you don't have it already
 # curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # serve the docs at localhost:8000/wolpi
 uv run --with mkdocs-material mkdocs serve
+
 # build the docs into the `site` directory
 uv run --with mkdocs-material mkdocs build
 ```
