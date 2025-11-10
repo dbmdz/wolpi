@@ -1,8 +1,8 @@
 # Extensions
 
 Wolpi's functionality can be extended with custom logic written in JavaScript or Python. This allows
-for integration with various authentication providers and image sources and as well as customizing
-the standard processing pipelines with extra syntax or entirely custom behavior. 
+for integration with various authentication providers and image sources as well as customizing
+the standard processing pipelines with extra syntax or entirely custom behavior.
 
 ## Hooks
 
@@ -20,16 +20,16 @@ and is described in the respective hook documentation below.
     must ensure that every part of the official IIIF Image API specification is adhered to, including
     parameter parsing, behavior, and error handling. On startup, Wolpi runs every enabled extension
     through the IIIF Image API conformance tests to ensure compliance, and refuses to start if any
-    of the enabled extension causes a violation.
+    enabled extension causes a violation.
 
     Practically, as an extension developer, this means:
     - If possible, gate your custom logic behind syntax that does not conflict with IIIF syntax. For
-      example, if you  want to implement a custom cropping behavior, use a custom syntax that is not
+      example, if you want to implement a custom cropping behavior, use a custom syntax that is not
       valid IIIF syntax (e.g., `customCrop:x,y,w,h` instead of `x,y,w,h`).
     - In some cases you may want to implement custom behavior that replaces standard IIIF behavior
       (e.g., a custom scaling algorithm). In these cases, ensure that your implementation adheres
       to the IIIF specification in terms of parameter parsing, behavior, and error handling.
-    - Run your extension against the IIIF Image API conformance tests to ensure compliance, you can
+    - Run your extension against the IIIF Image API conformance tests to ensure compliance. You can
       do this with the `validate` subcommand of the Wolpi application:
       ```bash
       java -jar wolpi.jar validate path/to/your/extension-pkg
@@ -55,7 +55,7 @@ its name and description.
     ```
 
     1.  This is currently hardcoded to `1`, as there is only one version of the
-        extension APIX. In the future, breaking changes to the API will increment
+        extension API. In the future, breaking changes to the API will increment
         this number to ensure that we can distinguish older extensions from newer
         ones and prevent breakage
 
@@ -282,7 +282,7 @@ this information for `info.json` requests.
         height: int
 
     # Size of a tile encoded in an image, with available scaling factors
-    class TileSize(TypedDict:
+    class TileSize(TypedDict):
         width: int
         height: int
         scale_factors: list[int]
@@ -294,7 +294,7 @@ this information for `info.json` requests.
         native_width: int
         native_height: int
         sizes: NotRequired[list[ImageSize]]
-        tile_sizes: NotRequired[list[ImageTileSize]]
+        tile_sizes: NotRequired[list[TileSize]]
 
     # Optional caching information about the image source.
     class CacheInfo(TypedDict):
@@ -302,7 +302,7 @@ this information for `info.json` requests.
         last_modified: NotRequired[str]
 
     # Describes how the identifier was resolved
-    class ImageSource:
+    class ImageSource(TypedDict):
         identifier: str
         resolved_image: Union[ResolvedImage, SourceNotModified]
         image_info: NotRequired[ImageInfo]
@@ -409,11 +409,11 @@ to interact with `VImage`).
 ### Image Processing Hooks
 
 With the `preProcess`, `preScale`, `preCrop`, `preRotate` and `preQuality` hooks,
-extensions can  implement custom behavior for the respective image operations. Each hook receives
-the `VImage` at  the current step of the processing pipeline, metadata about the image and the Image
-API request.  The hook must return a new `VImage` object that represents the processed image, or a
-`null`/`None` value  to indicate that no processing was done and Wolpi should continue with the
-standard implementation (see [below][java-api]) for details on how  to interact with `VImage`).
+extensions can implement custom behavior for the respective image operations. Each hook receives
+the `VImage` at the current step of the processing pipeline, metadata about the image and the Image
+API request. The hook must return a new `VImage` object that represents the processed image, or a
+`null`/`None` value to indicate that no processing was done and Wolpi should continue with the
+standard implementation (see [below][java-api]) for details on how to interact with `VImage`.
 
 [java-api]: #working-with-java-classes-from-extensions
 
@@ -471,15 +471,15 @@ standard implementation (see [below][java-api]) for details on how  to interact 
 
 If multiple extensions implement an image processing hook, Wolpi will call them in the order they are
 configured and use the first non-null result as the processed image. If all extensions return
-`null`/`None`,  Wolpi will continue with the standard implementation for that operation.
+`null`/`None`, Wolpi will continue with the standard implementation for that operation.
 
 
 ### `preFormat` Hook
 
 The `preFormat` hook is called before the image is encoded to the requested output format. The hook
 has the same parameters as the above image processing hook, but instead of a `VImage` object, it
-must return a `EncodedImage` object that represents the encoded image data, or a `null`/`None` value
-to incidate that no encoding took place.
+must return an `EncodedImage` object that represents the encoded image data, or a `null`/`None` value
+to indicate that no encoding took place.
 
 === "JavaScript"
     ```typescript
@@ -489,7 +489,7 @@ to incidate that no encoding took place.
         extraHeaders?: Record<string, string | string[]>;
     }
 
-    function preFormat = (
+    function preForma(t
         identifier: string,
         image: VImage,
         imageInfo: ImageInfo,
@@ -577,7 +577,7 @@ module `wolpi` that can be imported.
     ```
 
     1.  In JavaScript, the `wolpi` object of type `WolpiContext` is
-        available in the global scope for all extension.
+        available in the global scope for all extensions.
 
 === "Python"
 
@@ -604,7 +604,7 @@ module `wolpi` that can be imported.
         def info(self, message: str, keyVals: dict[str, str] | None) -> None: ...
         def warn(self, message: str, keyVals: dict[str, str] | None) -> None: ...
         def error(self, message: str, keyVals: dict[str, str] | None) -> None: ...
-        
+
     class WolpiMetrics:
       def counter(
           self,
@@ -636,7 +636,7 @@ module `wolpi` that can be imported.
       def record(self, fn: Callable[[], None]) -> None: ...
       def start(self) -> RunningTimer: ...
     ```
-    
+
     1.  In Python, the `wolpi` object of type `WolpiContext` is available as a module that can be
         imported:
         ``` python
@@ -647,20 +647,20 @@ module `wolpi` that can be imported.
 
 Extensions in Wolpi are kept in a pool after they have been loaded, so that they can be reused for
 multiple subsequent requests without having to run expensive initialization code for each request.
-Wolpi ensures that **only one requests is processed by any one extension instance at a time**, so that
+Wolpi ensures that **only one request is processed by any one extension instance at a time**, so that
 extensions do not need to worry about concurrency issues and can keep state in memory between
 hook invocations and requests without having to secure it with locks or other synchronization
 mechanisms. This also means that developers can safely assume that the hooks are always called
 in a specific order:
 
 - `info.json` requests: `authorize` → `resolve` → `augmentInfoJson`
-- Image request: `authorize` → `resolve` → `imagePreProcess` → `preCrop` → `preScale` → `preCrop`
+- Image request: `authorize` → `resolve` → `preProcessImage` → `preCrop` → `preScale`
                   → `preRotate` → `preQuality` → `preFormat` → `cleanup`
 
 This means that you can maintain state between hook invocations and can be sure that the state
 will always refer to the same request, as long as you clean it up in the end:
-Wolpi requires that every extension implements  a `cleanup` hook, which is called after the response
-has been sent to the client. Use this hook  to clear up any state that should not persist between
+Wolpi requires that every extension implements a `cleanup` hook, which is called after the response
+has been sent to the client. Use this hook to clear up any state that should not persist between
 requests. It's perfectly fine to have the hook do nothing if your extension does not accumulate any
 request-scoped state, but we mandate it anyway to avoid accidental state leaks (which are really
 annoying to debug).
@@ -695,15 +695,15 @@ wolpi:
 
 Wolpi uses [GraalVM's JavaScript runtime][graaljs] to run JavaScript extensions. This runtime
 is fully compliant with the ECMAScript 2024 specification and supports most modern JavaScript
-features (including `async`/`await`, though see the note below about asynchronous hooks). Fore more
+features (including `async`/`await`, though see the note below about asynchronous hooks). For more
 details, refer to the [GraalJS documentation][graaljs-docs].
 
-Note, however, that the runtime does not provide  Node.js or Browser-specific APIs, which limits
+Note, however, that the runtime does not provide Node.js or browser-specific APIs, which limits
 interoperability with a large chunk of the npm ecosystem. However, Wolpi provides [a few synchronous
-Wolpi-specific polyfills][polyfills] of filesystem and HTTP APIs for extension authors.
+Wolpi-specific polyfills][polyfills] for filesystem and HTTP APIs for extension authors.
 
 JavaScript extensions must be written as ES modules with either:
-- a default export with the hooks  as entries in an object
+- a default export with the hooks as entries in an object
 - or named exports for each hook.
 
 !!! question "Async?"
@@ -711,8 +711,8 @@ JavaScript extensions must be written as ES modules with either:
     Currently Wolpi does not support asynchronous hooks in JavaScript extensions. All hooks must be
     synchronous functions/methods. This is not as big of an issue as it might seem, since there are
     neither browser nor Node.js APIs available and the Java host does not have an async event loop.
-    If you do have a use case for asynchronous behavior, that we might not have been aware of, please
-    open  an issue  on the Wolpi GitHub repository and we may consider it for a future iteration of
+    If you do have a use case for asynchronous behavior that we might not have been aware of, please
+    open an issue on the Wolpi GitHub repository and we may consider it for a future iteration of
     the extension API.
 
 [polyfills]: #wolpi-modules
@@ -783,16 +783,15 @@ function fetchSync(
 ## Python Extensions
 
 The Python runtime used in Wolpi is [GraalPy][graalpy], which is a fully compliant Python 3.12
-Python extensions have full access to all parts of the Python 3.12 standard library, including
+runtime. Python extensions have full access to all parts of the Python 3.12 standard library, including
 things like `urllib.request` for making HTTP requests, `os`/`pathlib` for file system access and
 even `sqlite3` for local databases.
 
 Python Extensions can make use of dependencies, including dependencies with native code. However,
 note that not all packages on PyPI are supported by the GraalPy runtime. A good source to check for
-compatibility is the registry of compatible packages [available the GraalPy website][graalpy-compat].
-Note that many packages that are noted has passing less than 100% of the test suite of the dependency
-might still work fine for your use case, it's usually worth the time to evaluate a dependency using
-a GraalPy standalone REPL.
+compatibility is the registry of compatible packages [available from the GraalPy website][graalpy-compat].
+Note that many packages that are noted as passing less than 100% of their test suite might still work
+fine for your use case; it's usually worth the time to evaluate a dependency using a GraalPy standalone REPL.
 
 [graalpy]: https://www.graalvm.org/python
 [graalpy-compat]: https://www.graalvm.org/python/compatibility/
@@ -825,7 +824,7 @@ a GraalPy standalone REPL.
         if (!identifier.startsWith('js-')) {
           return;
         }
-        // wolpi.config() returns the configuration object for this extension
+        // wolpi.config has the configuration object for this extension
         const { baseDirectory } = wolpi.config;
         return {
           path: `${baseDirectory}/${identifier.substring(3)}.jp2`
@@ -896,9 +895,9 @@ a GraalPy standalone REPL.
 
 === "Python"
     A Python extension can also be a standard Python package, either in a local directory or from a
-    package registriy (defaults to PyPI, but custom indices can be configured). The package must define
-    a `wolpi` entry  point in its `pyproject.toml`. This entry point must point to a callable that
-    returns  a dictionary of hooks, or an object that has the hooks as methods.
+    package registry (defaults to PyPI, but custom indices can be configured). The package must define
+    a `wolpi` entry point in its `pyproject.toml`. This entry point must point to a callable that
+    returns a dictionary of hooks, or an object that has the hooks as methods.
 
     ```toml linenums="1" title="./pyproject.toml"
     [project]
@@ -914,9 +913,9 @@ a GraalPy standalone REPL.
     ```
 
     1.  We depend on the `redis` package from PyPI. The GraalPy compatibility table states that the
-        test suite only passes 65% of the test suite, but most of the basic functionality works fine,
-        It's usually worth spinning up a standalone GraalPy interpreter and play around with a package
-        to see if it's working as intended.
+        test suite only passes 65% of the tests, but most of the basic functionality works fine.
+        It's usually worth spinning up a standalone GraalPy interpreter and playing around with a
+        package to see if it's working as intended.
     2.  This part is crucial for a packaged Python extension: We define a `wolpi` entry point
         that points to the `extension` callable in the `hello_py_pkg.extension` module. This callable
         must return an object with the extension hooks as methods, or a dictionary with the hooks
@@ -1021,10 +1020,10 @@ This feature comes with some caveats:
     - You need to have a standalone GraalPy installation for this to work and configure
     Wolpi to use it for installing Python extensions, either by putting the `graalpy` executable on
     your `$PATH` or by setting the `wolpi.packaging.python-executable` configuration option. The
-    major version of GraalPy must match the one used in Wolpi (currently: **25**)
+    major version of GraalPy must match the one used in Wolpi (currently: **25**).
 
 The official Wolpi container image already comes with both `npm` and `GraalPy` installed, so you can
-use that as a base for your development environment if needed.  For easy local installation of these
+use that as a base for your development environment if needed. For easy local installation of these
 dependencies, we recommend using a tool like [mise][mise].
 
 [mise]: https://mise.jdx.dev/
@@ -1125,7 +1124,7 @@ more about the available APIs for image processing.
         const watermarkText = VImage.text(wolpi.vipsArena, identifier);
         return vimage.insert(
             watermarkText,
-            width - waterMarkText.width() - 10,
+            width - watermarkText.width() - 10,
             height - watermarkText.height() - 10
         );
     }
@@ -1140,7 +1139,7 @@ more about the available APIs for image processing.
     # the existing `VImage` object passed to the hook
     VImage = java.type('app.photofox.vipsffm.VImage')
 
-    function preProcessImage(vimage, identifier, info, request) {
+    def pre_process_image(vimage, identifier, info, request):
         # Call VImage methods on the vimage object
         width = vimage.width()
         height = vimage.height()
@@ -1148,10 +1147,10 @@ more about the available APIs for image processing.
             f"Processing image {identifier} with dimensions {width}x{height}")
 
         # Draw the identifier as a watermark in the bottom-right corner
-        watermarkText = VImage.text(wolpi.vipsArena, identifier)
+        watermark_text = VImage.text(wolpi.vipsArena, identifier)
         return vimage.insert(
-            watermarkText,
-            width - waterMarkText.width() - 10,
-            height - watermarkText.height() - 10
+            watermark_text,
+            width - watermark_text.width() - 10,
+            height - watermark_text.height() - 10
         )
     ```

@@ -6,14 +6,14 @@ sections.
 
 All configuration options are specified under the `wolpi` root key.
 
-## General configuration
+## General Configuration
 
 There are a few top-level configuration options that control general aspects of Wolpi's behavior:
 
-- `data-directory`: Location where Wolpi will store extensions installed from packages, defaults to
-  `./data`
-- `image-base-dir`: Fallback location where images are loaded from if no resolving extension provides
-   the image, defaults to `./images`
+- `data-directory`: Location where Wolpi stores extensions installed from packages; defaults to
+  `./data`.
+- `image-base-dir`: Fallback location for images if no resolving extension provides the asset;
+  defaults to `./images`.
 
 ## HTTP configuration
 
@@ -23,13 +23,13 @@ These options can be set under the `http` section to customize Wolpi's HTTP serv
 - `port`: Port to bind the server to, defaults to 8080.
 - `base-uri`: Base URI the server is accessible at, used for generating absolute URLs in responses,
   such as in the profile link header. If not set, the server will attempt to determine the base
-  URI from the request headers (`Host` and `X-Forwarded-*`)
+  URI from the request headers (`Host` and `X-Forwarded-*`).
 
 Wolpi uses a thread-based request handling model (where each request is handled on a separate thread
 from a pool) that you can fine-tune with these settings:
 
-- `min-threads` Minimum number of threads in the server thread pool, defaults to 10
-- `max-threads` Maximum number of threads in the server thread pool, defaults to 200
+- `min-threads`: Minimum number of threads in the server thread pool, defaults to 10
+- `max-threads`: Maximum number of threads in the server thread pool, defaults to 200
 - `max-requests-accepted`: Maximum number of requests the server will accept and queue, if the queue
   is full, requests will be rejected with a 503 error. Defaults to 100.
 
@@ -46,20 +46,20 @@ You can customize Wolpi's logging behavior through the `logging` section:
 ## HTTP Caching Headers
 Wolpi's resolving system will set HTTP caching headers (`ETag`, `Last-Modified`) on responses based
 on the information available from the file system or resolving extension. You can customize the
-content of the `Cache-Control` header with `cache-control-headers` option:
+content of the `Cache-Control` header with the `cache-control-headers` option:
 
-- `info-json`: Cache-Control header value for `info.json` responses, defaults to no header being set 
+- `info-json`: Cache-Control header value for `info.json` responses, defaults to no header being set.
 - `image`: Cache-Control header value for image responses, defaults to no header being set.
 
 ## Image Encoding options
 
-Encoding options for image processing, such as JPEG quality and PNG  compression level can be
+Encoding options for image processing, such as JPEG quality and PNG compression level, can be
 set under the `image-encoding` section. These options will be passed directly to the VIPS `save`
-functions,  see their respective documentation in the [VIPS API][vips-api] (e.g. for
+functions; see their respective documentation in the [VIPS API][vips-api] (e.g., for
 [JPEG][vips-jpg], [PNG][vips-png] or [WebP][vips-webp]).
 
 The section is keyed by the lowercase IIIF name for the image format (see
-[table 4.5 "Format" in the spec][iiif-formats]).  For primitive values, make sure the YAML value
+[table 4.5 "Format" in the spec][iiif-formats]). For primitive values, make sure the YAML value
 types match the expected types in the VIPS API (e.g. integers for `gint`, booleans for `gboolean`, etc),
 for enum values use the exact value name (as a YAML string) as in the VIPS API documentation for the
 enum, e.g. `VIPS_FOREIGN_SUBSAMPLE_ON` for a [`VipsForeignSubsample`][vips-subsample] option.
@@ -99,7 +99,7 @@ of these settings will impact the compliance level and the set of additional fea
 `info.json` responses.
 
 Wolpi supports various **optional features** of the IIIF Image API specification that can be enabled or
-disabled through the `iiif.features` section, that is split in multiple subsections. By default,
+disabled through the `iiif.features` section, which is split into multiple subsections. By default,
 all features (except if otherwise stated) are *enabled*.
 
 ### Limits
@@ -121,7 +121,7 @@ are all set as top-level entries in the `iiif.features` section:
 - `canonical-link-header`: Whether to include a canonical link header in responses
 - `canonical-redirect`:    Whether to redirect to the canonical URL for the image
 - `base-uri-redirect`:     Whether to redirect to the info.json endpoint when accessing the base URI
-                           without image parameters or `/info.json` suffix.
+                           without image parameters or an `/info.json` suffix.
 ### Cropping/Region Features
 
 These settings control the supported syntax for the region component for image requests and
@@ -140,17 +140,17 @@ are all set as entries under the `scaling` subsection in the `iiif.features` sec
 - `by-height`:                Whether to allow scaling by height with `,h`
 - `by-width`:                 Whether to allow scaling by width with `w,`
 - `by-percent`:               Whether to allow scaling by percent with `pct:`
-- `allow-upscaling`:          Whether to allow scaling by arbitrary (non-aspect-ratio
-                              preserving) dimensions with `w,h`
-- `by-arbitrary-dimensions`:  Allow upscaling of images, i.e. scaling to larger sizes than the
-                              original
+- `allow-upscaling`:          Whether to allow upscaling of images, i.e., scaling to larger sizes
+                              than the original
+- `by-arbitrary-dimensions`:  Whether to allow scaling to arbitrary, non-aspect-ratio-preserving
+                              dimensions with `w,h`
 ### Rotation Features
 
 These settings control the supported syntax for the rotation component for image requests and
 are all set as entries under the `rotation` subsection in the `iiif.features` section:
 
 - `mirroring`:            Whether to allow mirroring of images on the vertical axis with `!`
-- `by90-degree-rotation`: Whether to allow 90 degree rotations with `0,90,180,270`
+- `by90-degree-rotation`: Whether to allow 90-degree rotations with `0,90,180,270`
 - `arbitrary`:            Whether to allow arbitrary rotations with `arbitrary:angle`
 
 ### Supported Qualities
@@ -160,7 +160,7 @@ section.
 
 - `allowed`: List of quality values that are supported, defaults to all qualities from the IIIF
   Image API specification (`color`, `gray`, `bitonal`)
-- `default-quality`: Quality value that will be used when the `default` quality is request, must be one
+- `default-quality`: Quality value that will be used when the `default` quality is requested, must be one
    of the allowed qualities, defaults to `color`
 
 ### Supported Image Output Formats
