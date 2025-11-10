@@ -98,14 +98,8 @@ Many aspects of Wolpi's IIIF Image API behavior can be configured through the `i
 of these settings will impact the compliance level and the set of additional features described in the
 `info.json` responses.
 
-- `restrict-to-sizes`: If set to `true`, Wolpi will only allow requests for sizes that are
-  explicitly available in the source images (i.e. the tiles encoded into a TIF or JP2 image, or
-  the full resolution image). This can improve performance and increase cache hit rates, at the cost
-  of a loss of flexibility for clients. Defaults to `false`. Will cause the compliance level to be
-  reduced to "level 0" if enabled.
-
 Wolpi supports various **optional features** of the IIIF Image API specification that can be enabled or
-disabled through the `iiif.features` section, that is split in multiple subsections. By defaults,
+disabled through the `iiif.features` section, that is split in multiple subsections. By default,
 all features (except if otherwise stated) are *enabled*.
 
 ### Limits
@@ -219,7 +213,6 @@ wolpi:
       preset: VIPS_FOREIGN_WEBP_PRESET_TEXT
       effort: 3
   iiif:
-    restrict-to-sizes: false
     features:
       scaling:
         by-confined-width-height: true

@@ -13,6 +13,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 /// @param formats         The formats that can be requested, including allowed formats and
 ///                        preferred formats.
 public record IIIFConfig(
+    // TODO: Implement!
     boolean restrictToSizes,
     Limits limits,
     Features features,
