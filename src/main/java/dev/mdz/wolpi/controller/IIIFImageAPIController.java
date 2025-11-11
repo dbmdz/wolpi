@@ -125,6 +125,7 @@ public class IIIFImageAPIController {
                 notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
             }
             if (notModified) {
+                outHeaders.setCacheControl(config.cacheControlHeaders().infoJson());
                 setCacheHeaders(outHeaders, source);
                 return ResponseEntity.status(HttpStatus.NOT_MODIFIED).body(null);
             }
@@ -150,6 +151,7 @@ public class IIIFImageAPIController {
         } else {
             outHeaders.setContentType(MediaType.APPLICATION_JSON);
         }
+        outHeaders.setCacheControl(config.cacheControlHeaders().infoJson());
         setCacheHeaders(outHeaders, source);
         return ResponseEntity.ok().headers(outHeaders).body(infoJson);
     }
@@ -285,6 +287,7 @@ public class IIIFImageAPIController {
         }
 
         // Cache Headers only on proper image responses
+        outHeaders.setCacheControl(config.cacheControlHeaders().images());
         setCacheHeaders(outHeaders, source);
 
         if (config.iiif().features().profileLinkHeader()) {
@@ -315,19 +318,22 @@ public class IIIFImageAPIController {
         }
     }
 
-    /// Set cache-related headers on the response according to the configuration and the image
-    /// source's cache info.
+    /// Set `ETag` and/or `Last-Modified` headers on the given HttpHeaders object based on the
+    /// cache information in the [ImageSource].
+    ///
+    /// Will only set the headers if they are not already present in the existing header set.
+    ///
+    /// @param headers           The [HttpHeaders] object to set the headers on.
+    /// @param source            The [ImageSource] containing cache information.
     private void setCacheHeaders(HttpHeaders headers, ImageSource source) {
-        if (!config.cacheControlHeaders().infoJson().isEmpty()) {
-            headers.setCacheControl(config.cacheControlHeaders().infoJson());
+        if (source.cacheInfo() == null) {
+            return;
         }
-        if (source.cacheInfo() != null) {
-            if (source.cacheInfo().eTag() != null && !headers.containsKey("ETag")) {
-                headers.setETag("\"%s\"".formatted(source.cacheInfo().eTag()));
-            }
-            if (source.cacheInfo().lastModified() != null && !headers.containsKey("Last-Modified")) {
-                headers.setLastModified(source.cacheInfo().lastModified());
-            }
+        if (source.cacheInfo().eTag() != null && !headers.containsKey("ETag")) {
+            headers.setETag("\"%s\"".formatted(source.cacheInfo().eTag()));
+        }
+        if (source.cacheInfo().lastModified() != null && !headers.containsKey("Last-Modified")) {
+            headers.setLastModified(source.cacheInfo().lastModified());
         }
     }
 

@@ -40,6 +40,19 @@ You can customize Wolpi's logging behavior through the `logging` section:
   defaults to `text`
 - `level`: Log level, one of `debug`, `info`, `warn`, `error`, defaults to `info`
 
+
+## HTTP Caching Headers
+Wolpi's resolving system will set HTTP caching headers (`ETag`, `Last-Modified`) on responses based
+on the information available from the file system or resolving extension. You can customize the
+content of the `Cache-Control` header with the `cache-control-headers` option, by default it is
+set to a conservative value that requires re-validation to avoid stale resources on the client.
+
+- `info-json`: Cache-Control header value for `info.json` responses, defaults to
+   `public, max-age=604800, must-revalidate`
+- `image`: Cache-Control header value for image responses, defaults to
+  `public, max-age=604800, must-revalidate`
+
+
 ## Image Encoding options
 
 Encoding options for image processing, such as JPEG quality and PNG compression level, can be
