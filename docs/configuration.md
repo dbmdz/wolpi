@@ -21,6 +21,10 @@ These options can be set under the `http` section to customize Wolpi's HTTP serv
 
 - `host`: Host or IP to bind the server to, defaults to all interfaces.
 - `port`: Port to bind the server to, defaults to 8080.
+- `base-uri`: Base URI the server is accessible at, used for generating absolute URLs in responses,
+   such as in the profile link header. If not set, the server will attempt to determine the base
+   URI from the request headers (`Host` and `X-Forwarded-*`). Should not end on a slash.
+
 
 Wolpi uses a thread-based request handling model (where each request is handled on a separate thread
 from a pool) that you can fine-tune with these settings:

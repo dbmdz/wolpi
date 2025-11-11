@@ -138,11 +138,13 @@ public class IIIFImageAPIController {
                     .body(Map.of("error", "Could not read image information"));
         }
 
-        Map<String, Object> infoJson = loader.getImageInfoJson(
-                identifier,
-                imageInfo,
-                version,
-                request.getRequestURL().toString().replace("/info.json", ""));
+        String baseUrl;
+        if (config.http() != null && config.http().baseUri() != null) {
+            baseUrl = "%s/v%d/%s".formatted(config.http().baseUri(), version.value(), identifier);
+        } else {
+            baseUrl = request.getRequestURL().toString().replace("/info.json", "");
+        }
+        Map<String, Object> infoJson = loader.getImageInfoJson(identifier, imageInfo, version, baseUrl);
 
         if (config.iiif().features().jsonLdMediaType()) {
             outHeaders.setContentType(

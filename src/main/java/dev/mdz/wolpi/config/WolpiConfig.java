@@ -115,7 +115,6 @@ public record WolpiConfig(
             @DefaultValue("-1") Integer minThreads,
             @DefaultValue("-1") Integer maxThreads,
             @DefaultValue("-1") Integer maxRequestsAccepted,
-            // TODO: Implement!
             @DefaultValue("") String baseUri) {}
 
     /// Configuration for logging.
