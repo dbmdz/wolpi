@@ -157,6 +157,9 @@ public class PolyglotHelpers {
         // NOTE: Yeah, we could have written a custom Jackson serializer, but this is more
         //       general and useful for unit tests as well
         switch (obj) {
+            case RecordProxy recordProxy -> {
+                return recordProxy.getRecord();
+            }
             case ProxyObject proxyObj -> {
                 Map<String, Object> hostMap = new HashMap<>();
                 ProxyArray keys = (ProxyArray) proxyObj.getMemberKeys();
