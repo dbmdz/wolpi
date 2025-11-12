@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -20,10 +21,6 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 public class ControllerTest {
-
-    @Autowired
-    IIIFImageAPIController controller;
-
     @MockitoSpyBean
     WolpiConfig wolpiConfig;
 
@@ -56,5 +53,18 @@ public class ControllerTest {
         mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/info.json"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("https://example.com/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939"));
+    }
+
+    @Test
+    public void testImageWithLinkCanonicalHeaderAndCustomBaseUri() throws Exception {
+        when(wolpiConfig.http())
+                .thenReturn(new HttpConfig("localhost", 31337, 8, 200, 200, "https://example.com/iiif"));
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        header().string(
+                                        "Link",
+                                        containsString(
+                                                "<https://example.com/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg>; rel=\"canonical\"")));
     }
 }

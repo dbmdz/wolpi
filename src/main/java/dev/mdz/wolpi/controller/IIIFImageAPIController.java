@@ -281,10 +281,15 @@ public class IIIFImageAPIController {
 
         List<String> linkHeaderUrls = new ArrayList<>();
         if (canonicalRequest != null && config.iiif().features().canonicalLinkHeader()) {
-            String canonicalUrl = ServletUriComponentsBuilder.fromCurrentRequest()
-                    .build()
-                    .toUriString()
-                    .replace(request.toRequestPath(), canonicalRequest.toRequestPath());
+            String canonicalUrl;
+            if (config.http() != null && config.http().baseUri() != null) {
+                canonicalUrl = "%s%s".formatted(config.http().baseUri(), canonicalRequest.toRequestPath());
+            } else {
+                canonicalUrl = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .build()
+                        .toUriString()
+                        .replace(request.toRequestPath(), canonicalRequest.toRequestPath());
+            }
             linkHeaderUrls.add("<%s>; rel=\"canonical\"".formatted(canonicalUrl));
         }
 
