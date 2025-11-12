@@ -8,6 +8,8 @@ import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.IIIFConfig;
+import dev.mdz.wolpi.config.IIIFConfig.Limits;
+import dev.mdz.wolpi.config.IIIFConfig.ScalingFeature;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.CacheControlHeaders;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
@@ -17,6 +19,7 @@ import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
@@ -25,6 +28,7 @@ import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
+import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.testutil.VImageHelpers;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -502,6 +506,11 @@ public class ExtensionRuntimeTest {
                 new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false),
                 // should never be called
                 new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
+        var featuresMock = mock(IIIFConfig.Features.class);
+        var iiifMock = config.iiif();
+        lenient().when(iiifMock.features()).thenReturn(featuresMock);
+        lenient().when(iiifMock.limits()).thenReturn(new Limits(0, 0, 0));
+        lenient().when(featuresMock.scaling()).thenReturn(new ScalingFeature(true, true, true, true, true, true));
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
             VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
             VImage preScaled = runtime.preScale(

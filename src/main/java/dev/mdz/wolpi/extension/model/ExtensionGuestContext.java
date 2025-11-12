@@ -2,6 +2,7 @@ package dev.mdz.wolpi.extension.model;
 
 import dev.mdz.wolpi.extension.ExtensionLogger;
 import dev.mdz.wolpi.extension.ExtensionMetrics;
+import dev.mdz.wolpi.extension.mapping.ImageRequestParserProxy;
 import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
 import java.util.Map;
@@ -19,6 +20,8 @@ import org.jspecify.annotations.Nullable;
 /// @param metrics       Can be used to register metrics from extensions.
 /// @param vipsArena     An Arena that can be used for allocating native memory for VIPS image
 ///                      processing in extension code, needed for e.g. overlay images
+/// @param imageRequestParser A parser that can be used to parse IIIF image requests, useful for
+///                           extensions that want to modify the default image request handling
 public record ExtensionGuestContext(
         String wolpiVersion,
         String extensionVersion,
@@ -26,4 +29,5 @@ public record ExtensionGuestContext(
         ExtensionLogger logger,
         @Nullable Map<String, Object> config,
         ExtensionMetrics metrics,
-        Arena vipsArena) {}
+        Arena vipsArena,
+        ImageRequestParserProxy imageRequestParser) {}

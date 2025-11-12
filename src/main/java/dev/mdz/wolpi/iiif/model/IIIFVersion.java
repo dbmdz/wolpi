@@ -13,4 +13,12 @@ public enum IIIFVersion {
     public int value() {
         return value;
     }
+
+    public static IIIFVersion fromString(String version) {
+        return switch (version.toLowerCase()) {
+            case "v2" -> V2;
+            case "v3" -> V3;
+            default -> throw new IllegalArgumentException("Unsupported IIIF version: " + version);
+        };
+    }
 }

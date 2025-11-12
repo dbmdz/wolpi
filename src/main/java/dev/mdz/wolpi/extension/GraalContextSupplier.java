@@ -9,6 +9,8 @@ import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
+import dev.mdz.wolpi.iiif.model.IIIFQuality;
+import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.EncodedImage;
@@ -125,6 +127,16 @@ public class GraalContextSupplier {
                 ByteBuffer.class,
                 v -> v.getMetaObject().getMetaSimpleName().equals("bytes"),
                 v -> ByteBuffer.wrap(v.as(byte[].class)));
+        builder.targetTypeMapping(
+                Value.class,
+                IIIFQuality.class,
+                Value::isString,
+                v -> IIIFQuality.fromString(v.asString().toLowerCase()));
+        builder.targetTypeMapping(
+                Value.class,
+                IIIFVersion.class,
+                Value::isString,
+                v -> IIIFVersion.fromString(v.asString().toLowerCase()));
         return builder.build();
     }
 

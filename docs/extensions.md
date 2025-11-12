@@ -186,8 +186,10 @@ this information for `info.json` requests.
     /// resolver to avoid having Wolpi read the image just to extract
     /// this information for `info.json` requests
     interface ImageInfo {
-        nativeWidth: number;
-        nativeHeight: number;
+        nativeSize: {
+            width: number;
+            height: number;
+        };
 
         /// Sizes that are directly encoded in the image, e.g. JPEG2k
         /// or TIFF layers.
@@ -291,8 +293,7 @@ this information for `info.json` requests.
     # resolver to avoid having Wolpi read the image just to extract
     # this information for `info.json` requests
     class ImageInfo(TypedDict):
-        native_width: int
-        native_height: int
+        native_size: ImageSize
         sizes: NotRequired[list[ImageSize]]
         tile_sizes: NotRequired[list[TileSize]]
 
@@ -545,7 +546,11 @@ module `wolpi` that can be imported.
         // new images, should be treated as an opaque handle that is only
         // forwarded to vips-ffm, __do not__ store a reference to it or try to
         // manipulate it directly
-        vipsArena: unknown
+        vipsArena: unknown;
+        // This objects provides parsing methods for all parts of the IIIF
+        // Image API request, use this if you want to implement custom behavior
+        // based on the official syntax
+        imageRequestParser: ImageRequestParser;
     }
 
     interface WolpiLogger {
@@ -574,6 +579,25 @@ module `wolpi` that can be imported.
         start(): { stop(): void }
       }
     }
+
+    interface ImageRequestParser {
+        parseRegion(spec: string, sourceSize: ImageSize): {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        };
+        parseSize(version: 'v2' | 'v3', spec: string, sourceSize: ImageSize): {
+            width: number;
+            height: number;
+        };
+        parseRotation(spec: string): {
+            degrees: number;
+            mirror: boolean;
+        };
+        parseQuality(spec: string): 'color' | 'gray' | 'bitonal';
+    }
+
     ```
 
     1.  In JavaScript, the `wolpi` object of type `WolpiContext` is
@@ -586,7 +610,7 @@ module `wolpi` that can be imported.
         # Configuration object/dict for the extension, if present
         config: dict[str, Any] | None
         # Version specifier for Wolpi
-        wolpiVersion: str
+        wolpiVersiion: str
         # Version specifier for the extension
         extensionVersion: str
         # Logger instance for logging messages
@@ -598,6 +622,10 @@ module `wolpi` that can be imported.
         # forwarded to vips-ffm, __do not__ store a reference to it or try to
         # manipulate it directly
         vipsArena: object
+        # This objects provides parsing methods for all parts of the IIIF
+        # Image API request, use this if you want to implement custom behavior
+        # based on the official syntax
+        imageRequestParser: ImageRequestParser
 
     class WolpiLogger:
         def debug(self, message: str, keyVals: dict[str, str] | None) -> None: ...
@@ -635,6 +663,26 @@ module `wolpi` that can be imported.
     class TimerMetric:
       def record(self, fn: Callable[[], None]) -> None: ...
       def start(self) -> RunningTimer: ...
+
+    class ImageRequestParser:
+        def parseRegion(self, spec: str, source_size: ImageSize) -> CropRegion: ...
+        def parseSize(self, version: Literal['v2', 'v3'], spec: str, source_size: ImageSize) -> ImageSize: ...
+        def parseRotation(self, spec: str) -> Rotation: ...
+        def parseQuality(self, spec: str) -> Literal['color', 'gray', 'bitonal']: ...
+
+    class CropRegion:
+        x: int
+        y: int
+        width: int
+        height: int
+
+    class ImageSize:
+        width: int
+        height: int
+
+    class Rotation:
+        degrees: int
+        mirror: bool
     ```
 
     1.  In Python, the `wolpi` object of type `WolpiContext` is available as a module that can be

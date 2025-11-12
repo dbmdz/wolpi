@@ -80,19 +80,20 @@ class TestExtension:
       return None
 
   def pre_scale(self, image, identifier: str, image_info, image_request):
-    if not image_request.sizeSpec().startswith("custom:"):
+    if not image_request.sizeSpec.startswith("custom:"):
         return None
-    width, height = image_request.sizeSpec().replace("custom:", "").split(",")
-    return image.thumbnailImage(int(width), VipsOption.Int("height", int(height)), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
+    scale_spec = image_request.sizeSpec.replace("custom:", "")
+    dimensions = wolpi.imageRequestParser.parseSize(image_request.version, scale_spec, image_info.nativeSize)
+    return image.thumbnailImage(dimensions.width, VipsOption.Int("height", dimensions.height), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
   def pre_crop(self, image, identifier: str, image_info, image_request):
-    if not image_request.cropSpec().startswith("custom"):
+    if not image_request.cropSpec.startswith("custom"):
         return None
-    x, y, width, height = image_request.cropSpec().replace("custom:", "").split(",")
+    x, y, width, height = image_request.cropSpec.replace("custom:", "").split(",")
     return image.extractArea(int(x), int(y), int(width), int(height))
 
   def pre_rotate(self, image, identifier: str, image_info, image_request):
-      if not image_request.rotationSpec().startswith("custom"):
+      if not image_request.rotationSpec.startswith("custom"):
           return None
       exif_orientation = image.getInt("exif-ifd0-Orientation")
       rotated = image
@@ -110,7 +111,7 @@ class TestExtension:
       return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
 
   def pre_format(self, image, identifier: str, image_info, image_request):
-    if image_request.formatSpec() != "pixl":
+    if image_request.formatSpec != "pixl":
       return None
     print("Converting image to PIXL format")
     return {

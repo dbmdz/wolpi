@@ -26,6 +26,10 @@ public class RecordProxy implements ProxyObject {
                 .collect(java.util.stream.Collectors.toMap(RecordComponent::getName, RecordComponent::getAccessor));
     }
 
+    public Record getRecord() {
+        return record;
+    }
+
     @Override
     public @Nullable Object getMember(String key) {
         var getter = getters.get(key);

@@ -134,7 +134,7 @@ export default {
   },
 
   preFormat(image, identifier, imageInfo, imageRequest) {
-    if (imageRequest.formatSpec() !== "xyz") {
+    if (imageRequest.formatSpec !== "xyz") {
       return null;
     }
     return {
@@ -147,7 +147,7 @@ export default {
   },
 
   preScale(image, identifier, imageInfo, imageRequest) {
-    if (!imageRequest.sizeSpec().startsWith("custom")) {
+    if (!imageRequest.sizeSpec.startsWith("custom")) {
       return null;
     }
     return image.thumbnailImage(50, VipsOption.Int("height", 50), VipsOption.Enum("size", VipsSize.SIZE_FORCE));
