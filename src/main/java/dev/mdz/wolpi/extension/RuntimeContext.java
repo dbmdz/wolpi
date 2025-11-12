@@ -4,6 +4,7 @@ import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -49,7 +50,9 @@ public abstract class RuntimeContext implements AutoCloseable {
                 .flatMap(name -> Optional.ofNullable(PolyglotHelpers.getDictOrObjectMember(name, ext, true)).stream())
                 .filter(Value::canExecute)
                 .findFirst()
-                .map(fn -> fn.execute(args))
+                .map(fn -> fn.execute(Arrays.stream(args)
+                        .map(val -> PolyglotHelpers.toGuest(val, getLang()))
+                        .toArray()))
                 .orElseThrow(() -> new IllegalStateException("Hook " + hook + " not implemented in extension")));
     }
 
