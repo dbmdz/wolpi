@@ -5,20 +5,17 @@ import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
-import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.JSLoadedExtension;
+import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor.AlterationEvent;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
-import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -42,7 +39,6 @@ import org.graalvm.polyglot.Source;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.info.BuildProperties;
 import org.springframework.stereotype.Component;
 
 /// Responsible for loading and initializing extensions.
@@ -81,33 +77,24 @@ public class ExtensionRegistry implements AutoCloseable {
     private final Map<ExtensionConfig, List<Consumer<LoadedExtension>>> reloadCallbacks = new ConcurrentHashMap<>();
 
     private final GraalContextSupplier contextSupplier;
-    private final HttpClient httpClient;
     private final PyPiInstaller pyInstaller;
     private final NpmInstaller jsInstaller;
-    private final String wolpiVersion;
     private final @Nullable FileAlterationMonitor fileMonitor;
     private final GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool;
-    private final MeterRegistry meterRegistry;
-    private final Arena vipsArena;
+    private final GuestContextFactory guestContextFactory;
 
     public ExtensionRegistry(
             WolpiConfig cfg,
-            HttpClient httpClient,
             PyPiInstaller pyInstaller,
             NpmInstaller jsInstaller,
-            BuildProperties buildProps,
             GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
             GraalContextSupplier contextSupplier,
-            MeterRegistry meterRegistry,
-            Arena vipsArena) {
-        this.httpClient = httpClient;
+            GuestContextFactory guestContextFactory) {
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
-        this.wolpiVersion = buildProps.getVersion();
         this.extensionContextPool = extensionContextPool;
         this.contextSupplier = contextSupplier;
-        this.meterRegistry = meterRegistry;
-        this.vipsArena = vipsArena;
+        this.guestContextFactory = guestContextFactory;
 
         FileAlterationMonitor monitor;
         try {
@@ -382,15 +369,8 @@ public class ExtensionRegistry implements AutoCloseable {
             extensionVersion = "unknown";
         }
 
-        var guestCtx = new ExtensionGuestContext(
-                wolpiVersion,
-                extensionVersion,
-                httpClient,
-                new ExtensionLogger(packageName),
-                config.config(),
-                new ExtensionMetrics(meterRegistry),
-                vipsArena);
-
+        var guestCtx =
+                guestContextFactory.createGuestContext(packageName, extensionVersion, config.config(), Language.PYTHON);
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);
@@ -486,14 +466,8 @@ public class ExtensionRegistry implements AutoCloseable {
             extensionVersion = "unknown";
         }
 
-        var guestCtx = new ExtensionGuestContext(
-                wolpiVersion,
-                extensionVersion,
-                httpClient,
-                new ExtensionLogger(packageName),
-                config.config(),
-                new ExtensionMetrics(meterRegistry),
-                vipsArena);
+        var guestCtx = guestContextFactory.createGuestContext(
+                packageName, extensionVersion, config.config(), Language.JAVASCRIPT);
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);

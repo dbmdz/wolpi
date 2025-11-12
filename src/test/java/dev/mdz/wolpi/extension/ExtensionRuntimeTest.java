@@ -602,14 +602,12 @@ public class ExtensionRuntimeTest {
         config.extensions().addAll(extensions);
         var registry = new ExtensionRegistry(
                 config,
-                httpClient,
                 pyPiInstaller,
                 npmInstaller,
-                buildProperties,
                 null,
                 new GraalContextSupplier(config),
-                meterRegistry,
-                testArena);
+                new GuestContextFactory(
+                        buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 

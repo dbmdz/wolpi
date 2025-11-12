@@ -165,13 +165,10 @@ class ExtensionRegistryTest {
                 null);
         return new ExtensionRegistry(
                 wolpiConfig,
-                httpClient,
                 pyPiInstaller,
                 npmInstaller,
-                buildProperties,
                 null,
                 new GraalContextSupplier(wolpiConfig),
-                null,
-                Arena.ofAuto());
+                new GuestContextFactory(buildProperties, httpClient, Arena.ofAuto(), null, null));
     }
 }
