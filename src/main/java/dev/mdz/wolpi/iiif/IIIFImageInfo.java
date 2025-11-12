@@ -37,8 +37,8 @@ public class IIIFImageInfo {
                         isV2
                                 ? complianceRegistry.v2Profiles()
                                 : complianceRegistry.complianceLevelV3().v3String())
-                .kv("width", sourceImageInfo.nativeWidth())
-                .kv("height", sourceImageInfo.nativeHeight());
+                .kv("width", sourceImageInfo.nativeSize().width())
+                .kv("height", sourceImageInfo.nativeSize().height());
 
         if (!isV2) {
             if (config.limits().maxWidth() > 0) {

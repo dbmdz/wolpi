@@ -163,9 +163,7 @@ public class ImageProcessor {
         // We need to load the image if an extension intends to preprocess it
         boolean mayBePreProcessed = extensionRuntime.hasExtensionsForHook(ExtensionHooks.PREPROCESS_IMAGE);
         if (!mayBePreProcessed && imageSource.imageInfo() != null) {
-            sourceSize = new ImageSize(
-                    imageSource.imageInfo().nativeWidth(),
-                    imageSource.imageInfo().nativeHeight());
+            sourceSize = imageSource.imageInfo().nativeSize();
         } else {
             image = loader.loadImage(imageSource);
             sourceSize = new ImageSize(image.getWidth(), image.getHeight());

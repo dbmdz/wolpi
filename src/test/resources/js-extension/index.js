@@ -69,7 +69,7 @@ export default {
     }
     let imageInfo = undefined;
     if (identifier.indexOf(".withImageInfo") >= 0) {
-      imageInfo = { nativeWidth: 1, nativeHeight: 1, sizes: [], tileSizes: [] };
+      imageInfo = { nativeSize: { width: 1, height: 1 }, sizes: [], tileSizes: [] };
     }
     if (resolvingType === "FILESYSTEM") {
       return { path: `/tmp/images/${resolved}.jp2`, cacheInfo, imageInfo };

@@ -349,8 +349,7 @@ public class ExtensionRuntimeTest {
                 assertThat(withImageInfo).isNotNull();
                 var imageInfo = withImageInfo.imageInfo();
                 assertThat(imageInfo).isNotNull();
-                assertThat(imageInfo.nativeWidth()).isEqualTo(1);
-                assertThat(imageInfo.nativeHeight()).isEqualTo(1);
+                assertThat(imageInfo.nativeSize()).isEqualTo(new ImageSize(1, 1));
                 assertThat(imageInfo.tileSizes()).isEmpty();
                 assertThat(imageInfo.sizes()).isEmpty();
             }
@@ -457,7 +456,7 @@ public class ExtensionRuntimeTest {
             VImage processed = runtime.preProcessImage(
                     img,
                     "watermarked:some-id",
-                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
                     ImageRequest.full("watermarked:some-id", IIIFVersion.V3));
 
             assertThat(processed)
@@ -477,7 +476,7 @@ public class ExtensionRuntimeTest {
             EncodedImage encoded = runtime.preFormat(
                     img,
                     "image-" + format,
-                    new ImageInfo(10, 10, List.of(), List.of()),
+                    new ImageInfo(new ImageSize(10, 10), List.of(), List.of()),
                     new ImageRequest("image-" + format, IIIFVersion.V3, "full", "full", "0", "default", format));
             assertThat(encoded).isNotNull();
             assertThat(encoded.data()).isEqualByComparingTo(expectedData);
@@ -508,7 +507,7 @@ public class ExtensionRuntimeTest {
             VImage preScaled = runtime.preScale(
                     img,
                     "some-image",
-                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
                     new ImageRequest("some-image", IIIFVersion.V3, null, "custom:20,100", null, null, null));
             assertThat(preScaled).hasDimensions(20, 100);
         }
@@ -525,7 +524,7 @@ public class ExtensionRuntimeTest {
             VImage preCropped = runtime.preCrop(
                     img,
                     "some-image",
-                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
                     new ImageRequest("some-image", IIIFVersion.V3, "custom:50,60,100,200", null, null, null, null));
             assertThat(preCropped).hasDimensions(100, 200);
             assertThat(preCropped).equals(VImageHelpers.createEmptyImage(testArena, 100, 200, Color.red));
@@ -544,7 +543,7 @@ public class ExtensionRuntimeTest {
             VImage preRotated = runtime.preRotate(
                     img,
                     "some-image",
-                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
                     new ImageRequest("some-image", IIIFVersion.V3, null, null, "custom:metadata", null, null));
             assertThat(preRotated).equals(img.rotate(90.0));
         }
