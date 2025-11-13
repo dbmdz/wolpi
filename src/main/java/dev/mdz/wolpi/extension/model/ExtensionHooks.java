@@ -16,7 +16,7 @@ public enum ExtensionHooks {
     SCALE("pre_scale", "preScale"),
     CROP("pre_crop", "preCrop"),
     ROTATE("pre_rotate", "preRotate"),
-    COLOR("pre_color", "preColor"),
+    QUALITY("pre_quality", "preQuality"),
     FORMAT("pre_format", "preFormat");
 
     private final HashSet<String> validNames;

@@ -171,7 +171,7 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// @param info        the image info metadata based on the original input image
     /// @param request     the image request parameters
     /// @return the changed image or `null` if image has not been changed
-    @Nullable VImage preColor(VImage image, String identifier, ImageInfo info, ImageRequest request);
+    @Nullable VImage preQuality(VImage image, String identifier, ImageInfo info, ImageRequest request);
 
     /// Allow extensions to customize the encoding of the processed image.
     ///
@@ -482,8 +482,8 @@ public interface ExtensionRuntime extends AutoCloseable {
         }
 
         @Override
-        public @Nullable VImage preColor(VImage image, String identifier, ImageInfo info, ImageRequest request) {
-            return runHookWithEarlyExit(ExtensionHooks.COLOR, image, identifier, info, request);
+        public @Nullable VImage preQuality(VImage image, String identifier, ImageInfo info, ImageRequest request) {
+            return runHookWithEarlyExit(ExtensionHooks.QUALITY, image, identifier, info, request);
         }
 
         @Override

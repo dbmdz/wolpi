@@ -212,7 +212,7 @@ public class ImageProcessor {
         }
 
         VImage modifiedImage =
-                extensionRuntime.preColor(rotated, request.identifier(), imageSource.imageInfo(), request);
+                extensionRuntime.preQuality(rotated, request.identifier(), imageSource.imageInfo(), request);
         if (modifiedImage == null) {
             modifiedImage = changeImageQuality(request, rotated);
         }

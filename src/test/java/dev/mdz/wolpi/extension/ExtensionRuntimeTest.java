@@ -580,12 +580,12 @@ public class ExtensionRuntimeTest {
 
     @Test
     @DisplayName("Should execute pre-color hooks on image")
-    void shouldExecutePreColorHooks() {
+    void shouldExecutePreQualityHooks() {
         var exts = List.of(
                 new ExtensionConfig(Path.of("src/test/resources/py-extension/single.py"), null, null, Map.of(), false));
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
             VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.black);
-            VImage invertedImage = runtime.preColor(
+            VImage invertedImage = runtime.preQuality(
                     img,
                     "some-image",
                     new ImageInfo(500, 500, List.of(), List.of()),

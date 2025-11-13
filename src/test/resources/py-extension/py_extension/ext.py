@@ -107,7 +107,7 @@ class TestExtension:
           rotated = image.rotate(270.0)
       return rotated
 
-  def pre_color(self, image, identifier: str, image_info, image_request):
+  def pre_quality(self, image, identifier: str, image_info, image_request):
       if not image_request.qualitySpec().startswith("custom"):
           return None
       return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
