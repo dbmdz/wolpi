@@ -596,7 +596,7 @@ public class ExtensionRuntimeTest {
             VImage invertedImage = runtime.preQuality(
                     img,
                     "some-image",
-                    new ImageInfo(500, 500, List.of(), List.of()),
+                    new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
                     new ImageRequest("some-image", IIIFVersion.V3, null, null, null, "custom:invert", null));
             assertThat(invertedImage).equals(VImageHelpers.createEmptyImage(testArena, 500, 500, Color.white));
         }
