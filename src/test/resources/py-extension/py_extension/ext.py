@@ -106,7 +106,7 @@ class TestExtension:
       return rotated
 
   def pre_quality(self, image, identifier: str, image_info, image_request):
-      if not image_request.qualitySpec().startswith("custom"):
+      if not image_request.qualitySpec.startswith("custom"):
           return None
       return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
 
