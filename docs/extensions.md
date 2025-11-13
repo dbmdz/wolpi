@@ -610,7 +610,7 @@ module `wolpi` that can be imported.
         # Configuration object/dict for the extension, if present
         config: dict[str, Any] | None
         # Version specifier for Wolpi
-        wolpiVersiion: str
+        wolpiVersion: str
         # Version specifier for the extension
         extensionVersion: str
         # Logger instance for logging messages
