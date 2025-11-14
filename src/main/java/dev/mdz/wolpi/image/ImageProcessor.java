@@ -277,18 +277,18 @@ public class ImageProcessor {
 
     /// Encode an image to a target format.
     public EncodedImage encodeImage(VImage image, ImageInfo info, ImageRequest request) throws IOException {
-        String suffix = request.formatSpec().toLowerCase();
-
-        if (!wolpiConfig.iiif().formats().allowed().contains(suffix)) {
-            throw new IllegalArgumentException("Unsupported output format: " + suffix);
-        }
-
         var extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
+
         if (extensionEncoded != null) {
             return new EncodedImage(
                     extensionEncoded.data(), extensionEncoded.contentType(), extensionEncoded.extraHeaders());
         }
 
+        String suffix = request.formatSpec().toLowerCase();
+
+        if (!wolpiConfig.iiif().formats().allowed().contains(suffix)) {
+            throw new IllegalArgumentException("Unsupported output format: " + suffix);
+        }
         List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
 
         // Force 1bit output for bitonal images in PNG and GIF formats
