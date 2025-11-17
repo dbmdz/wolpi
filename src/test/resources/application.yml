@@ -10,7 +10,8 @@ server:
 wolpi:
   data-directory: "/tmp/wolpi-data"
   image-base-dir: "./images"
-  extensions: []
+  extensions:
+    - path: "src/test/resources/js-extension/index.js"
   extension-pool:
     max-total: 16
     max-idle: 4
@@ -89,3 +90,4 @@ spring:
       on-profile: "test-cli-isolated"
 wolpi:
   data-directory: "/tmp/wolpi-data-isolated"
+  extensions: []

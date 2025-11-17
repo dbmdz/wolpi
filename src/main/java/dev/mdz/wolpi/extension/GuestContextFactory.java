@@ -43,7 +43,11 @@ public class GuestContextFactory {
     /// @param guestLanguage    The language the extension is running in, used for mapping objects.
     /// @return A new [ExtensionGuestContext] instance.
     public ExtensionGuestContext createGuestContext(
-            String packageName, String extensionVersion, @Nullable Map<String, Object> config, Language guestLanguage) {
+            String packageName,
+            String extensionVersion,
+            @Nullable Map<String, Object> config,
+            Language guestLanguage,
+            @Nullable String configuredBaseUri) {
         return new ExtensionGuestContext(
                 wolpiVersion,
                 extensionVersion,
@@ -52,6 +56,7 @@ public class GuestContextFactory {
                 config,
                 new ExtensionMetrics(meterRegistry),
                 vipsArena,
-                new ImageRequestParserProxy(imageRequestParser, guestLanguage));
+                new ImageRequestParserProxy(imageRequestParser, guestLanguage),
+                configuredBaseUri);
     }
 }

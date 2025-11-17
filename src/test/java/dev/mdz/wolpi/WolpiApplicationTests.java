@@ -11,7 +11,9 @@ import org.assertj.core.api.AbstractAssert;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -22,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 // Needed so we can generate arguments from the imageApiValidator field
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -44,11 +47,20 @@ class WolpiApplicationTests {
     @Autowired
     private GraalContextSupplier graalContextSupplier;
 
+    WebTestClient client;
+
     // Keep a Graal Python Context alive for the duration of all tests to speed things up
     // considerably (~2sec overhead per test otherwise!)
     @BeforeAll
     void setupGraalContext() {
         this.graalContext = imageApiValidator.getValidationContext();
+    }
+
+    @BeforeEach
+    void setupWebTestclient() {
+        client = WebTestClient.bindToServer()
+                .baseUrl("http://localhost:%d".formatted(port))
+                .build();
     }
 
     @AfterAll
@@ -70,6 +82,14 @@ class WolpiApplicationTests {
         for (var result : imageApiValidator.runTest(test, baseUrl, VALIDATION_ID, version, graalContext)) {
             ValidationResultAssert.assertThat(result).isSuccess();
         }
+    }
+
+    @Test
+    void extensionsHaveAccessToServletDerivedBaseUrl() {
+        var resp = client.get()
+                .uri("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.hdr-png")
+                .exchange();
+        resp.expectHeader().valueEquals("X-Wolpi-Base-Uri", "http://localhost:%d".formatted(port));
     }
 
     /// Generate tests from the python test classes

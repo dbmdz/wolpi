@@ -82,6 +82,7 @@ public class ExtensionRegistry implements AutoCloseable {
     private final @Nullable FileAlterationMonitor fileMonitor;
     private final GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool;
     private final GuestContextFactory guestContextFactory;
+    private final WolpiConfig wolpiConfig;
 
     public ExtensionRegistry(
             WolpiConfig cfg,
@@ -89,12 +90,14 @@ public class ExtensionRegistry implements AutoCloseable {
             NpmInstaller jsInstaller,
             GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
             GraalContextSupplier contextSupplier,
-            GuestContextFactory guestContextFactory) {
+            GuestContextFactory guestContextFactory,
+            WolpiConfig wolpiConfig) {
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
         this.extensionContextPool = extensionContextPool;
         this.contextSupplier = contextSupplier;
         this.guestContextFactory = guestContextFactory;
+        this.wolpiConfig = wolpiConfig;
 
         FileAlterationMonitor monitor;
         try {
@@ -369,8 +372,12 @@ public class ExtensionRegistry implements AutoCloseable {
             extensionVersion = "unknown";
         }
 
-        var guestCtx =
-                guestContextFactory.createGuestContext(packageName, extensionVersion, config.config(), Language.PYTHON);
+        String baseUri = null;
+        if (wolpiConfig != null && wolpiConfig.http() != null) {
+            baseUri = wolpiConfig.http().baseUri();
+        }
+        var guestCtx = guestContextFactory.createGuestContext(
+                packageName, extensionVersion, config.config(), Language.PYTHON, baseUri);
         try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);
@@ -455,7 +462,7 @@ public class ExtensionRegistry implements AutoCloseable {
         String extensionVersion = null;
         if (config.npm() != null) {
             extensionVersion = config.npm().version();
-        } else if (packageName != null) {
+        } else if (Files.isDirectory(config.path())) {
             try {
                 extensionVersion = jsInstaller.getVersion(packageName);
             } catch (PackageInstallException e) {
@@ -465,9 +472,16 @@ public class ExtensionRegistry implements AutoCloseable {
         if (extensionVersion == null) {
             extensionVersion = "unknown";
         }
+        if (packageName == null) {
+            packageName = "unknown-js-extension";
+        }
 
+        String baseUri = null;
+        if (wolpiConfig != null && wolpiConfig.http() != null) {
+            baseUri = wolpiConfig.http().baseUri();
+        }
         var guestCtx = guestContextFactory.createGuestContext(
-                packageName, extensionVersion, config.config(), Language.JAVASCRIPT);
+                packageName, extensionVersion, config.config(), Language.JAVASCRIPT, baseUri);
         try (RuntimeContext ctx = new JSRuntimeContext(source, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);

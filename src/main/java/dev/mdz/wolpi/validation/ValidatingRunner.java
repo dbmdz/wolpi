@@ -57,7 +57,10 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
     /// can run against the application during validation, but no external traffic is routed to it.
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        if (extensionRegistry.getExtensions().isEmpty()) {
+        // Don't validate if we have no extensions, or if we're running in a mock servlet context,
+        // where the validation tests don't have access to a real HTTP server.
+        boolean skipValidation = extensionRegistry.getExtensions().isEmpty() || this.serverPort == 0;
+        if (skipValidation) {
             log.info(
                     "Listening on {}:{}",
                     this.config.http() == null

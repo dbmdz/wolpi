@@ -7,6 +7,7 @@ import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /// Context object available to extensions at runtime, provides access to metadata, the extension
 /// configuration, as well as a shared [HttpClient] instance.
@@ -22,6 +23,9 @@ import org.jspecify.annotations.Nullable;
 ///                      processing in extension code, needed for e.g. overlay images
 /// @param imageRequestParser A parser that can be used to parse IIIF image requests, useful for
 ///                           extensions that want to modify the default image request handling
+/// @param baseUri       Optional base URI for the Wolpi instance from the `http.baseUri` setting,
+///                      will be determined from the currently active request if not set and request
+///                      context is available.
 public record ExtensionGuestContext(
         String wolpiVersion,
         String extensionVersion,
@@ -30,4 +34,18 @@ public record ExtensionGuestContext(
         @Nullable Map<String, Object> config,
         ExtensionMetrics metrics,
         Arena vipsArena,
-        ImageRequestParserProxy imageRequestParser) {}
+        ImageRequestParserProxy imageRequestParser,
+        @Nullable String baseUri) {
+
+    @Override
+    public @Nullable String baseUri() {
+        if (this.baseUri != null) {
+            return this.baseUri;
+        }
+        try {
+            return ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+        } catch (IllegalStateException e) {
+            return null;
+        }
+    }
+}

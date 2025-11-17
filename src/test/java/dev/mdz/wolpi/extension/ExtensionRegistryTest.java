@@ -169,6 +169,7 @@ class ExtensionRegistryTest {
                 npmInstaller,
                 null,
                 new GraalContextSupplier(wolpiConfig),
-                new GuestContextFactory(buildProperties, httpClient, Arena.ofAuto(), null, null));
+                new GuestContextFactory(buildProperties, httpClient, Arena.ofAuto(), null, null),
+                null);
     }
 }

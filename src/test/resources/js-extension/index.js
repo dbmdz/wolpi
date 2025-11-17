@@ -12,6 +12,7 @@ const COLOR_PAT = /^#(?<red>[0-9a-fA-F]{2})(?<green>[0-9a-fA-F]{2})(?<blue>[0-9a
 
 const VipsOption = Java.type("app.photofox.vipsffm.VipsOption");
 const VipsSize = Java.type("app.photofox.vipsffm.enums.VipsSize")
+const VTarget = Java.type("app.photofox.vipsffm.VTarget");
 
 export default {
   info() {
@@ -134,16 +135,27 @@ export default {
   },
 
   preFormat(image, identifier, imageInfo, imageRequest) {
-    if (imageRequest.formatSpec !== "xyz") {
-      return null;
-    }
-    return {
-      data: new Uint8Array([0x78, 0x79, 0x7a]),
-      contentType: "image/vnd.xyz",
-      extraHeaders: {
-        "X-Wolpi-Encoding-Source": [identifier]
+    if (imageRequest.formatSpec === "hdr-png") {
+      const target = VTarget.newToMemory(wolpi.vipsArena);
+      image.writeToTarget(target, ".png");
+      const data = target.getBlob().asArenaScopedByteBuffer();
+      return {
+        data,
+        contentType: "image/png",
+        extraHeaders: {
+          "X-Wolpi-Base-Uri": [wolpi.baseUri]
+        }
       }
-    };
+    } else if (imageRequest.formatSpec === "xyz") {
+      return {
+        data: new Uint8Array([0x78, 0x79, 0x7a]),
+        contentType: "image/vnd.xyz",
+        extraHeaders: {
+          "X-Wolpi-Encoding-Source": [identifier]
+        }
+      };
+    }
+    return null;
   },
 
   preScale(image, identifier, imageInfo, imageRequest) {
