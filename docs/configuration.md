@@ -4,7 +4,13 @@ Wolpi can be configured through a YAML-based configuration file. This file allow
 various aspects of Wolpi's behavior. This guide will walk you through the available configuration
 sections.
 
-All configuration options are specified under the `wolpi` root key.
+## Specifying the Configuration File
+
+By default, Wolpi looks for a configuration file named `wolpi.yml` in the current working directory.
+You can specify a different configuration file location by either:
+
+- setting the `WOLPI_CONFIG` environment variable with the path to your YAML file (`WOLPI_CONFIG=/path/to/wolpi.yml`), or
+- passing the `--config=<path>` command-line argument when starting Wolpi (`java -jar wolpi.jar --config=/path/to/wolpi.yml`).
 
 ## General Configuration
 
@@ -283,6 +289,24 @@ wolpi:
 
 Wolpi is built on top of [Spring Boot][spring-boot] and you can use any of its [supported configuration
 options][spring-boot-config] to further customize your setup.
+
+To do so, put the desired Spring Boot configuration options under the `spring` key in your
+`wolpi.yml` configuration file. For example, to customize the IPs that Wolpi trusts `X-Forwarded-For`
+headers from, you could specify this:
+
+```yaml
+spring: # (1)!
+  server:
+    tomcat:
+      remoteip:
+        internal-proxies: "10.192.37.\d{1,3}"# (2)!
+```
+
+1.  This is the top-level key under which all Spring Boot configuration options go.
+2.  See [`server.tomcat.remoteip.internal-proxies` in the Spring Boot documentation][internal-proxies]
+    for  details on the format of this setting, by default it trusts all private IP ranges.
+
+[internal-proxies]: https://docs.spring.io/spring-boot/appendix/application-properties/index.html#application-properties.server.server.tomcat.remoteip.internal-proxies
 
 **Please note:** You do this at your own risk, these settings can in rare cases break certain Wolpi
 functionality if set incorrectly or expose you to additional security risks. Make sure you understand

@@ -30,8 +30,6 @@ import picocli.CommandLine.Parameters;
 /// The actual subcommand is implemented in the inner class [ValidationCommand].
 @Component
 @Command(
-        name = "validate",
-        description = "Validate a Wolpi extension",
         mixinStandardHelpOptions = true,
         subcommands = {ValidationCommand.class})
 public class CliRunner implements CommandLineRunner, Runnable {

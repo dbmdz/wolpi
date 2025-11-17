@@ -2,7 +2,6 @@ package dev.mdz.wolpi;
 
 import app.photofox.vipsffm.Vips;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import dev.mdz.wolpi.config.ConfigOverrideListener;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
@@ -174,7 +173,6 @@ public class Wolpi implements WebMvcConfigurer {
         // Operations cache does not make much sense for our access patterns
         Vips.disableOperationCache();
         SpringApplication app = new SpringApplication(Wolpi.class);
-        app.addListeners(new ConfigOverrideListener());
         app.run(args);
     }
 }
