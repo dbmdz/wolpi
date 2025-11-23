@@ -36,7 +36,7 @@
     <graalvm.version>25.0.1</graalvm.version>
     <jspecify.version>1.0.0</jspecify.version>
     <picocli.version>4.7.7</picocli.version>
-    <vips-ffm.version>1.9.3</vips-ffm.version>
+    <vips-ffm.version>1.9.4</vips-ffm.version>
   </properties>
 
   <dependencies>
@@ -242,7 +242,7 @@
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
-        <version>3.0.0</version>
+        <version>3.1.0</version>
         <configuration>
           <ratchetFrom>origin/main</ratchetFrom>
           <java>
