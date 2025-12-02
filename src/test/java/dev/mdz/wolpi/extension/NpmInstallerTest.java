@@ -3,7 +3,6 @@ package dev.mdz.wolpi.extension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import tools.jackson.databind.json.JsonMapper;
 
 @DisplayName("NpmInstaller")
 class NpmInstallerTest {
@@ -51,7 +51,7 @@ class NpmInstallerTest {
                 null,
                 new PackagingConfig(npmPath, null, Duration.ofSeconds(5)),
                 Collections.emptyMap());
-        installer = new NpmInstaller(config, new ObjectMapper());
+        installer = new NpmInstaller(config, new JsonMapper());
         nodeModulesDir = tempDir.resolve("npm", "node_modules");
         Files.createDirectories(nodeModulesDir);
     }
@@ -61,9 +61,7 @@ class NpmInstallerTest {
     void installExtension() throws Exception {
         Path packageDir = nodeModulesDir.resolve("test-package");
         Files.createDirectories(packageDir);
-        Files.writeString(
-                packageDir.resolve("package.json"),
-                """
+        Files.writeString(packageDir.resolve("package.json"), """
         {
           "name": "test-package",
           "version": "1.2.3",
@@ -86,9 +84,7 @@ class NpmInstallerTest {
     void installExtensionFromLocalDirectory() throws Exception {
         Path packageDir = tempDir.resolve("my-package");
         Files.createDirectories(packageDir);
-        Files.writeString(
-                packageDir.resolve("package.json"),
-                """
+        Files.writeString(packageDir.resolve("package.json"), """
         {
           "name": "my-package",
           "version": "0.1.0",
@@ -142,7 +138,7 @@ class NpmInstallerTest {
         try (MockedStatic<CommandRunner> runner = Mockito.mockStatic(CommandRunner.class)) {
             runner.when(() -> CommandRunner.getEnvVar("PATH")).thenReturn("");
 
-            NpmInstaller installerWithoutNode = new NpmInstaller(config, new ObjectMapper());
+            NpmInstaller installerWithoutNode = new NpmInstaller(config, new JsonMapper());
             assertThatThrownBy(() -> installerWithoutNode.installExtension(
                             "test-package", "1.2.3", URI.create("https://registry.npmjs.org")))
                     .isInstanceOf(PackageInstallException.class)
@@ -188,9 +184,7 @@ class NpmInstallerTest {
     void shouldReturnEntryPointOfInstalledPackage() throws Exception {
         Path packageDir = nodeModulesDir.resolve("test-package");
         Files.createDirectories(packageDir);
-        Files.writeString(
-                packageDir.resolve("package.json"),
-                """
+        Files.writeString(packageDir.resolve("package.json"), """
         {
           "name": "test-package",
           "version": "1.2.3",
@@ -218,9 +212,7 @@ class NpmInstallerTest {
     void shouldThrowIfPackageJsonHasNoExportsField() throws Exception {
         Path packageDir = nodeModulesDir.resolve("test-package");
         Files.createDirectories(packageDir);
-        Files.writeString(
-                packageDir.resolve("package.json"),
-                """
+        Files.writeString(packageDir.resolve("package.json"), """
         {
           "name": "test-package",
           "version": "1.2.3"
@@ -249,9 +241,7 @@ class NpmInstallerTest {
     void shouldReturnVersionOfInstalledPackage() throws Exception {
         Path packageDir = nodeModulesDir.resolve("test-package");
         Files.createDirectories(packageDir);
-        Files.writeString(
-                packageDir.resolve("package.json"),
-                """
+        Files.writeString(packageDir.resolve("package.json"), """
         {
           "name": "test-package",
           "version": "9.8.7",
@@ -287,9 +277,7 @@ class NpmInstallerTest {
     void shouldThrowIfPackageJsonHasNoVersionFieldWhenGettingVersion() throws Exception {
         Path packageDir = nodeModulesDir.resolve("test-package");
         Files.createDirectories(packageDir);
-        Files.writeString(
-                packageDir.resolve("package.json"),
-                """
+        Files.writeString(packageDir.resolve("package.json"), """
         {
           "name": "test-package"
         }

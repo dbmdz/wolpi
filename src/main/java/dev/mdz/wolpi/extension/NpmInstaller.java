@@ -1,7 +1,5 @@
 package dev.mdz.wolpi.extension;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -19,6 +17,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 /// NpmInstaller installs npm packages into a dedicated base directory using the system's npm
 /// binary.
@@ -38,9 +39,9 @@ public class NpmInstaller {
     private final Path baseDir;
     private final @Nullable Path npmPath;
     private final Duration processTimeout;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public NpmInstaller(WolpiConfig config, ObjectMapper objectMapper) throws PackageInstallException {
+    public NpmInstaller(WolpiConfig config, JsonMapper objectMapper) throws PackageInstallException {
         this.processTimeout = config.packaging().installTimeout();
         this.objectMapper = objectMapper;
         this.baseDir = config.dataDirectory().resolve("npm").toAbsolutePath().normalize();
@@ -169,7 +170,7 @@ public class NpmInstaller {
         Map<String, Object> root;
         try {
             root = objectMapper.readValue(Files.readAllBytes(pkgJson), new TypeReference<>() {});
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             throw new PackageInstallException("Failed to parse package.json at '%s'".formatted(packageRoot), e);
         }
         String name;

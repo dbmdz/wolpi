@@ -1,10 +1,5 @@
 package dev.mdz.wolpi.extension;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -24,6 +19,11 @@ import java.util.stream.StreamSupport;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.dataformat.toml.TomlMapper;
 
 /// Install a Python package from PyPI or a local directory into a dedicated virtual environment
 /// using the system's Python installation.
@@ -50,10 +50,10 @@ public class PyPiInstaller {
     private final Path baseDir;
     private final @Nullable Path pythonPath;
     private final Duration processTimeout;
-    private final ObjectMapper jsonMapper;
+    private final JsonMapper jsonMapper;
     private final TomlMapper tomlMapper;
 
-    public PyPiInstaller(WolpiConfig config, ObjectMapper jsonMapper) throws IOException {
+    public PyPiInstaller(WolpiConfig config, JsonMapper jsonMapper) throws IOException {
         this.processTimeout = config.packaging().installTimeout();
         this.jsonMapper = jsonMapper;
         this.tomlMapper = new TomlMapper();
@@ -282,7 +282,7 @@ public class PyPiInstaller {
         Map<String, Object> toml;
         try {
             toml = tomlMapper.readValue(pyproject.toFile(), new TypeReference<>() {});
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw new PackageInstallException(e);
         }
         if (toml.containsKey("project")) {
@@ -358,13 +358,13 @@ public class PyPiInstaller {
         JsonNode root;
         try {
             root = jsonMapper.readTree(out);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new PackageInstallException("Failed to parse pip inspect output: " + out, e);
         }
         var installed = root.get("installed");
         return StreamSupport.stream(installed.spliterator(), false)
-                .filter(pkg -> pkg.get("metadata").get("name").asText().equals(packageName))
-                .map(pkg -> Path.of(pkg.get("metadata_location").asText()))
+                .filter(pkg -> pkg.get("metadata").get("name").asString().equals(packageName))
+                .map(pkg -> Path.of(pkg.get("metadata_location").asString()))
                 .findFirst()
                 .orElseThrow(
                         () -> new PackageInstallException("Could not determine install location for " + packageName));

@@ -30,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -90,7 +91,7 @@ public class IIIFImageAPIController {
             @PathVariable String identifier,
             @Nullable @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch,
             @Nullable @RequestHeader(value = "If-Modified-Since", required = false) Instant ifModifiedSince,
-            HttpHeaders headers,
+            @RequestHeader HttpHeaders headers,
             HttpServletRequest request,
             WebRequest webRequest) {
         HttpHeaders outHeaders = new HttpHeaders();
@@ -98,7 +99,9 @@ public class IIIFImageAPIController {
             outHeaders.setAccessControlAllowOrigin(
                     Optional.ofNullable(headers.getOrigin()).orElse("*"));
         }
-        if (!loader.authorize(identifier, headers, request.getRemoteAddr())) {
+        MultiValueMap<String, String> headersMap = new LinkedMultiValueMap<>();
+        headers.forEach(headersMap::put);
+        if (!loader.authorize(identifier, headersMap, request.getRemoteAddr())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .headers(outHeaders)
                     .body(Map.of("error", "Unauthorized access to image"));
@@ -191,7 +194,9 @@ public class IIIFImageAPIController {
         }
 
         // Check permissions first
-        if (!loader.authorize(identifier, requestHeaders, servletRequest.getRemoteAddr())) {
+        MultiValueMap<String, String> requestHeadersMap = new LinkedMultiValueMap<>();
+        requestHeaders.forEach(requestHeadersMap::put);
+        if (!loader.authorize(identifier, requestHeadersMap, servletRequest.getRemoteAddr())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .headers(outHeaders)
                     .body(null);
@@ -310,7 +315,8 @@ public class IIIFImageAPIController {
         try {
             var encoded = processor.encodeImage(processedImage, imageInfo, request);
             if (encoded.extraHeaders() != null) {
-                outHeaders.addAll(MultiValueMap.fromMultiValue(encoded.extraHeaders()));
+                encoded.extraHeaders()
+                        .forEach((header, values) -> values.forEach(value -> outHeaders.add(header, value)));
             }
             return ResponseEntity.ok()
                     .headers(outHeaders)
@@ -336,10 +342,10 @@ public class IIIFImageAPIController {
         if (source.cacheInfo() == null) {
             return;
         }
-        if (source.cacheInfo().eTag() != null && !headers.containsKey("ETag")) {
+        if (source.cacheInfo().eTag() != null && !headers.containsHeader("ETag")) {
             headers.setETag("\"%s\"".formatted(source.cacheInfo().eTag()));
         }
-        if (source.cacheInfo().lastModified() != null && !headers.containsKey("Last-Modified")) {
+        if (source.cacheInfo().lastModified() != null && !headers.containsHeader("Last-Modified")) {
             headers.setLastModified(source.cacheInfo().lastModified());
         }
     }

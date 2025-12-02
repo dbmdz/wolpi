@@ -1,7 +1,5 @@
 package dev.mdz.wolpi.validation;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.PyPiInstaller;
@@ -27,6 +25,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 /// Validates the application against the official IIIF Image API test suite
 @Component
@@ -40,7 +41,7 @@ public class ImageApiValidator {
     private final ExtensionRegistry extensionRegistry;
     private final PyPiInstaller pyPiInstaller;
     private final GraalContextSupplier contextSupplier;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     // These are lazy-initialized when first needed
     private @Nullable List<ValidationTest> allTests = null;
@@ -50,7 +51,7 @@ public class ImageApiValidator {
             PyPiInstaller pyPiInstaller,
             ExtensionRegistry extensionRegistry,
             GraalContextSupplier contextSupplier,
-            ObjectMapper mapper) {
+            JsonMapper mapper) {
         this.pyPiInstaller = pyPiInstaller;
         this.extensionRegistry = extensionRegistry;
         this.contextSupplier = contextSupplier;
@@ -368,7 +369,7 @@ public class ImageApiValidator {
             var typeRef = new TypeReference<List<ValidationTest>>() {};
             try {
                 return objectMapper.readValue(cachedTests.toFile(), typeRef);
-            } catch (IOException e) {
+            } catch (JacksonException e) {
                 log.warn(
                         "Failed to read cached test list from {}, will re-discover tests",
                         cachedTests.toAbsolutePath(),
@@ -396,7 +397,7 @@ public class ImageApiValidator {
         }
         try {
             objectMapper.writeValue(cachedTests.toFile(), tests);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.warn(
                     "Failed to write cached test list to {}, will re-discover tests next time",
                     cachedTests.toAbsolutePath(),

@@ -5,8 +5,6 @@ import org.jspecify.annotations.NullMarked;
 @NullMarked
 open module wolpi {
     requires app.photofox.vipsffm;
-    requires com.fasterxml.jackson.databind;
-    requires com.fasterxml.jackson.dataformat.toml;
     requires com.google.common;
     requires io.github.classgraph;
     requires java.net.http;
@@ -27,6 +25,11 @@ open module wolpi {
     requires info.picocli;
     requires org.apache.commons.io;
     requires java.desktop; // only for test assertions
+    requires spring.boot.web.server;
+    requires spring.boot.tomcat;
+    requires spring.boot.jackson;
+    requires tools.jackson.databind;
+    requires tools.jackson.dataformat.toml;
 
     exports dev.mdz.wolpi;
     exports dev.mdz.wolpi.config;

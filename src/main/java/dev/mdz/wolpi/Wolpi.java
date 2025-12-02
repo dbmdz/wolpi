@@ -1,7 +1,7 @@
 package dev.mdz.wolpi;
 
 import app.photofox.vipsffm.Vips;
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
@@ -17,7 +17,6 @@ import java.net.http.HttpClient;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -32,7 +31,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.convert.ApplicationConversionService;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,10 +41,9 @@ import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.AbstractHttpMessageConverter;
-import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverters;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.web.context.annotation.RequestScope;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -115,8 +114,9 @@ public class Wolpi implements WebMvcConfigurer {
     }
 
     @Bean
-    public Jackson2ObjectMapperBuilder jacksonBuilder() {
-        return new Jackson2ObjectMapperBuilder().serializationInclusion(JsonInclude.Include.NON_NULL);
+    public JsonMapperBuilderCustomizer jacksonCustomizer() {
+        return jsonMapperBuilder ->
+                jsonMapperBuilder.changeDefaultPropertyInclusion(inc -> inc.withContentInclusion(Include.NON_NULL));
     }
 
     /// Register the conversion service needed for case-insensitive enum conversion
@@ -128,8 +128,8 @@ public class Wolpi implements WebMvcConfigurer {
     /// Add a new write-only [HttpMessageConverter] that can write ByteBuffers directly to the
     /// response body.
     @Override
-    public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
-        converters.add(new AbstractHttpMessageConverter<ByteBuffer>(MediaType.ALL) {
+    public void configureMessageConverters(HttpMessageConverters.ServerBuilder builder) {
+        builder.addCustomConverter(new AbstractHttpMessageConverter<ByteBuffer>(MediaType.ALL) {
             @Override
             public boolean canRead(Class<?> clazz, @Nullable MediaType mediaType) {
                 return false;

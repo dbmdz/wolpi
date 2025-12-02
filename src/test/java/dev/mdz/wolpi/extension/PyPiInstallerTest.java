@@ -3,7 +3,6 @@ package dev.mdz.wolpi.extension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import tools.jackson.databind.json.JsonMapper;
 
 @DisplayName("PyPiInstaller")
 class PyPiInstallerTest {
@@ -51,7 +51,7 @@ class PyPiInstallerTest {
                 null,
                 new PackagingConfig(null, pythonPath, Duration.ofSeconds(5)),
                 Collections.emptyMap());
-        installer = new PyPiInstaller(config, new ObjectMapper());
+        installer = new PyPiInstaller(config, new JsonMapper());
         pypiDir = tempDir.resolve("pypi");
         Files.createDirectories(pypiDir);
     }
@@ -138,7 +138,7 @@ class PyPiInstallerTest {
         try (MockedStatic<CommandRunner> sys = Mockito.mockStatic(CommandRunner.class)) {
             sys.when(() -> CommandRunner.getEnvVar("PATH")).thenReturn("");
 
-            PyPiInstaller installerWithoutPython = new PyPiInstaller(config, new ObjectMapper());
+            PyPiInstaller installerWithoutPython = new PyPiInstaller(config, new JsonMapper());
             assertThatThrownBy(() -> installerWithoutPython.installExtension(
                             "test-package", "1.2.3", URI.create("https://example.com/simple")))
                     .isInstanceOf(PackageInstallException.class)
@@ -156,10 +156,8 @@ class PyPiInstallerTest {
         Path entryPointsFile = distInfo.resolve("entry_points.txt");
         Files.writeString(entryPointsFile, "[wolpi]\nmy-ext = my_pkg.main:get_extension");
 
-        String inspectOutput = String.format(
-                """
-                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""",
-                distInfo);
+        String inspectOutput = String.format("""
+                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""", distInfo);
 
         var builder = ProcessBuilderMocks.builder()
                 .matchCommandTokenContains("pip")
@@ -178,10 +176,8 @@ class PyPiInstallerTest {
         Path distInfo =
                 pypiDir.resolve("test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
         Files.createDirectories(distInfo);
-        String inspectOutput = String.format(
-                """
-                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""",
-                distInfo);
+        String inspectOutput = String.format("""
+                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""", distInfo);
         var builder = ProcessBuilderMocks.builder()
                 .matchCommandTokenContains("pip")
                 .success()
@@ -201,10 +197,8 @@ class PyPiInstallerTest {
                 pypiDir.resolve("test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
         Files.createDirectories(distInfo);
         Files.writeString(distInfo.resolve("entry_points.txt"), "[console_scripts]\nfoo = bar:baz");
-        String inspectOutput = String.format(
-                """
-                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""",
-                distInfo);
+        String inspectOutput = String.format("""
+                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""", distInfo);
         var builder = ProcessBuilderMocks.builder()
                 .matchCommandTokenContains("pip")
                 .success()
@@ -224,10 +218,8 @@ class PyPiInstallerTest {
                 pypiDir.resolve("test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
         Files.createDirectories(distInfo);
         Files.writeString(distInfo.resolve("entry_points.txt"), "[wolpi]\nmy-ext = invalidspec");
-        String inspectOutput = String.format(
-                """
-                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""",
-                distInfo);
+        String inspectOutput = String.format("""
+                {"installed": [{"metadata": {"name": "test-package"}, "metadata_location": "%s"}]}""", distInfo);
         var builder = ProcessBuilderMocks.builder()
                 .matchCommandTokenContains("pip")
                 .success()
@@ -259,10 +251,8 @@ class PyPiInstallerTest {
     void shouldThrowWhenPackageNotFoundInPipInspectOutput() throws Exception {
         Path otherDist = pypiDir.resolve("other", "lib", "python3.11", "site-packages", "other-0.1.0.dist-info");
         Files.createDirectories(otherDist);
-        String inspectOutput = String.format(
-                """
-                {"installed": [{"metadata": {"name": "other"}, "metadata_location": "%s"}]}""",
-                otherDist);
+        String inspectOutput = String.format("""
+                {"installed": [{"metadata": {"name": "other"}, "metadata_location": "%s"}]}""", otherDist);
         var builder = ProcessBuilderMocks.builder()
                 .matchCommandTokenContains("pip")
                 .success()
