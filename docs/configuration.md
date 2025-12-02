@@ -208,6 +208,8 @@ extensions, where the initialization can take upwards of a second). You can conf
    set this to a value that allows handling your normal expected peak concurrency without  having to create new
    extension instances on demand.
 
+For more information about the extension pool, refer to the [section in the extension documentation](./extensions.md#extension-lifecycle).
+
 ## Full example configuration
 
 ```yaml

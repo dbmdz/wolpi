@@ -7,13 +7,13 @@ different use cases and workflows.
 
 At its core, Wolpi is simply a IIIF Image API 2.1 and 3.0 server that can serve images from a
 directory on the local filesystem. However, it can be extended with custom extensions written in
-JavaScript or Python to customize its behavior at all steps of the image delivery process, from auth
+JavaScript or Python to customize its behavior at all steps of the image delivery process, from authorization
 and resolving to the individual image operations and even the output encoding.
 
 [vips]: https://www.libvips.org/
 
 ## Running Wolpi
-The easiest way to run Wolpi is to use the provided Docker image:
+The easiest way to run Wolpi is to use the official container image:
 
 ```bash
 docker run -p 8080:8080 -v <path_to_your_images>:/images ghcr.io/dbmdz/wolpi:latest
@@ -25,9 +25,10 @@ image located  at `<path_to_your_images>/foo/bar/baz.jpg` on the host machine wi
 
 ## Configuration
 Through the YAML-based configuration, you can customize various aspects of Wolpi's behavior, such as:
+
 - vips image encoding options (e.g. JPEG quality, WebP presets, etc)
 - enable/disable optional IIIF Image API features and limits, to tailor Wolpi to your use cases, the
-  IIIF  Image API compliance level and `info.json` will be automatically adjusted according
+  IIIF  Image API compliance level and `info.json` will be automatically adjusted accordingly
 
 Refer to the [configuration documentation][config-doc] to learn more about the available configuration
 options.
@@ -60,7 +61,7 @@ your own Wolpi extensions.
 
 ## Operating Wolpi
 
-Wolpi provides all the necessities to run it both on traditional servers and in cloud environments:
+Wolpi provides everything required to run it both on traditional servers and in cloud environments:
 
 - Runnable as a standalone JAR or OCI container
 - Full support for HTTP caching semantics (ETags, Last-Modified, Cache-Control, etc.) to easily

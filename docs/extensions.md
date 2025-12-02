@@ -23,6 +23,7 @@ and is described in the respective hook documentation below.
     enabled extension causes a violation.
 
     Practically, as an extension developer, this means:
+
     - If possible, gate your custom logic behind syntax that does not conflict with IIIF syntax. For
       example, if you want to implement a custom cropping behavior, use a custom syntax that is not
       valid IIIF syntax (e.g., `customCrop:x,y,w,h` instead of `x,y,w,h`).
@@ -711,7 +712,7 @@ Wolpi requires that every extension implements a `cleanup` hook, which is called
 has been sent to the client. Use this hook to clear up any state that should not persist between
 requests. It's perfectly fine to have the hook do nothing if your extension does not accumulate any
 request-scoped state, but we mandate it anyway to avoid accidental state leaks (which are really
-annoying to debug).
+difficult to debug).
 
 
 ## Extension Configuration
@@ -751,6 +752,7 @@ interoperability with a large chunk of the npm ecosystem. However, Wolpi provide
 Wolpi-specific polyfills][polyfills] for filesystem and HTTP APIs for extension authors.
 
 JavaScript extensions must be written as ES modules with either:
+
 - a default export with the hooks as entries in an object
 - or named exports for each hook.
 
@@ -763,6 +765,7 @@ JavaScript extensions must be written as ES modules with either:
     open an issue on the Wolpi GitHub repository and we may consider it for a future iteration of
     the extension API.
 
+[graaljs]: https://www.graalvm.org/latest/reference-manual/js/
 [polyfills]: #wolpi-modules
 [graaljs-docs]: https://www.graalvm.org/latest/reference-manual/js/JavaScriptCompatibility
 
@@ -1041,6 +1044,32 @@ fine for your use case; it's usually worth the time to evaluate a dependency usi
     5.  And finally, we must reset the state variable so the next request gets a clean state
 
 ## Developing Extensions
+
+### Setup
+
+We highly recommend using the official container image for developing extensions, since it already ships
+with all the dependencies required to run Wolpi with Python/JavaScript extensions (including those with
+third party dependencies). To do so, simply mount your configuration and your extension directories into
+the container and tell Wolpi where to find the configuration file:
+
+```bash
+$ docker run \
+    -p 8080:8080 \
+    -p 4711:4711 \ # (1)
+    -v config.yaml:/app/config.yaml \
+    -v ./my-plugins:/app/plugins \
+    -e WOLPI_CONFIG=/app/config.yaml \
+    ghcr.io/dbmdz/wolpi:latest
+```
+
+1. For debugging, see [below](#debugging-extensions)
+
+Your `config.yaml` should specify the extension path relative to the location in the container:
+
+```yaml
+extensions:
+  - path: /app/plugins/hello-world.js
+```
 
 ### Live Reload for local extensions
 To make development easier, Wolpi supports installing local extensions with live reload enabled.
