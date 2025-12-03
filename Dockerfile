@@ -40,4 +40,4 @@ COPY --from=builder /app/target/wolpi-*.jar /app/app.jar
 
 EXPOSE 8080
 
-CMD ["java", "-jar", "--enable-native-access=ALL-UNNAMED", "/app/app.jar"]
+CMD ["java", "-jar", "--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow", "/app/app.jar"]

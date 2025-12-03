@@ -723,21 +723,20 @@ its source (`path`, `npm`, or `pypi`) and can optionally have a set of configura
 **Example:**
 
 ```yaml linenums="1"
-wolpi:
-  extensions:
-    - path: /path/to/helloworld.js
-      config:
-        baseDirectory: /path/to/images
-    - npm:
-        pkg: "hello-js-package"
-        version: "1.0.0"
-        # index: "https://custom-registry.example.com"
-    - pypi:
-        pkg: "hello-py-package"
-        version: "1.0.0"
-        # index: "https://custom-pypi.example.com/simple"
-      config:
-        apiUrl: "https://api.example.com"
+extensions:
+  - path: /path/to/helloworld.js
+    config:
+      baseDirectory: /path/to/images
+  - npm:
+      pkg: "hello-js-package"
+      version: "1.0.0"
+      # index: "https://custom-registry.example.com"
+  - pypi:
+      pkg: "hello-py-package"
+      version: "1.0.0"
+      # index: "https://custom-pypi.example.com/simple"
+    config:
+      apiUrl: "https://api.example.com"
 ```
 
 ## JavaScript Extensions
@@ -1081,10 +1080,9 @@ without having to restart the entire Wolpi application.
 Simply set the `live-reload: true` option in the extension definition in `application.yml`:
 
 ```yaml linenums="1"
-wolpi:
-  extensions:
-    - path: /path/to/your/extension.js
-      live-reload: true
+extensions:
+  - path: /path/to/your/extension.js
+    live-reload: true
 ```
 
 This feature comes with some caveats:
@@ -1114,18 +1112,17 @@ debugger to it and set breakpoints, step through code, and inspect variables ins
 To enable debugging, set the `wolpi.extension-debug` section in `application.yml`:
 
 ```yaml linenums="1"
-wolpi:
-  extension-debug:
-    # Enable or disable extension debugging, global setting for
-    # all extensions and languages
-    enabled: true
-    # Host and port to listen on for debugger connections
-    host: localhost
-    port: 4711
-    # Suspend execution at first source line
-    suspend: false
-    # Only begin executing after a debugger has connected
-    waitAttached: false
+extension-debug:
+  # Enable or disable extension debugging, global setting for
+  # all extensions and languages
+  enabled: true
+  # Host and port to listen on for debugger connections
+  host: localhost
+  port: 4711
+  # Suspend execution at first source line
+  suspend: false
+  # Only begin executing after a debugger has connected
+  waitAttached: false
 ```
 
 Then, open the directory with your extensions in Visual Studio Code and create the following

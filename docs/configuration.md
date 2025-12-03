@@ -213,78 +213,77 @@ For more information about the extension pool, refer to the [section in the exte
 ## Full example configuration
 
 ```yaml
-wolpi:
-  logging:
-    level: info
-    format: text
-  data-directory: "./data"
-  image-base-dir: "./images"
-  extensions: []
-  cache-control-headers:
-    images: "public, max-age=604800, must-revalidate"
-    info-json: "public, max-age=604800, must-revalidate"
-  encoding-options:
-    jpg:
-      Q: 80
-      optimize_coding: true
-      interlace: false
-      # overshoot_deringing: true # only available with mozjpeg
-      # quant_table: 3 # mozjpeg default table
-    tif:
-      Q: 80
-      compression: "VIPS_FOREIGN_TIFF_COMPRESSION_JPEG"
-      tile: true
-      tile_width: 512
-      tile_height: 512
-    webp:
-      Q: 80
-      preset: VIPS_FOREIGN_WEBP_PRESET_TEXT
-      effort: 3
-  iiif:
-    features:
-      scaling:
-        by-confined-width-height: true
-        by-height: true
-        by-width: true
-        by-percent: true
-        allow-upscaling: false
-        by-arbitrary-dimensions: true
-      region:
-        by-percent: true
-        by-pixels: true
-        square: true
-      rotation:
-        mirroring: true
-        by90-degree-rotation: true
-        arbitrary: true
-      profile-link-header: true
-      json-ld-media-type: true
-      cors: true
-      canonical-link-header: true
-      canonical-redirect: true
-      base-uri-redirect: true
-    qualities:
-      allowed:
-        - color
-        - gray
-        - bitonal
-      default-quality: color
-    formats:
-      allowed:
-        - jpg
-        - tif
-        - png
-        - gif
-        - jp2
-        - webp
-      preferred:
-        - jpg
-        - webp
-        - png
-    limits:
-      max-width: 0
-      max-height: 0
-      max-area: 0
+logging:
+  level: info
+  format: text
+data-directory: "./data"
+image-base-dir: "./images"
+extensions: []
+cache-control-headers:
+  images: "public, max-age=604800, must-revalidate"
+  info-json: "public, max-age=604800, must-revalidate"
+encoding-options:
+  jpg:
+    Q: 80
+    optimize_coding: true
+    interlace: false
+    # overshoot_deringing: true # only available with mozjpeg
+    # quant_table: 3 # mozjpeg default table
+  tif:
+    Q: 80
+    compression: "VIPS_FOREIGN_TIFF_COMPRESSION_JPEG"
+    tile: true
+    tile_width: 512
+    tile_height: 512
+  webp:
+    Q: 80
+    preset: VIPS_FOREIGN_WEBP_PRESET_TEXT
+    effort: 3
+iiif:
+  features:
+    scaling:
+      by-confined-width-height: true
+      by-height: true
+      by-width: true
+      by-percent: true
+      allow-upscaling: false
+      by-arbitrary-dimensions: true
+    region:
+      by-percent: true
+      by-pixels: true
+      square: true
+    rotation:
+      mirroring: true
+      by90-degree-rotation: true
+      arbitrary: true
+    profile-link-header: true
+    json-ld-media-type: true
+    cors: true
+    canonical-link-header: true
+    canonical-redirect: true
+    base-uri-redirect: true
+  qualities:
+    allowed:
+      - color
+      - gray
+      - bitonal
+    default-quality: color
+  formats:
+    allowed:
+      - jpg
+      - tif
+      - png
+      - gif
+      - jp2
+      - webp
+    preferred:
+      - jpg
+      - webp
+      - png
+  limits:
+    max-width: 0
+    max-height: 0
+    max-area: 0
 ```
 
 ##  👷🪜🕳️ Escape-Hatch: Spring Boot configuration
