@@ -194,6 +194,19 @@ For details on how extensions are configured, refer to the [extensions section i
 
 [exts-doc]: ./extensions.md/#extension-configuration
 
+### Extension Packaging Configuration
+
+When installing extension packages (and extension validation dependencies), wolpi needs access to Python
+and JavaScript package managers. By default, these are discovered on the system's `PATH` (`graalpy` or `python` for Python, `npm` for JavaScript), but users can override these through the `packaging` section, as well
+as configure the timeout for the installation of packages:
+
+```yaml
+packaging:
+  npm-executable: '/usr/bin/npm'
+  python-executable: '/usr/local/bin/graalpy'
+  install-timeout: 5m
+```
+
 ### Extension Pool Configuration
 
 Wolpi runs extensions from a pool of cached extension instances to improve performance (essential, especially with Python

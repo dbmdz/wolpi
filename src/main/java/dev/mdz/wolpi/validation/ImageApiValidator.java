@@ -34,6 +34,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class ImageApiValidator {
     private static final String VALIDATOR_VERSION = "0.1.0";
     private static final String VALIDATION_IMAGE_PNG = "67352ccc-d1b0-11e1-89ae-279075081939-png";
+    private static final List<String> PYVIPS_SHIM_LOCATIONS = List.of(
+            "/python/pyvips_shim.py", "/classes/python/pyvips_shim.py", "/BOOT-INF/classes/python/pyvips_shim.py");
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -189,11 +191,21 @@ public class ImageApiValidator {
                         file.setReadable(true, true);
                         file.setWritable(true, true);
                     }
-                    Files.write(shimLocation, Files.readAllBytes(jarFs.getPath("classes", "python", "pyvips_shim.py")));
+                    Path shimJarLocation = PYVIPS_SHIM_LOCATIONS.stream()
+                            .map(jarFs::getPath)
+                            .filter(Files::exists)
+                            .findFirst()
+                            .orElseThrow(() ->
+                                    new IOException("Failed to locate pyvips_shim.py in JAR at expected locations"));
+                    Files.write(shimLocation, Files.readAllBytes(shimJarLocation));
                     deleteShimAfter = true;
                 }
             } else {
-                shimLocation = absolutePath.resolveSibling("classes/python/pyvips_shim.py");
+                shimLocation = PYVIPS_SHIM_LOCATIONS.stream()
+                        .map(p -> absolutePath.resolveSibling(p.substring(1)))
+                        .filter(Files::exists)
+                        .findFirst()
+                        .orElseThrow(() -> new IOException("Failed to locate pyvips_shim.py at expected locations"));
                 deleteShimAfter = false;
             }
         } catch (IOException e) {

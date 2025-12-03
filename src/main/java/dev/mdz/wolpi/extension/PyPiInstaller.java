@@ -14,7 +14,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -62,8 +63,11 @@ public class PyPiInstaller {
 
         Path pythonPath = config.packaging().pythonExecutable();
         if (pythonPath == null) {
-            pythonPath = Optional.ofNullable(CommandRunner.findOnSystemPath("python3"))
-                    .orElse(CommandRunner.findOnSystemPath("python"));
+            pythonPath = Stream.of("graalpy", "python3", "python")
+                    .map(CommandRunner::findOnSystemPath)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
         }
         if (pythonPath == null || !Files.isRegularFile(pythonPath) || !Files.isExecutable(pythonPath)) {
             log.warn(

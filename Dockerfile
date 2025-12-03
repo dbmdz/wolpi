@@ -1,6 +1,8 @@
 # Stage 1: Build the application with OpenJDK
-FROM docker.io/debian:13.1-slim AS builder
+FROM docker.io/debian:13.2-slim AS builder
 WORKDIR /app
+
+ENV LANG=C.UTF-8
 
 RUN apt-get update -q && \
     apt-get install -qq -y --no-install-recommends openjdk-25-jdk maven && \
@@ -11,12 +13,17 @@ COPY . .
 RUN mvn -q clean install -DskipTests -Dspotless.check.skip=true
 
 # Stage 2: Create the runtime image with GraalVM
-FROM docker.io/debian:13.1-slim
+FROM docker.io/debian:13.2-slim
 WORKDIR /app
 
+ENV LANG=C.UTF-8
+
+# Dependencies for libvips, npm and building of python wheels
 RUN apt-get update -q && \
-    apt-get install -qq -y --no-install-recommends libvips42t64 libglib2.0-0t64 ca-certificates curl npm && \
+    apt-get install -qq -y --no-install-recommends \
+        libvips42t64 libglib2.0-0t64 ca-certificates curl npm build-essential libffi-dev && \
     rm -rf /var/lib/apt/lists/*
+
 
 # Create symlink for libvips, liblib and libgobject so vips-ffm can find them
 RUN ln -s /usr/lib/x86_64-linux-gnu/libvips.so.42 /usr/lib/x86_64-linux-gnu/libvips.so && \
@@ -28,7 +35,7 @@ RUN mkdir -p /opt/graalvm && \
     curl -L "${GRAALVM_URL}" | tar -xz --strip-components=1 -C /opt/graalvm
 
 # Install GraalPy for more compatiblity with native python packages
-ENV GRAALPY_URL="https://github.com/oracle/graalpython/releases/download/graal-25.0.0/graalpy-25.0.0-linux-amd64.tar.gz"
+ENV GRAALPY_URL="https://github.com/oracle/graalpython/releases/download/graal-25.0.1/graalpy-25.0.1-linux-amd64.tar.gz"
 RUN mkdir -p /opt/graalpy && \
     curl -L "${GRAALPY_URL}" | tar -xz --strip-components=1 -C /opt/graalpy
 RUN ln -s /opt/graalpy/bin/graalpy /usr/local/bin/graalpy
@@ -36,7 +43,12 @@ RUN ln -s /opt/graalpy/bin/graalpy /usr/local/bin/graalpy
 ENV JAVA_HOME="/opt/graalvm"
 ENV PATH="/opt/graalvm/bin:${PATH}"
 
-COPY --from=builder /app/target/wolpi-*.jar /app/app.jar
+COPY --from=builder /app/target/wolpi-*.jar /app.jar
+
+RUN java -Djarmode=tools -jar /app.jar extract && \
+    rm -rf /app.jar && \
+    mv /app/app/* /app && \
+    rm -rf /app/app
 
 EXPOSE 8080
 
