@@ -853,6 +853,7 @@ fine for your use case; it's usually worth the time to evaluate a dependency usi
     you need to install GraalPy locally and set the `wolpi.packaging.python-executable` to the path
     to your GraalPy Python executable. This ensures that any necessary patches are applied when
     installing the extension package. By default, your system's default Python 3 interpreter is used.
+    **If possible, use the container, it has everything needed included by default.**
 
 
 ## Single-File Extensions
@@ -1049,26 +1050,27 @@ fine for your use case; it's usually worth the time to evaluate a dependency usi
 
 We highly recommend using the official container image for developing extensions, since it already ships
 with all the dependencies required to run Wolpi with Python/JavaScript extensions (including those with
-third party dependencies). To do so, simply mount your configuration and your extension directories into
-the container and tell Wolpi where to find the configuration file:
+third party dependencies). To do so, simply mount your configuration and the directory with your extensions
+into the container:
 
 ```bash
 $ docker run \
     -p 8080:8080 \
-    -p 4711:4711 \ # (1)
-    -v config.yaml:/app/config.yaml \
-    -v ./my-plugins:/app/plugins \
-    -e WOLPI_CONFIG=/app/config.yaml \
+    -p 4711:4711 \ # (1)!
+    -v config.yml:/app/wolpi.yml \ # (2)!
+    -v ./my-extensions:/app/extensions \
     ghcr.io/dbmdz/wolpi:latest
 ```
 
 1. For debugging, see [below](#debugging-extensions)
+2. You can customize the configuration path inside the container by setting the `WOLPI_CONFIG`
+   environment variable, by default Wolpi will check `/app/wolpi.yml` or `/app/wolpi.yaml`
 
-Your `config.yaml` should specify the extension path relative to the location in the container:
+Your `config.yml` should specify the absolute path to the extension in the container:
 
 ```yaml
 extensions:
-  - path: /app/plugins/hello-world.js
+  - path: /app/extensions/hello-world.js
 ```
 
 ### Live Reload for local extensions
@@ -1158,12 +1160,12 @@ set breakpoints and step through your extension code.
 ## Working with Java classes from extensions
 
 Extensions have free access to all Java classes on the Wolpi classpath and can use them as needed
-to implement their functionality. To do so, use the [Graal Polyglot API][graal-polyglot-api] to
+to implement their functionality. To do so, use the *Graal Polyglot API* ([Python][graal-polyglot-py]/[JavaScript][graal-polyglot-js]) to
 get a reference to a Java class and then call its static methods or create instances as needed.
 
 === "JavaScript"
     ```typescript linenums="1"
-    const System = java.type('java.lang.System');
+    const System = Java.type('java.lang.System');
     System.out.println('Hello from JavaScript!');
     ```
 
@@ -1180,6 +1182,8 @@ that they can call  APIs on to perform image processing. This class comes from t
 [`vips-ffm`][vips-ffm] Java bindings for libvips, refer to the [JavaDoc][vips-ffm-javadoc] to learn
 more about the available APIs for image processing.
 
+[graal-polyglot-py]: https://www.graalvm.org/python/docs/#interoperability
+[graal-polyglot-js]: https://www.graalvm.org/latest/reference-manual/js/JavaInteroperability/#access-java-from-javascript
 [vimage-javadoc]: https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html
 [vips-ffm]: https://github.com/lopcode/vips-ffm
 [vips-ffm-javadoc]: https://vipsffm.photofox.app/
