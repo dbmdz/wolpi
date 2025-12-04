@@ -49,6 +49,10 @@ You can customize Wolpi's logging behavior through the `logging` section:
 - `format`: Log format, either `text` (colored, human-readable) or `json` (structured),
   defaults to `text`
 - `level`: Log level, one of `debug`, `info`, `warn`, `error`, defaults to `info`
+- `log-request-details-on-crash`: Whether to include the remote client address and request headers
+  when logging uncaught exceptions that occur while handling requests, defaults to `true`. Disable
+  if you consider these details to be sensitive information in your setup and don't want them to end
+  up in logs.
 
 
 ## HTTP Caching Headers
@@ -229,6 +233,7 @@ For more information about the extension pool, refer to the [section in the exte
 logging:
   level: info
   format: text
+  log-request-details-on-crash: true
 data-directory: "./data"
 image-base-dir: "./images"
 extensions: []

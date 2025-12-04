@@ -10,9 +10,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.CompositePropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -40,6 +40,22 @@ import org.springframework.core.io.FileSystemResource;
 public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
     private static final String CONFIG_ENV_PROP = "wolpi.config";
     private static final String CONFIG_CLI_PROP = "config";
+    // FIXME: For some reason the Log4J throwable filter ignores the first and the last entries, so
+    //        we need to add dummy entries there to make it work as intended.
+    private static final List<String> LOGGING_FILTERS = List.of(
+            "========================",
+            "org.apache.tomcat",
+            "org.apache.catalina",
+            "org.apache.coyote",
+            "java.lang.reflect",
+            "jdk.internal.reflect",
+            "jdk.proxy2",
+            "java.lang.Thread",
+            "jakarta.servlet",
+            "org.springframework.web",
+            "org.springframework.aop",
+            "org.graalvm.polyglot",
+            "========================");
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
@@ -134,7 +150,15 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
             } else if (config.logging().format() == LogFormat.TEXT) {
                 overrides.put(
                         "logging.pattern.console",
-                        "%clr(%d{HH:mm:ss.SSS}){faint} %replace(%replace(%replace(%replace(%replace(%level){'ERROR','\uD83D\uDCA3'}){'WARN','⚠️'}){'INFO','\uD83D\uDCAC'}){'DEBUG','\uD83D\uDC1B'}){'TRACE','\uD83D\uDC63'} %magenta(%logger{0}) %clr(%m) %X%n%xEx");
+                        "%clr(%d{HH:mm:ss.SSS}){faint} "
+                                + "%replace(%replace(%replace(%replace(%replace(%level)"
+                                + "{'ERROR','\uD83D\uDCA3'})"
+                                + "{'WARN','⚠️'})"
+                                + "{'INFO','\uD83D\uDCAC'})"
+                                + "{'DEBUG','\uD83D\uDC1B'})"
+                                + "{'TRACE','\uD83D\uDC63'} "
+                                + "%magenta(%logger{0}) %clr(%m) %X%n"
+                                + "%rEx{8,filters(" + String.join(",", LOGGING_FILTERS) + ")}");
             }
         }
         return new MapPropertySource("wolpi-logging-overrides", overrides);

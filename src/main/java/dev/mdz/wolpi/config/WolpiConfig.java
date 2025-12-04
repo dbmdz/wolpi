@@ -122,9 +122,13 @@ public record WolpiConfig(
     /// @param format Format of the log output, either `text` or `json`. Defaults to `text`.
     /// @param level Minimum log level, one of `trace`, `debug`, `info`, `warn`, `error`, or
     ///              `off`. Defaults to `info`.
+    /// @param logRequestDetailsOnCrash Whether to log the remote address and headers of the request
+    ///     that caused a crash, disable this to avoid logging potentially sensitive information.
+    ///     Defaults to `true`.
     public record LoggingConfig(
             @DefaultValue("text") LogFormat format,
-            @DefaultValue("info") LogLevel level) {}
+            @DefaultValue("info") LogLevel level,
+            @DefaultValue("true") boolean logRequestDetailsOnCrash) {}
 
     /// Supported log formats.
     public enum LogFormat {
