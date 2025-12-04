@@ -120,7 +120,7 @@ public class ImageApiValidator {
     /// @param ext  The extension to validate
     /// @param port The local server port Wolpi is currently listening on
     /// @return `true` if all tests passed with the extension enabled, `false` if any test failed
-    boolean validateExtension(LoadedExtension ext, int port) {
+    public boolean validateExtension(LoadedExtension ext, int port) {
         log.info(
                 "Running IIIF Image API validation tests with extension '{}'...",
                 ext.extensionInfo().name());

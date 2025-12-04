@@ -2,6 +2,7 @@ package dev.mdz.wolpi.validation;
 
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
+import dev.mdz.wolpi.extension.model.LoadedExtension;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,8 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
 
     private final ExtensionRegistry extensionRegistry;
     private final ImageApiValidator validator;
+    private final ExtensionValidationCache validationCache;
+    private final ExtensionHashCalculator hashCalculator;
     private final ApplicationEventPublisher publisher;
     private final ConfigurableApplicationContext context;
     private final WolpiConfig config;
@@ -40,11 +43,15 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
     public ValidatingRunner(
             ExtensionRegistry extensionRegistry,
             ImageApiValidator validator,
+            ExtensionValidationCache validationCache,
+            ExtensionHashCalculator hashCalculator,
             ApplicationEventPublisher publisher,
             ConfigurableApplicationContext context,
             WolpiConfig config) {
         this.extensionRegistry = extensionRegistry;
         this.validator = validator;
+        this.validationCache = validationCache;
+        this.hashCalculator = hashCalculator;
         this.publisher = publisher;
         this.context = context;
         this.config = config;
@@ -70,18 +77,50 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
             return;
         }
         AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.REFUSING_TRAFFIC);
-        log.info(
-                "Starting validation of {} registered extensions",
-                extensionRegistry.getExtensions().size());
-        if (!validator.runStartupExtensionValidation(this.serverPort)) {
-            log.error("Extension validation failed, fix or remove misbehaving extensions and restart.");
-            int exitCode = SpringApplication.exit(this.context, () -> 1);
-            System.exit(exitCode);
+
+        record ExtensionWithHash(LoadedExtension extension, String hash) {}
+        var allExtensions = extensionRegistry.getExtensions();
+        var extensionsToValidate = allExtensions.stream()
+                .map(ext -> new ExtensionWithHash(ext, hashCalculator.calculateHash(ext)))
+                .filter(ewh -> {
+                    var hash = hashCalculator.calculateHash(ewh.extension);
+                    if (validationCache.isValidated(ewh.extension, hash)) {
+                        log.debug(
+                                "Skipping validation for extension '{}' (hash: {}), already validated",
+                                ewh.extension.extensionInfo().name(),
+                                hash);
+                        return false;
+                    }
+                    return true;
+                })
+                .toList();
+
+        if (extensionsToValidate.isEmpty()) {
+            log.info("All {} extension(s) have been validated previously, skipping validation", allExtensions.size());
+        } else {
+            log.info(
+                    "Starting validation of {} extension(s) ({} cached, {} to validate)",
+                    allExtensions.size(),
+                    allExtensions.size() - extensionsToValidate.size(),
+                    extensionsToValidate.size());
+
+            for (var ewh : extensionsToValidate) {
+                log.info(
+                        "Validating extension '{}'...",
+                        ewh.extension.extensionInfo().name());
+                if (!validator.validateExtension(ewh.extension, this.serverPort)) {
+                    log.error("Extension validation failed, fix or remove misbehaving extensions and restart.");
+                    int exitCode = SpringApplication.exit(this.context, () -> 1);
+                    System.exit(exitCode);
+                }
+                validationCache.markValidated(ewh.extension, ewh.hash);
+            }
+
+            log.info(
+                    "Extension validation successful for all {} registered extension(s), accepting traffic.",
+                    allExtensions.size());
         }
 
-        log.info(
-                "Extension validation successful for all {} registered extensions, accepting traffic.",
-                extensionRegistry.getExtensions().size());
         AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.ACCEPTING_TRAFFIC);
         log.info(
                 "Listening on {}:{}",
