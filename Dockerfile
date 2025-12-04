@@ -8,9 +8,13 @@ RUN apt-get update -q && \
     apt-get install -qq -y --no-install-recommends openjdk-25-jdk maven && \
     rm -rf /var/lib/apt/lists/*
 
-COPY . .
+# Download dependencies in a separate layer to allow for caching
+COPY pom.xml .
+RUN mvn -q dependency:resolve-plugins dependency:go-offline
 
-RUN mvn -q clean install -DskipTests -Dspotless.check.skip=true
+# And only the copy the full source tree and build
+COPY . .
+RUN mvn package -DskipTests -Dspotless.check.skip=true
 
 # Stage 2: Create the runtime image with GraalVM
 FROM docker.io/debian:13.2-slim
@@ -40,6 +44,8 @@ RUN mkdir -p /opt/graalpy && \
     curl -L "${GRAALPY_URL}" | tar -xz --strip-components=1 -C /opt/graalpy
 RUN ln -s /opt/graalpy/bin/graalpy /usr/local/bin/graalpy
 
+# Make sure the output is by default colored when using text logging
+ENV SPRING_OUTPUT_ANSI_ENABLED="ALWAYS"
 ENV JAVA_HOME="/opt/graalvm"
 ENV PATH="/opt/graalvm/bin:${PATH}"
 

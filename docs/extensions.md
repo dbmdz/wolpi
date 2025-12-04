@@ -1089,6 +1089,9 @@ This feature comes with some caveats:
 
 - Only changes to the *source files* are picked up. If you make modifications to your
 `package.json` or `pyproject.toml`, you will have to restart Wolpi to have them take effect.
+- If you want live reload for single-file extensions mounted into a container,
+  you must mount the parent directory of the extension into the container, and
+  not just the file itself to get live reloading to work
 
 === "JavaScript"
     - The `npm` executable used must be at least version 10.
