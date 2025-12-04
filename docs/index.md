@@ -16,12 +16,12 @@ and resolving to the individual image operations and even the output encoding.
 The easiest way to run Wolpi is to use the official container image:
 
 ```bash
-docker run -p 8080:8080 -v <path_to_your_images>:/images ghcr.io/dbmdz/wolpi:latest
+docker run -p 8080:8080 -v <path_to_your_images>:/app/images ghcr.io/dbmdz/wolpi:latest
 ```
 
-By default, images will then be served from the `/images` directory inside the container, e.g. an
+By default, images will then be served from the `/app/images` directory inside the container, e.g. an
 image located  at `<path_to_your_images>/foo/bar/baz.jpg` on the host machine will be available at
-`http://localhost:8080/iiif/3/foo/bar/baz.jpg`.
+http://localhost:8080/3/foo/bar/baz.jpg/info.json (for info.json) and e.g. http://localhost:8080/3/foo/bar/baz.jpg/full/max/0/default.jpg (for an image request)
 
 ## Configuration
 Through the YAML-based configuration, you can customize various aspects of Wolpi's behavior, such as:
