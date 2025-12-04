@@ -176,6 +176,12 @@ public class ExtensionRuntimeTest {
         if (testArena != null) {
             testArena.close();
         }
+        // Clear the context pool to ensure no state leaks between tests
+        try {
+            contextPool.clear();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to clear context pool", e);
+        }
     }
 
     @Nested
