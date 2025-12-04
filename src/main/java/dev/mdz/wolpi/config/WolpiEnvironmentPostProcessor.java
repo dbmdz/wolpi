@@ -52,8 +52,7 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
             "jdk.proxy2",
             "java.lang.Thread",
             "jakarta.servlet",
-            "org.springframework.web",
-            "org.springframework.aop",
+            "org.springframework",
             "org.graalvm.polyglot",
             "========================");
 

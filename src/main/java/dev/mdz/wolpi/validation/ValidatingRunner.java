@@ -83,12 +83,11 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
         var extensionsToValidate = allExtensions.stream()
                 .map(ext -> new ExtensionWithHash(ext, hashCalculator.calculateHash(ext)))
                 .filter(ewh -> {
-                    var hash = hashCalculator.calculateHash(ewh.extension);
-                    if (validationCache.isValidated(ewh.extension, hash)) {
+                    if (validationCache.isValidated(ewh.extension, ewh.hash)) {
                         log.debug(
                                 "Skipping validation for extension '{}' (hash: {}), already validated",
                                 ewh.extension.extensionInfo().name(),
-                                hash);
+                                ewh.hash);
                         return false;
                     }
                     return true;

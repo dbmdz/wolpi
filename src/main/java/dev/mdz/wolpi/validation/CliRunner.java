@@ -6,6 +6,7 @@ import dev.mdz.wolpi.extension.NpmInstaller;
 import dev.mdz.wolpi.extension.PyPiInstaller;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.validation.CliRunner.InstallValidatorCommand;
 import dev.mdz.wolpi.validation.CliRunner.ValidationCommand;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
@@ -25,14 +26,16 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /// Runner that provides a "validate" CLI command to validate a Wolpi extension
-/// using the IIIF Image API validation suite.
+/// using the IIIF Image API validation suite and a "install-validator" command
+/// to pre-install the validation suite (e.g. for building a container image).
 ///
-/// The actual subcommand is implemented in the inner class [ValidationCommand].
+/// The actual subcommands are implemented in the inner classes.
 @Component
 @Command(
         mixinStandardHelpOptions = true,
-        subcommands = {ValidationCommand.class})
+        subcommands = {ValidationCommand.class, InstallValidatorCommand.class})
 public class CliRunner implements CommandLineRunner, Runnable {
+
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -47,7 +50,7 @@ public class CliRunner implements CommandLineRunner, Runnable {
     @Override
     public void run(String... args) throws Exception {
         // Pass over to picocli if "validate" command is given
-        if (Arrays.asList(args).contains("validate")) {
+        if (Arrays.stream(args).anyMatch(arg -> arg.equals("validate") || arg.equals("install-validator"))) {
             var filteredArgs = Arrays.stream(args)
                     .filter(arg -> !arg.startsWith("--spring.") && !arg.startsWith("-D") && !arg.startsWith("--wolpi."))
                     .toArray(String[]::new);
@@ -64,11 +67,12 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
     /// Subcommand that performs the actual validation of a Wolpi extension.
     ///
-    /// Detects changes to the extension file or directory and re-runs the validation
-    /// automatically if the `--watch` option is given.
+    /// Detects changes to the extension file or directory and re-runs the validation automatically
+    /// if the `--watch` option is given.
     @Component
     @Command(name = "validate", description = "Validate a local Wolpi extension")
     public static class ValidationCommand implements Runnable, ApplicationListener<WebServerInitializedEvent> {
+
         private final ExtensionRegistry extensionRegistry;
         private final ImageApiValidator imageApiValidator;
         private final PyPiInstaller pyPiInstaller;
@@ -192,6 +196,23 @@ public class CliRunner implements CommandLineRunner, Runnable {
             try (var _ = extensionRegistry.temporarilyIsolateExtension(ext)) {
                 return imageApiValidator.validateExtension(ext, this.serverPort);
             }
+        }
+    }
+
+    @Component
+    @Command(name = "install-validator", description = "Install the IIIF Image API validation suite")
+    public static class InstallValidatorCommand implements Runnable {
+
+        private final ImageApiValidator imageApiValidator;
+
+        public InstallValidatorCommand(ImageApiValidator imageApiValidator) {
+            this.imageApiValidator = imageApiValidator;
+        }
+
+        @Override
+        public void run() {
+            imageApiValidator.installValidator();
+            System.exit(0);
         }
     }
 }

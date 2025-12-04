@@ -56,6 +56,16 @@ RUN java -Djarmode=tools -jar /app.jar extract && \
     mv /app/app/* /app && \
     rm -rf /app/app
 
+RUN java --enable-native-access=ALL-UNNAMED \
+         --sun-misc-unsafe-memory-access=allow \
+         -jar /app/app.jar \
+         install-validator && \
+    mv /app/data /app/.data_preinstalled
+
 EXPOSE 8080
+
+# Copy the preinstalled validator venv to the /app/data directory, which might
+# have been bind-mounted from outside
+ENTRYPOINT ["/bin/sh", "-c", "cp -r -n /app/.data_preinstalled/. /app/data && exec \"$@\"", "--"]
 
 CMD ["java", "-jar", "--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow", "/app/app.jar"]
