@@ -1,23 +1,27 @@
 package dev.mdz.wolpi.validation;
 
 import dev.mdz.wolpi.config.ExtensionConfig;
+import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.NpmInstaller;
 import dev.mdz.wolpi.extension.PyPiInstaller;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.validation.CliRunner.InstallExtensionsCommand;
 import dev.mdz.wolpi.validation.CliRunner.InstallValidatorCommand;
 import dev.mdz.wolpi.validation.CliRunner.ValidationCommand;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.web.server.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -33,7 +37,7 @@ import picocli.CommandLine.Parameters;
 @Component
 @Command(
         mixinStandardHelpOptions = true,
-        subcommands = {ValidationCommand.class, InstallValidatorCommand.class})
+        subcommands = {ValidationCommand.class, InstallValidatorCommand.class, InstallExtensionsCommand.class})
 public class CliRunner implements CommandLineRunner, Runnable {
 
     private static final Logger log =
@@ -50,9 +54,13 @@ public class CliRunner implements CommandLineRunner, Runnable {
     @Override
     public void run(String... args) throws Exception {
         // Pass over to picocli if "validate" command is given
-        if (Arrays.stream(args).anyMatch(arg -> arg.equals("validate") || arg.equals("install-validator"))) {
+        if (Arrays.stream(args).anyMatch(arg -> List.of("validate", "install-validator", "install-extensions")
+                .contains(arg))) {
             var filteredArgs = Arrays.stream(args)
-                    .filter(arg -> !arg.startsWith("--spring.") && !arg.startsWith("-D") && !arg.startsWith("--wolpi."))
+                    .filter(arg -> !arg.startsWith("--spring.")
+                            && !arg.startsWith("-D")
+                            && !arg.startsWith("--wolpi.")
+                            && !arg.startsWith("--config"))
                     .toArray(String[]::new);
             int exitCode = new CommandLine(this, picoCliFactory).execute(filteredArgs);
             exitHandler.accept(exitCode);
@@ -205,6 +213,8 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
         private final ImageApiValidator imageApiValidator;
 
+        Consumer<Integer> exitHandler = System::exit;
+
         public InstallValidatorCommand(ImageApiValidator imageApiValidator) {
             this.imageApiValidator = imageApiValidator;
         }
@@ -212,7 +222,39 @@ public class CliRunner implements CommandLineRunner, Runnable {
         @Override
         public void run() {
             imageApiValidator.installValidator();
-            System.exit(0);
+            exitHandler.accept(0);
+        }
+    }
+
+    // Don't run as part of default integration tests, since ValidatingRunner is unavailable there
+    @Profile("!test")
+    @Component
+    @Command(name = "install-extensions", description = "Install and verify extensions from the configuration")
+    public static class InstallExtensionsCommand implements Runnable {
+
+        private final WolpiConfig wolpiConfig;
+        private final ValidatingRunner validatingRunner;
+
+        Consumer<Integer> exitHandler = System::exit;
+
+        public InstallExtensionsCommand(WolpiConfig wolpiConfig, ValidatingRunner validatingRunner) {
+            this.wolpiConfig = wolpiConfig;
+            this.validatingRunner = validatingRunner;
+        }
+
+        @Override
+        public void run() {
+            if (wolpiConfig.extensions().isEmpty()) {
+                log.info("No extensions found in configuration, exiting.");
+                exitHandler.accept(0);
+            }
+            int exitCode = 0;
+            if (validatingRunner.validateAllExtensions()) {
+                log.info("Extensions installed and validated successfully.");
+            } else {
+                exitCode = 1;
+            }
+            exitHandler.accept(exitCode);
         }
     }
 }

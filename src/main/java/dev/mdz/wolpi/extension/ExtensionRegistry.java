@@ -114,6 +114,7 @@ public class ExtensionRegistry implements AutoCloseable {
             return;
         }
         // Parallelize extension loading to speed up application startup time
+        Set<ExtensionConfig> failedExtensions = new HashSet<>();
         try (ExecutorService pool =
                 Executors.newFixedThreadPool(cfg.extensions().size())) {
             List<Callable<LoadedExtension>> loadingTasks = cfg.extensions().stream()
@@ -130,6 +131,9 @@ public class ExtensionRegistry implements AutoCloseable {
                         } catch (RuntimeException e) {
                             log.error("Unexpected error while loading extension from " + ext, e);
                         }
+                        if (loaded == null) {
+                            failedExtensions.add(ext);
+                        }
                         return loaded;
                     })
                     .toList();
@@ -138,6 +142,9 @@ public class ExtensionRegistry implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
         cfg.extensions().forEach(ext -> {
+            if (failedExtensions.contains(ext)) {
+                return;
+            }
             LoadedExtension loadedExtension = loadedExtensions.get(ext);
             for (ExtensionHooks hook : loadedExtension.implementedHooks()) {
                 implementedHooks

@@ -11,6 +11,7 @@ You can specify a different configuration file location by either:
 
 - setting the `WOLPI_CONFIG` environment variable with the path to your YAML file (`WOLPI_CONFIG=/path/to/wolpi.yml`), or
 - passing the `--config=<path>` command-line argument when starting Wolpi (`java -jar wolpi.jar --config=/path/to/wolpi.yml`).
+  Make sure to include the `=` between the `--config` flag and the path!
 
 ## General Configuration
 

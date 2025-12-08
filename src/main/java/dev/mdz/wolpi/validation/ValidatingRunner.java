@@ -57,27 +57,7 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
         this.config = config;
     }
 
-    /// Run validation on all registered extensions after the web server is ready.
-    ///
-    /// The application is marked as REFUSING_TRAFFIC during validation and only marked as
-    /// ACCEPTING_TRAFFIC if all extensions pass validation. This ensures that health checks
-    /// can run against the application during validation, but no external traffic is routed to it.
-    @Override
-    public void run(ApplicationArguments args) throws Exception {
-        // Don't validate if we have no extensions, or if we're running in a mock servlet context,
-        // where the validation tests don't have access to a real HTTP server.
-        boolean skipValidation = extensionRegistry.getExtensions().isEmpty() || this.serverPort == 0;
-        if (skipValidation) {
-            log.info(
-                    "Listening on {}:{}",
-                    this.config.http() == null
-                            ? "localhost"
-                            : this.config.http().host(),
-                    this.serverPort);
-            return;
-        }
-        AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.REFUSING_TRAFFIC);
-
+    public boolean validateAllExtensions() {
         record ExtensionWithHash(LoadedExtension extension, String hash) {}
         var allExtensions = extensionRegistry.getExtensions();
         var extensionsToValidate = allExtensions.stream()
@@ -108,16 +88,43 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
                         "Validating extension '{}'...",
                         ewh.extension.extensionInfo().name());
                 if (!validator.validateExtension(ewh.extension, this.serverPort)) {
-                    log.error("Extension validation failed, fix or remove misbehaving extensions and restart.");
-                    int exitCode = SpringApplication.exit(this.context, () -> 1);
-                    System.exit(exitCode);
+                    log.error(
+                            "Validation of extension '{}' failed, fix or remove and restart.",
+                            ewh.extension.extensionInfo().name());
+                    return false;
                 }
                 validationCache.markValidated(ewh.extension, ewh.hash);
             }
 
+            log.info("Extension validation successful for all {} registered extension(s).", allExtensions.size());
+        }
+        return true;
+    }
+
+    /// Run validation on all registered extensions after the web server is ready.
+    ///
+    /// The application is marked as REFUSING_TRAFFIC during validation and only marked as
+    /// ACCEPTING_TRAFFIC if all extensions pass validation. This ensures that health checks
+    /// can run against the application during validation, but no external traffic is routed to it.
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        // Don't validate if we have no extensions, or if we're running in a mock servlet context,
+        // where the validation tests don't have access to a real HTTP server.
+        boolean skipValidation = extensionRegistry.getExtensions().isEmpty() || this.serverPort == 0;
+        if (skipValidation) {
             log.info(
-                    "Extension validation successful for all {} registered extension(s), accepting traffic.",
-                    allExtensions.size());
+                    "Listening on {}:{}",
+                    this.config.http() == null
+                            ? "localhost"
+                            : this.config.http().host(),
+                    this.serverPort);
+            return;
+        }
+        AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.REFUSING_TRAFFIC);
+
+        if (!this.validateAllExtensions()) {
+            int exitCode = SpringApplication.exit(this.context, () -> 1);
+            System.exit(exitCode);
         }
 
         AvailabilityChangeEvent.publish(this.publisher, this, ReadinessState.ACCEPTING_TRAFFIC);

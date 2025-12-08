@@ -31,7 +31,7 @@ export default function fetchSync(url, options = {}) {
 
   const request = builder.build();
 
-  const javaResponse = wolpi.httpClient().send(request, BodyHandlers.ofByteArray());
+  const javaResponse = wolpi.httpClient.send(request, BodyHandlers.ofByteArray());
   const bodyBytes = javaResponse.body();
 
   const headers = {};

@@ -3,9 +3,9 @@
 /// modules:
 /// - [dev.mdz.wolpi.config] - Application configuration classes
 /// - [dev.mdz.wolpi.controller] - HTTP controller implementing IIIF Image API endpoints
+/// - [dev.mdz.wolpi.extension] - Extension system for JavaScript and Python plugins
 /// - [dev.mdz.wolpi.iiif] - IIIF info.json generation, compliance checks and request parsing
 /// - [dev.mdz.wolpi.image] - Image loading and processing operations using libvips
-/// - [dev.mdz.wolpi.extension] - Extension system for JavaScript and Python plugins
 /// - [dev.mdz.wolpi.model] - Shared domain model
-/// - [dev.mdz.wolpi.exceptions] - Custom exception types for error handling
+/// - [dev.mdz.wolpi.validation] - Extension validation using the IIIF Image API validation suite
 package dev.mdz.wolpi;
