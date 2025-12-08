@@ -96,6 +96,9 @@ public class ImageLoader {
     ///                 X-Forwarded-* headers.
     /// @return True if access is authorized, false otherwise.
     public boolean authorize(String identifier, Map<String, List<String>> headers, String clientIp) {
+        if (identifier.startsWith(VALIDATION_ID_PREFIX)) {
+            return true;
+        }
         return extensionRuntime.authorize(identifier, headers, clientIp);
     }
 
