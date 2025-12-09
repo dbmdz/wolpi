@@ -25,7 +25,7 @@ ENV LANG=C.UTF-8
 # Dependencies for libvips, npm and building of python wheels
 RUN apt-get update -q && \
     apt-get install -qq -y --no-install-recommends \
-        libvips42t64 libglib2.0-0t64 ca-certificates curl npm build-essential libffi-dev && \
+        libvips42t64 libglib2.0-0t64 ca-certificates curl npm build-essential libffi-dev patchelf && \
     rm -rf /var/lib/apt/lists/*
 
 
