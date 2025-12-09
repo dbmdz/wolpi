@@ -142,7 +142,10 @@ public class ImageApiValidator {
             if (allFailures.isEmpty()) {
                 continue;
             }
-            log.error("Extension '{}' caused IIF Image API v{} validation failures:", ext, version.value());
+            log.error(
+                    "Extension '{}' caused IIF Image API v{} validation failures:",
+                    ext.extensionInfo().name(),
+                    version.value());
             for (var entry : allFailures) {
                 var test = entry.getKey();
                 for (var failure : entry.getValue()) {
