@@ -231,7 +231,35 @@ public class GraalContextSupplier {
             ctx.getBindings("python").putMember("__wolpi_module__", guestCtx);
             ctx.eval("python", """
                     import sys
+                    import types
+
+
+                    class HttpStatusError(Exception):
+                        \"""
+                        Exception to return a HTTP response with a status code, a message and an
+                        optional JSON body.
+                        \"""
+
+                        #: Error message associated with the exception
+                        message: str
+
+                        #: HTTP status code associated with the exception
+                        status: int
+
+                        #: Optional JSON body to include in the response
+                        details: dict | None
+
+                        def __init__(self, message: str, status: int, details: dict | None = None):
+                            self.message = message
+                            self.status = status
+                            self.details = details
+                            super().__init__(message)
+
+                    error_module = types.ModuleType("wolpi.errors")
+                    error_module.HttpStatusError = HttpStatusError
+
                     sys.modules['wolpi'] = __wolpi_module__
+                    sys.modules['wolpi.errors'] = error_module
                     """);
         } finally {
             ctx.leave();

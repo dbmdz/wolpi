@@ -4,6 +4,7 @@ import time
 import java
 
 import wolpi
+from wolpi.errors import HttpStatusError
 
 COLOR_PAT = re.compile(r"^#(?P<red>[0-9a-fA-F]{2})(?P<green>[0-9a-fA-F]{2})(?P<blue>[0-9a-fA-F]{2})$")
 
@@ -21,10 +22,23 @@ class TestExtension:
       "description": "A test extension written in Python to test hook calling."
     }
 
+  def _raise_from_id(self, identifier: str):
+    if identifier == "py-raise-http-400":
+      raise HttpStatusError(
+          message="HTTP 400 from py", status=400,
+          details={"error": "Bad Request"})
+    if identifier == "py-raise-http-418":
+      raise HttpStatusError(
+          message="HTTP 418 from py", status=418,
+          details={"error": "I'm a teapot"})
+    if identifier == "py-raise":
+      raise Exception("Generic exception from py")
+
   def cleanup(self):
     pass
 
   def authorize(self, identifier: str, headers: dict, client_ip: str) -> bool:
+    self._raise_from_id(identifier)
     if wolpi.config is None:
       return True
     wolpi_cfg = dict(wolpi.config)
@@ -39,6 +53,7 @@ class TestExtension:
     return True
 
   def resolve(self, identifier, etag, last_modified):
+    self._raise_from_id(identifier)
     if wolpi.config is None:
       return None
     wolpi_cfg = wolpi.config
@@ -57,12 +72,14 @@ class TestExtension:
     }
 
   def augment_info_json(self, identifier: str, info_json: dict, iiif_version: int) -> dict:
+    self._raise_from_id(identifier)
     return {
       **info_json,
       "augmentedFromPython": f"{identifier}-{iiif_version}"
     }
 
   def pre_process_image(self, image, identifier: str, image_info, image_request):
+    self._raise_from_id(identifier)
     if not identifier.startswith("watermarked:"):
       return None
     cfg = wolpi.config or {}
@@ -80,37 +97,42 @@ class TestExtension:
       return None
 
   def pre_scale(self, image, identifier: str, image_info, image_request):
+    self._raise_from_id(identifier)
     if not image_request.sizeSpec.startswith("custom:"):
-        return None
+      return None
     scale_spec = image_request.sizeSpec.replace("custom:", "")
     dimensions = wolpi.imageRequestParser.parseSize(image_request.version, scale_spec, image_info.nativeSize)
     return image.thumbnailImage(dimensions.width, VipsOption.Int("height", dimensions.height), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
   def pre_crop(self, image, identifier: str, image_info, image_request):
+    self._raise_from_id(identifier)
     if not image_request.cropSpec.startswith("custom"):
-        return None
+      return None
     x, y, width, height = image_request.cropSpec.replace("custom:", "").split(",")
     return image.extractArea(int(x), int(y), int(width), int(height))
 
   def pre_rotate(self, image, identifier: str, image_info, image_request):
-      if not image_request.rotationSpec.startswith("custom"):
-          return None
-      exif_orientation = image.getInt("exif-ifd0-Orientation")
-      rotated = image
-      if exif_orientation == 8:
-          rotated = image.rotate(90.0)
-      elif exif_orientation == 3:
-          rotated = image.rotate(180.0)
-      elif exif_orientation == 6:
-          rotated = image.rotate(270.0)
-      return rotated
+    self._raise_from_id(identifier)
+    if not image_request.rotationSpec.startswith("custom"):
+      return None
+    exif_orientation = image.getInt("exif-ifd0-Orientation")
+    rotated = image
+    if exif_orientation == 8:
+      rotated = image.rotate(90.0)
+    elif exif_orientation == 3:
+      rotated = image.rotate(180.0)
+    elif exif_orientation == 6:
+      rotated = image.rotate(270.0)
+    return rotated
 
   def pre_quality(self, image, identifier: str, image_info, image_request):
-      if not image_request.qualitySpec.startswith("custom"):
-          return None
-      return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
+    self._raise_from_id(identifier)
+    if not image_request.qualitySpec.startswith("custom"):
+      return None
+    return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
 
   def pre_format(self, image, identifier: str, image_info, image_request):
+    self._raise_from_id(identifier)
     if image_request.formatSpec != "pixl":
       return None
     print("Converting image to PIXL format")

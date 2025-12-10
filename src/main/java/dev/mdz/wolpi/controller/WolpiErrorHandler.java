@@ -1,11 +1,13 @@
 package dev.mdz.wolpi.controller;
 
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.exceptions.HttpStatusException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,13 @@ public class WolpiErrorHandler extends ResponseEntityExceptionHandler {
 
     public WolpiErrorHandler(WolpiConfig config) {
         this.logDetails = config.logging() == null || config.logging().logRequestDetailsOnCrash();
+    }
+
+    @ExceptionHandler(HttpStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpStatusError(HttpStatusException ex) {
+        Map<String, Object> body =
+                ex.details() != null ? ex.details() : Collections.singletonMap("message", ex.message());
+        return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode())).body(body);
     }
 
     @ExceptionHandler(Exception.class)

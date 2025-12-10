@@ -14,6 +14,16 @@ const VipsOption = Java.type("app.photofox.vipsffm.VipsOption");
 const VipsSize = Java.type("app.photofox.vipsffm.enums.VipsSize")
 const VTarget = Java.type("app.photofox.vipsffm.VTarget");
 
+function raiseFromIdentifier(identifier) {
+  if (identifier === 'js-raise-http-400') {
+    throw { "status": 400, message: "HTTP 400 from js" }
+  } else if (identifier === "js-raise-http-418") {
+    throw { "status": 418, message: "HTTP 418 from js" }
+  } else if (identifier === "js-raise") {
+    throw new Error("Generic error from js");
+  }
+}
+
 export default {
   info() {
     const System = Java.type("java.lang.System")
@@ -26,6 +36,7 @@ export default {
   },
 
   authorize(identifier, headers, clientIp) {
+    raiseFromIdentifier(identifier);
     if (!wolpi.config) {
       return true;
     }
@@ -53,6 +64,7 @@ export default {
   },
 
   resolve(identifier, eTag, lastModified) {
+    raiseFromIdentifier(identifier);
     if (eTag === "not-modified") {
       return { notModified: true };
     }

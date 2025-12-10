@@ -44,6 +44,8 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
     //        we need to add dummy entries there to make it work as intended.
     private static final List<String> LOGGING_FILTERS = List.of(
             "========================",
+            "com.oracle.graal.python.nodes",
+            "com.oracle.truffle.runtime",
             "org.apache.tomcat",
             "org.apache.catalina",
             "org.apache.coyote",
@@ -51,6 +53,7 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
             "jdk.internal.reflect",
             "jdk.proxy2",
             "java.lang.Thread",
+            "java.util.stream",
             "jakarta.servlet",
             "org.springframework",
             "org.graalvm.polyglot",

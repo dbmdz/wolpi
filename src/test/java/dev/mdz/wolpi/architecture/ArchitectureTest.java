@@ -32,6 +32,8 @@ public class ArchitectureTest {
             .definedBy("..wolpi.image")
             .layer("Model")
             .definedBy("dev.mdz.wolpi.model")
+            .layer("Shared Exceptions")
+            .definedBy("dev.mdz.wolpi.exceptions")
 
             // Support components
             .layer("Config")
@@ -65,7 +67,7 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule noGraalVMLeaks = noClasses()
             .that()
-            .resideOutsideOfPackages("..wolpi.extension..", "..wolpi.validation..")
+            .resideOutsideOfPackages("..wolpi.extension..", "..wolpi.validation..", "..wolpi.exceptions..")
             .should()
             .accessClassesThat(resideInAPackage("..graalvm.."));
 

@@ -1,6 +1,8 @@
 package dev.mdz.wolpi.extension;
 
 import app.photofox.vipsffm.VImage;
+import dev.mdz.wolpi.exceptions.ExtensionExecutionException;
+import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
@@ -26,6 +28,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import org.apache.commons.pool2.KeyedObjectPool;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyObject;
@@ -254,6 +257,8 @@ public interface ExtensionRuntime extends AutoCloseable {
                 var ctx = ensureRuntimeContext(authExts.get(0));
                 try (var lease = ctx.enter()) {
                     return runAuthExtension(ctx.getLang(), lease.extension(), identifier, headers, clientIp);
+                } catch (PolyglotException pe) {
+                    handleExtensionException(pe);
                 }
             }
 
@@ -284,9 +289,7 @@ public interface ExtensionRuntime extends AutoCloseable {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
-                    log.error("Error while running extension authorization, denying access", e);
-                    authorized = false;
-                    break;
+                    handleExtensionException(e.getCause());
                 }
             }
 
@@ -294,6 +297,24 @@ public interface ExtensionRuntime extends AutoCloseable {
             futs.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
 
             return authorized;
+        }
+
+        /// Handle exceptions thrown from extension code.
+        ///
+        /// If the exception is a [PolyglotException], try to map it to an [HttpStatusException] if possible,
+        /// otherwise rethrow the original exception. For other exception types, wrap them in an
+        /// [ExtensionExecutionException] and throw that.
+        private void handleExtensionException(Throwable err) {
+            if (!(err instanceof PolyglotException pe)) {
+                throw new ExtensionExecutionException("Unknown error while executing extension code", err);
+            }
+
+            var httpError = HttpStatusException.fromGuestException(pe);
+            if (httpError != null) {
+                throw httpError;
+            } else {
+                throw new ExtensionExecutionException("Extension raised an error during execution", pe);
+            }
         }
 
         private boolean runAuthExtension(
@@ -327,6 +348,8 @@ public interface ExtensionRuntime extends AutoCloseable {
                 RuntimeContext ctx = ensureRuntimeContext(resolveExts.get(0));
                 try (var lease = ctx.enter()) {
                     return runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
+                } catch (PolyglotException pe) {
+                    handleExtensionException(pe);
                 }
             }
 
@@ -344,6 +367,7 @@ public interface ExtensionRuntime extends AutoCloseable {
 
             ImageSource resolved = null;
             int completed = 0;
+            Throwable err = null;
             while (completed < resolveExts.size()) {
                 try {
                     var fut = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
@@ -360,13 +384,17 @@ public interface ExtensionRuntime extends AutoCloseable {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
-                    log.error("Error while running resolving hook, ignoring.", e);
-                    completed++;
+                    handleExtensionException(e.getCause());
                 }
             }
 
             // Cancel all remaining futures if we didn't complete them all
             futures.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
+
+            // If we didn't get a result, but had an error, rethrow it
+            if (resolved == null && err != null) {
+                handleExtensionException(err);
+            }
 
             return resolved;
         }
@@ -410,15 +438,23 @@ public interface ExtensionRuntime extends AutoCloseable {
             Map<String, Object> augmented = null;
             for (LoadedExtension ext : infoJsonExts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
-                var rv = ctx.runHook(
-                        ExtensionHooks.INFO_JSON,
-                        identifier,
-                        PolyglotHelpers.toGuest(augmented != null ? augmented : standardInfoJson, ctx.getLang()),
-                        iiifVersion.value());
-                if (rv != null && !rv.isNull()) {
-                    augmented = rv.as(InfoJson);
+                try {
+                    var rv = ctx.runHook(
+                            ExtensionHooks.INFO_JSON,
+                            identifier,
+                            PolyglotHelpers.toGuest(augmented != null ? augmented : standardInfoJson, ctx.getLang()),
+                            iiifVersion.value());
+                    if (rv != null && !rv.isNull()) {
+                        augmented = rv.as(InfoJson);
+                    }
+                } catch (PolyglotException pe) {
+                    handleExtensionException(pe);
                 }
             }
+            if (augmented == null) {
+                return null;
+            }
+            //noinspection unchecked
             return (Map<String, Object>) PolyglotHelpers.toHost(augmented);
         }
 
@@ -428,27 +464,31 @@ public interface ExtensionRuntime extends AutoCloseable {
             VImage processed = null;
             for (LoadedExtension ext : exts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
-                var rv = ctx.runHook(
-                        ExtensionHooks.PREPROCESS_IMAGE,
-                        processed == null ? image : processed,
-                        identifier,
-                        info,
-                        request);
-                if (rv == null || rv.isNull()) {
-                    continue;
+                try {
+                    var rv = ctx.runHook(
+                            ExtensionHooks.PREPROCESS_IMAGE,
+                            processed == null ? image : processed,
+                            identifier,
+                            info,
+                            request);
+                    if (rv == null || rv.isNull()) {
+                        continue;
+                    }
+                    VImage tmp = rv.as(VImage.class);
+                    if (tmp.getWidth() != image.getWidth() || tmp.getHeight() != image.getHeight()) {
+                        log.warn(
+                                "Preprocessing hook in extension {} returned image with different dimensions ({}x{}) than input image ({}x{}), ignoring result.",
+                                ext.extensionInfo().name(),
+                                tmp.getWidth(),
+                                tmp.getHeight(),
+                                image.getWidth(),
+                                image.getHeight());
+                        continue;
+                    }
+                    processed = tmp;
+                } catch (PolyglotException pe) {
+                    handleExtensionException(pe);
                 }
-                VImage tmp = rv.as(VImage.class);
-                if (tmp.getWidth() != image.getWidth() || tmp.getHeight() != image.getHeight()) {
-                    log.warn(
-                            "Preprocessing hook in extension {} returned image with different dimensions ({}x{}) than input image ({}x{}), ignoring result.",
-                            ext.extensionInfo().name(),
-                            tmp.getWidth(),
-                            tmp.getHeight(),
-                            image.getWidth(),
-                            image.getHeight());
-                    continue;
-                }
-                processed = tmp;
             }
             return processed;
         }
@@ -466,11 +506,16 @@ public interface ExtensionRuntime extends AutoCloseable {
         private @Nullable VImage runHookWithEarlyExit(
                 ExtensionHooks hook, VImage image, String identifier, ImageInfo info, ImageRequest request) {
             List<LoadedExtension> exts = registry.getExtensions(hook);
+            Throwable err = null;
             for (LoadedExtension ext : exts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
-                var rv = ctx.runHook(hook, image, identifier, info, request);
-                if (rv != null && !rv.isNull()) {
-                    return rv.as(VImage.class);
+                try {
+                    var rv = ctx.runHook(hook, image, identifier, info, request);
+                    if (rv != null && !rv.isNull()) {
+                        return rv.as(VImage.class);
+                    }
+                } catch (PolyglotException pe) {
+                    handleExtensionException(pe);
                 }
             }
             return null;
@@ -491,9 +536,13 @@ public interface ExtensionRuntime extends AutoCloseable {
             List<LoadedExtension> formatExts = registry.getExtensions(ExtensionHooks.FORMAT);
             for (LoadedExtension ext : formatExts) {
                 RuntimeContext ctx = ensureRuntimeContext(ext);
-                var rv = ctx.runHook(ExtensionHooks.FORMAT, image, identifier, info, request);
-                if (rv != null && !rv.isNull()) {
-                    return rv.as(EncodedImage.class);
+                try {
+                    var rv = ctx.runHook(ExtensionHooks.FORMAT, image, identifier, info, request);
+                    if (rv != null && !rv.isNull()) {
+                        return rv.as(EncodedImage.class);
+                    }
+                } catch (PolyglotException pe) {
+                    handleExtensionException(pe);
                 }
             }
             return null;

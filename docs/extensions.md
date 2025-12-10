@@ -1,5 +1,8 @@
 # Extensions
 
+??? bug "TODO"
+    - Split into "Using Extensions" and "Developing Extensions" to reduce complexity for non-developers
+
 Wolpi's functionality can be extended with custom logic written in JavaScript or Python. This allows
 for integration with various authentication providers and image sources as well as customizing
 the standard processing pipelines with extra syntax or entirely custom behavior.
@@ -739,6 +742,43 @@ extensions:
       apiUrl: "https://api.example.com"
 ```
 
+## Behavior when multiple extensions implement the same hook
+
+When configuring multiple extensions, it can happen that more than one extension implements
+the same hook. What happens in this case depends on the hook:
+
+### `authorize`
+Called **in parallel** until one returns `false`, in which case the request is
+considered unauthorized and all other pending hook calls are canceled. If all return `true`,
+the request is authorized. If any of the extensions throws an error, the request fails with a
+error response.
+
+### `resolve`
+Called **in parallel** until one resolves to a valid image source, in which case all other
+pending hook calls are canceled. If none resolve the identifier, the request fails with
+a `404 Not Found` error. If any of the extensions throws an error and none of the others can
+resolve the identifier, the request fails with an error response, otherwise the error is logged
+and the first successful resolution is used.
+
+!!! warning "Order is not guaranteed!"
+
+    Since the `authorize` and `resolve` hooks are called in parallel, there is no guarantee
+    about the order in which the extensions are called. If you have multiple extensions that
+    implement these hooks, ensure that they do not depend on being called in a specific order and
+    ideally that there is no overlap in the identifiers they can handle.
+    If you need ordered behavior, e.g. to implement a custom "fallback resolver", consider combining
+    the logic into a single extension by declaring the other extensions as dependencies in your own
+    extension package, assuming they share a programming language.
+
+### `augmentInfoJson` and `preProcessImage`
+Called in sequence, passing the result of each hook as the input to the next one. If any of them
+throw an error, the request fails with an error response.
+
+### `preCrop`, `preScale`, `preRotate`, `preQuality`, `preFormat`
+Called in sequence until one returns a non-null result. If none returns a non-null result,
+the standard implementation for that operation is used. If any of them throw an error,
+the request fails with an error response.
+
 ## JavaScript Extensions
 
 Wolpi uses [GraalVM's JavaScript runtime][graaljs] to run JavaScript extensions. This runtime
@@ -1042,6 +1082,85 @@ fine for your use case; it's usually worth the time to evaluate a dependency usi
     4.  Here we check the request-scoped state variable that we have previously set in `authorize`,
         since we no longer have access to the HTTP headers at this point
     5.  And finally, we must reset the state variable so the next request gets a clean state
+
+## Error Handling in Extensions
+
+By default, any exception that is raised in an extension hook will be logged along with a (filtered
+to reduce noise) stack trace. Depending on the hook where the exception occurred, Wolpi will either
+return a HTTP 500 response to the client, or skip the extension and continue processing with the next
+extension (if multiple extensions are configured).
+
+If you need to return a HTTP error response to the client from within an extension hook, you can
+raise a special exception from your extension hooks:
+
+=== "JavaScript"
+    ```typescript
+    type HttpStatusError = {
+      message: string;
+      status: number;
+      details?: {[key: string]: any};
+    }
+
+    export default {
+      // info/cleanup omitted for brevity
+      resolve: (identifier) => {
+        if (identifier === 'broken-identifier') {
+          throw {
+            "message": "Got a broken identifier",
+            "status": 400,
+            "details": {
+              "cause": "identifier had 'broken' in it."
+            }
+          }
+        }
+      }
+      // ...
+    }
+    ```
+=== "Python"
+    ```python title="wolpi.errors"
+    class HttpStatusError(Exception):
+        """
+        Exception to return a HTTP response with a status code, a message and an
+        optional JSON body.
+        """
+
+        #: Error message associated with the exception
+        message: str
+
+        #: HTTP status code associated with the exception
+        status: int
+
+        #: Optional JSON body to include in the response
+        details: dict | None
+
+        def __init__(self, message: str, status: int, details: dict | None = None):
+            self.message = message
+            self.status = status
+            self.details = details
+            super().__init__(message)
+    ```
+
+    ``` python
+    from wolpi.errors import HttpStatusError
+
+    def resolve(identifier: str) -> ImageSource:
+      if identifier == 'broken-identifier':
+        raise HttpStatusError(
+          message='Got a broken identifier',
+          status=400,
+          details={
+            'cause': "identifier had 'broken' in it."
+          }
+        )
+    ```
+
+If  Wolpi encounters such an exception, it will return a corresponding HTTP response to the client,
+except for the `resolve` hook, where it will skip the extension and continue processing with the
+other configured resolving extensions. Only if no other extension is able to resolve the identifier,
+Wolpi will return the error response from the first extension that raised such an exception.
+Otherwise, the exception is logged and Wolpi continues processing with the result of the other
+successful extension.
 
 ## Developing Extensions
 

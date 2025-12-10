@@ -15,6 +15,8 @@ import dev.mdz.wolpi.config.WolpiConfig.CacheControlHeaders;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionPoolConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
+import dev.mdz.wolpi.exceptions.ExtensionExecutionException;
+import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -253,6 +255,43 @@ public class ExtensionRuntimeTest {
                         .isTrue();
             }
         }
+
+        @ParameterizedTest
+        @CsvSource({"js,single", "py,single", "js,multi", "py,single"})
+        @DisplayName("Should raise an HttpStatusError if an extension raises an HttpStatusError during authorization")
+        void shouldRaiseHttpStatusErrorOnAuthorizationError(String lang, String cardinality) {
+            List<ExtensionConfig> exts = new ArrayList<>();
+            exts.add(getTestAuthExtension(TestExtensionType.JS, null, null, null, Map.of()));
+            exts.add(getTestAuthExtension(TestExtensionType.PY_SINGLE, null, null, null, Map.of()));
+            if (cardinality.equals("single")) {
+                exts.remove(lang.equals("js") ? 1 : 0);
+            }
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                String ident = "%s-raise-http-418".formatted(lang);
+                Assertions.assertThatThrownBy(() -> runtime.authorize(ident, Map.of(), "127.0.0.1"))
+                        .isInstanceOf(HttpStatusException.class)
+                        .hasFieldOrPropertyWithValue("httpStatusCode", 418);
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"py,single", "js,single", "py,multi", "js,multi"})
+        @DisplayName(
+                "Should raise generic ExtensionExecutionError if an extension raises a generic error during authorization")
+        void shouldRaiseGenericErrorOnAuthorizationError(String lang, String cardinality) {
+            List<ExtensionConfig> exts = new ArrayList<>();
+            exts.add(getTestAuthExtension(TestExtensionType.PY_SINGLE, null, null, null, Map.of()));
+            exts.add(getTestAuthExtension(TestExtensionType.JS, null, null, null, Map.of()));
+            if (cardinality.equals("single")) {
+                exts.remove(lang.equals("js") ? 0 : 1);
+            }
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                String ident = "%s-raise".formatted(lang);
+                Assertions.assertThatThrownBy(() -> runtime.authorize(ident, Map.of(), "127.0.0.1"))
+                        .isInstanceOf(ExtensionExecutionException.class)
+                        .hasMessageContaining("Extension raised an error during execution");
+            }
+        }
     }
 
     @Nested
@@ -382,6 +421,43 @@ public class ExtensionRuntimeTest {
                 // HTTP resolver sleeps for 10 seconds, so if it was not cancelled, the total duration would
                 // be > 1 minute
                 assertThat(duration).isLessThan(Duration.ofMillis(500));
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"js,single", "py,single", "js,multi", "py,single"})
+        @DisplayName("Should raise an HttpStatusError if no extension could resolve and at least one raised an error")
+        void shouldRaiseHttpStatusErrorOnAuthorizationError(String lang, String cardinality) {
+            List<ExtensionConfig> exts = new ArrayList<>();
+            exts.add(getTestResolverExtension("js-", TestResolvingType.FILESYSTEM));
+            exts.add(getTestResolverExtension("py-", TestResolvingType.HTTP));
+            if (cardinality.equals("single")) {
+                exts.remove(lang.equals("js") ? 1 : 0);
+            }
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                String ident = "%s-raise-http-418".formatted(lang);
+                Assertions.assertThatThrownBy(() -> runtime.resolve(ident, null, null))
+                        .isInstanceOf(HttpStatusException.class)
+                        .hasFieldOrPropertyWithValue("httpStatusCode", 418);
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"py,single", "js,single", "py,multi", "js,multi"})
+        @DisplayName(
+                "Should raise generic ExtensionExecutionError if an extension raises a generic error during resolving")
+        void shouldRaiseGenericErrorOnResolvingError(String lang, String cardinality) {
+            List<ExtensionConfig> exts = new ArrayList<>();
+            exts.add(getTestAuthExtension(TestExtensionType.PY_SINGLE, null, null, null, Map.of()));
+            exts.add(getTestAuthExtension(TestExtensionType.JS, null, null, null, Map.of()));
+            if (cardinality.equals("single")) {
+                exts.remove(lang.equals("js") ? 0 : 1);
+            }
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                String ident = "%s-raise".formatted(lang);
+                Assertions.assertThatThrownBy(() -> runtime.resolve(ident, null, null))
+                        .isInstanceOf(ExtensionExecutionException.class)
+                        .hasMessageContaining("Extension raised an error during execution");
             }
         }
     }
@@ -605,6 +681,29 @@ public class ExtensionRuntimeTest {
                     new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
                     new ImageRequest("some-image", IIIFVersion.V3, null, null, null, "custom:invert", null));
             assertThat(invertedImage).equals(VImageHelpers.createEmptyImage(testArena, 500, 500, Color.white));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"400,js", "400,py", "418,js", "418,py"})
+    @DisplayName("Should raise HTTP status code when error with status code is raised in extension")
+    void shouldRaiseHttpStatusCodeFromExtension(int statusCode, String extType) {
+        ExtensionConfig extConfig =
+                switch (extType) {
+                    case "js" ->
+                        new ExtensionConfig(
+                                Path.of("src/test/resources/js-extension/index.js"), null, null, null, false);
+                    case "py" ->
+                        new ExtensionConfig(
+                                Path.of("src/test/resources/py-extension/single.py"), null, null, null, false);
+                    default -> throw new IllegalArgumentException("Unknown extension type: " + extType);
+                };
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(extConfig)) {
+            Assertions.assertThatThrownBy(() ->
+                            runtime.authorize("%s-raise-http-%d".formatted(extType, statusCode), Map.of(), "127.0.0.1"))
+                    .isInstanceOf(HttpStatusException.class)
+                    .hasMessageContaining("HTTP %d from %s".formatted(statusCode, extType))
+                    .hasFieldOrPropertyWithValue("httpStatusCode", statusCode);
         }
     }
 

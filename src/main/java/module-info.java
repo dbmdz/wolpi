@@ -47,4 +47,5 @@ open module wolpi {
     exports dev.mdz.wolpi.model;
     exports dev.mdz.wolpi.validation;
     exports dev.mdz.wolpi.validation.model;
+    exports dev.mdz.wolpi.exceptions;
 }
