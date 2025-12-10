@@ -14,6 +14,9 @@ public class HttpStatusException extends ExtensionExecutionException {
 
     public static @Nullable HttpStatusException fromGuestException(PolyglotException pe) {
         var obj = pe.getGuestObject();
+        if (obj == null || obj.isNull()) {
+            return null;
+        }
         var message = PolyglotHelpers.getDictOrObjectMember("message", obj);
         var status = PolyglotHelpers.getDictOrObjectMember("status", obj);
         var details = PolyglotHelpers.getDictOrObjectMember("details", obj);
