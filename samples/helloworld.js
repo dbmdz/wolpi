@@ -29,7 +29,7 @@ export default {
     }
     identifier = identifier.substring(3); // Remove the 'js-' prefix.
     // The `wolpi` global provides access to the Wolpi context, including the configuration for the extensions.
-    for (const { parentPath, name } of readDirSync(wolpi.config().baseDirectory)) {
+    for (const { parentPath, name } of readDirSync(wolpi.config.baseDirectory)) {
       const basename = name.substring(0, name.lastIndexOf('.'));
       const extension = name.substring(name.lastIndexOf('.') + 1);
       if (basename === identifier && IMAGE_EXTENSIONS.has(extension)) {

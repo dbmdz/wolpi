@@ -260,6 +260,11 @@ public class ExtensionRegistry implements AutoCloseable {
         }
         // Then add it
         loadedExtensions.put(config, ext);
+        for (ExtensionHooks hook : ext.implementedHooks()) {
+            implementedHooks
+                    .computeIfAbsent(hook, (k) -> new CopyOnWriteArrayList<>())
+                    .add(ext);
+        }
         return ext;
     }
 
