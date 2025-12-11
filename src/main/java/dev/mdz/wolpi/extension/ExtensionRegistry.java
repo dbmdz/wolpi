@@ -19,7 +19,7 @@ import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -90,14 +90,13 @@ public class ExtensionRegistry implements AutoCloseable {
             NpmInstaller jsInstaller,
             GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
             GraalContextSupplier contextSupplier,
-            GuestContextFactory guestContextFactory,
-            WolpiConfig wolpiConfig) {
+            GuestContextFactory guestContextFactory) {
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
         this.extensionContextPool = extensionContextPool;
         this.contextSupplier = contextSupplier;
         this.guestContextFactory = guestContextFactory;
-        this.wolpiConfig = wolpiConfig;
+        this.wolpiConfig = cfg;
 
         FileAlterationMonitor monitor;
         try {
@@ -513,6 +512,9 @@ public class ExtensionRegistry implements AutoCloseable {
                     .flatMap(List::stream)
                     .distinct()
                     .filter(e -> !disabledExtensions.contains(e))
+                    // Make sure the order matches the one in the configuration
+                    .sorted(Comparator.comparingInt(
+                            e -> wolpiConfig.extensions().indexOf(e.config())))
                     .toList();
         }
 
@@ -525,7 +527,10 @@ public class ExtensionRegistry implements AutoCloseable {
             }
         }
         matchingExtensions.removeAll(disabledExtensions);
-        return new ArrayList<>(matchingExtensions);
+        return matchingExtensions.stream()
+                // Make sure the order matches the one in the configuration
+                .sorted(Comparator.comparingInt(e -> wolpiConfig.extensions().indexOf(e.config())))
+                .toList();
     }
 
     /// Temporarily disable all extensions except the given one.

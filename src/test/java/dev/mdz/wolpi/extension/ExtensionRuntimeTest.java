@@ -720,8 +720,7 @@ public class ExtensionRuntimeTest {
                 null,
                 new GraalContextSupplier(config),
                 new GuestContextFactory(
-                        buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry),
-                null);
+                        buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
     }
 
