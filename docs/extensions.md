@@ -1231,9 +1231,9 @@ dependencies, we recommend using a tool like [mise][mise].
 Wolpi provides support for the "Advanced Debugging Protocol" (ADP), which allows you to connect a
 debugger to it and set breakpoints, step through code, and inspect variables inside your extensions.
 
-To enable debugging, set the `wolpi.extension-debug` section in `application.yml`:
+To enable debugging, set the `wolpi.extension-debug` section in your config:
 
-```yaml linenums="1"
+```yaml linenums="1" title="wolpi.yml"
 extension-debug:
   # Enable or disable extension debugging, global setting for
   # all extensions and languages
@@ -1248,9 +1248,9 @@ extension-debug:
 ```
 
 Then, open the directory with your extensions in Visual Studio Code and create the following
-launch configuration:
+launch configuration in `.vscode/launch.json`:
 
-```json linenums="1"
+```json linenums="1" title=".vscode/launch.json"
 {
     "version": "0.2.0",
     "configurations": [
@@ -1264,9 +1264,7 @@ launch configuration:
             "name": "Attach to Python Extensions",
             "debugServer": 4711,
             "request": "attach",
-            "type": "debugpy",
-            "pathMappings": [
-            ]
+            "type": "debugpy"
         }
     ]
 }
@@ -1275,6 +1273,16 @@ launch configuration:
 Start up Wolpi, then start the debugger in VS Code using the "Attach to JS Extensions" or
 "Attach to Python Extensions" configuration. You should see the application threads and be able to
 set breakpoints and step through your extension code.
+
+!!! warning "Debugging with the Wolpi container"
+
+    Debugging extensions with Wolpi running in a container has some caveats:
+
+    - `live-reload: true` must be set for the extension in the config
+    - Breakpoints only work if the path to the extension inside the container matches the path
+      on the host machine. To achieve this, mount the directory with your extensions into the
+      container at the same absolute path as on your host system. This is a limit of the Graal Debug
+      Adapter implementation that does not allow remapping paths at the moment.
 
 ## Working with Java classes from extensions
 
