@@ -30,6 +30,7 @@ open module wolpi {
     requires spring.boot.jackson;
     requires tools.jackson.databind;
     requires tools.jackson.dataformat.toml;
+    requires micrometer.observation;
 
     exports dev.mdz.wolpi;
     exports dev.mdz.wolpi.config;

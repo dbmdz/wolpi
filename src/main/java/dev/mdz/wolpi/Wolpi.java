@@ -10,6 +10,10 @@ import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.RuntimeContext;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.config.MeterFilter;
+import io.micrometer.core.instrument.config.MeterFilterReply;
+import io.micrometer.observation.ObservationPredicate;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.foreign.Arena;
@@ -164,6 +168,22 @@ public class Wolpi implements WebMvcConfigurer {
             connector.setProperty("relaxedPathChars", "^");
             connector.setProperty("relaxedQueryChars", "^");
         });
+    }
+
+    @Bean
+    public MeterFilter ignoreMonitoringEndpoints() {
+        return new MeterFilter() {
+            @Override
+            public MeterFilterReply accept(Meter.Id id) {
+                if (id.getName().equals("http.server.requests")) {
+                    String uri = id.getTag("uri");
+                    if (uri != null && uri.startsWith("/monitoring")) {
+                        return MeterFilterReply.DENY;
+                    }
+                }
+                return MeterFilterReply.NEUTRAL;
+            }
+        };
     }
 
     public static void main(String[] args) {

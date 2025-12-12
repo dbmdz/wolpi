@@ -11,14 +11,37 @@ logging:
 
 server:
   forward-headers-strategy: framework
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 management:
   endpoints:
     web:
       base-path: "/monitoring"
+      exposure:
+        include: "health,prometheus"
   endpoint:
     prometheus:
       access: read_only
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: false
+      percentiles:
+        http.server.requests: []
+      slo:
+        http.server.requests: 50ms, 200ms, 500ms, 1s, 5s
+    enable:
+      system: false
+      jvm:
+        classes: false
+      logback: false
+      tomcat:
+        sessions: false
+        cache: false
+        global: false
+        servlet: false
 
 wolpi:
   logging:
