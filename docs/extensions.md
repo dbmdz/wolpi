@@ -212,11 +212,7 @@ this information for `info.json` requests.
     }
 
     /// Describes how the identifier was resolved
-    interface ImageSource {
-        identifier: string;
-        resolvedImage: ResolvedImage | SourceNotModified;
-        imageInfo?: ImageInfo;
-
+    interface ImageSource = (ResolvedImage | SourceNotModified) & {
         /// Optional caching information about the image source,
         /// will be set on the response headers and can be used
         /// by clients for subsequent requests to the same identifier
@@ -236,52 +232,6 @@ this information for `info.json` requests.
 
 === "Python"
     ``` python
-    # An image file in a file system accessible to Wolpi
-    class FilesystemResolvedImage(TypedDict):
-        path: str
-
-    # A data blob containing the raw (still encoded) image data,
-    # will be decoded by libvips
-    class BinaryResolvedImage(TypedDict):
-        raw_data: bytes
-
-    # An image accessible via HTTP(S), optionally with custom request
-    # headers (e.g. for auth) and a flag indicating whether byte-range 
-    # requests are supported by the endpoint
-    class HttpResolvedImage(TypedDict):
-        url: str
-        headers: NotRequired[dict[str, str]]
-        supports_byte_range: NotRequired[bool]
-
-    # A custom data source that libvips will read from using the
-    # provided callbacks, can be more efficient for reading very
-    # large images from e.g. databases or object storage systems
-    # that do not support HTTP with byte-range requests
-    class CustomSourceResolvedImage(Protocol):
-
-        # `whence` denotes the position to seek from: 0 (beginning of file),
-        # 1 (current position) or 2 (end of file)
-        def on_seek(self, offset: int, whence: int) -> int:
-            ...
-
-        # The returned buffer will be copied, feel free to reuse internal
-        # buffers for subsequent calls
-        def on_read(self, length: int) -> bytes | bytearray:
-            ...
-
-    type ResolvedImage = Union[
-        FilesystemResolvedImage,
-        BinaryResolvedImage,
-        HttpResolvedImage,
-        CustomSourceResolvedImage
-    ]
-
-    # Indicate that the source has not been modified since it was
-    # last accessed by the client, determined from the caching headers
-    # passed to the resolving hook
-    class SourceNotModified(TypedDict):
-        not_modified: bool
-
     # Size of an image (layer) in pixels
     class ImageSize(TypedDict):
         width: int
@@ -293,7 +243,7 @@ this information for `info.json` requests.
         height: int
         scale_factors: list[int]
 
-    # Set of metadata about the image that can be provided by the
+    # Optional set of metadata about the image that can be provided by the
     # resolver to avoid having Wolpi read the image just to extract
     # this information for `info.json` requests
     class ImageInfo(TypedDict):
@@ -306,12 +256,65 @@ this information for `info.json` requests.
         e_tag: NotRequired[str]
         last_modified: NotRequired[str]
 
-    # Describes how the identifier was resolved
-    class ImageSource(TypedDict):
-        identifier: str
-        resolved_image: Union[ResolvedImage, SourceNotModified]
+    # An image file in a file system accessible to Wolpi
+    class FilesystemImageSource(TypedDict):
+        path: str
         image_info: NotRequired[ImageInfo]
         cache_info: NotRequired[CacheInfo]
+
+    # A data blob containing the raw (still encoded) image data,
+    # will be decoded by libvips
+    class BinaryImageSource(TypedDict):
+        raw_data: bytes
+        image_info: NotRequired[ImageInfo]
+        cache_info: NotRequired[CacheInfo]
+
+    # An image accessible via HTTP(S), optionally with custom request
+    # headers (e.g. for auth) and a flag indicating whether byte-range 
+    # requests are supported by the endpoint
+    class HttpImageSource(TypedDict):
+        url: str
+        headers: NotRequired[dict[str, str]]
+        supports_byte_range: NotRequired[bool]
+        image_info: NotRequired[ImageInfo]
+        cache_info: NotRequired[CacheInfo]
+
+    # A custom data source that libvips will read from using the
+    # provided callbacks, can be more efficient for reading very
+    # large images from e.g. databases or object storage systems
+    # that do not support HTTP with byte-range requests
+    # This is best returned as an actual object, not a dict.
+    class CustomImageSource(Protocol):
+
+        # `whence` denotes the position to seek from: 0 (beginning of file),
+        # 1 (current position) or 2 (end of file)
+        def on_seek(self, offset: int, whence: int) -> int:
+            ...
+
+        # The returned buffer will be copied, feel free to reuse internal
+        # buffers for subsequent calls
+        def on_read(self, length: int) -> bytes | bytearray:
+            ...
+
+        def cache_info(self) -> CacheInfo | None:
+            ...
+
+        def image_info(self) -> ImageInfo | None:
+            ...
+
+    # Indicate that the source has not been modified since it was
+    # last accessed by the client, determined from the caching headers
+    # passed to the resolving hook
+    class SourceNotModified(TypedDict):
+        not_modified: Literal[True]
+
+    type ImageSource = Union[
+        FilesystemImageSource,
+        BinaryImageSource,
+        HttpImageSource,
+        CustomImageSource,
+        SourceNotModified
+    ]
 
     def resolve(
         identifier: str,
