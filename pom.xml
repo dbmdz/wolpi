@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.0</version>
+    <version>4.0.1</version>
   </parent>
   <groupId>dev.mdz</groupId>
   <artifactId>wolpi</artifactId>
@@ -36,7 +36,7 @@
     <graalvm.version>25.0.1</graalvm.version>
     <jspecify.version>1.0.0</jspecify.version>
     <picocli.version>4.7.7</picocli.version>
-    <vips-ffm.version>1.9.4</vips-ffm.version>
+    <vips-ffm.version>1.9.5</vips-ffm.version>
   </properties>
 
   <dependencies>
