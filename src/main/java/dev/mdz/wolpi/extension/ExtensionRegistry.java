@@ -389,7 +389,7 @@ public class ExtensionRegistry implements AutoCloseable {
         }
         var guestCtx = guestContextFactory.createGuestContext(
                 packageName, extensionVersion, config.config(), Language.PYTHON, baseUri);
-        try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, null, contextSupplier)) {
+        try (RuntimeContext ctx = new PythonRuntimeContext(source, entryPoint, venvPath, guestCtx, contextSupplier)) {
             var hooks = getExtensionHooks(ctx);
             var info = ctx.runHook(ExtensionHooks.INFO).as(ExtensionInfo.class);
             return new PythonLoadedExtension(

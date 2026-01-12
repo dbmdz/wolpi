@@ -47,6 +47,21 @@ and is described in the respective hook documentation below.
 Every extension must implement the `info` hook to return basic information about itself, such as
 its name and description.
 
+!! warning "Do not use this hook for initialization code!"
+
+    The `info` hook is called by Wolpi on startup to gather information about the extension.
+    It is executed in a different context than the one used when processing requests, so any
+    modifications to the extension's state in this hook will not be visible during request processing.
+    If you need to run initialization code for your extension, do so by checking for uninitialized
+    state when you need it, and initializing it on first use.
+
+
+??? bug "TODO"
+    Do we need an additional `initialize` Hook that gets executed whenever an extension is first
+    loaded into the pool? This would be a good place to run expensive setup code that only needs
+    to be run once per extension instance.
+
+
 === "JavaScript"
     ```typescript
     function info(): {
@@ -218,7 +233,7 @@ this information for `info.json` requests.
         /// by clients for subsequent requests to the same identifier
         cacheInfo?: {
             eTag?: string;
-            lastModified?: string;
+            lastModified?: Date;
         };
     }
 
@@ -227,7 +242,7 @@ this information for `info.json` requests.
         identifier: string,
         clientETag?: string,
         clientLastModified?: string
-    ): ImageSource;
+    ): ImageSource | undefined;
     ```
 
 === "Python"
@@ -254,7 +269,7 @@ this information for `info.json` requests.
     # Optional caching information about the image source.
     class CacheInfo(TypedDict):
         e_tag: NotRequired[str]
-        last_modified: NotRequired[str]
+        last_modified: NotRequired[datetime.datetime]
 
     # An image file in a file system accessible to Wolpi
     class FilesystemImageSource(TypedDict):
@@ -320,7 +335,7 @@ this information for `info.json` requests.
         identifier: str,
         client_e_tag: str | None,
         client_last_modified: str | None
-    ) -> ImageSource: ...
+    ) -> ImageSource | None: ...
     ```
 
 If there are multiple extensions that implement the `resolve` hook, Wolpi will call them in the order
