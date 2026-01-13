@@ -19,14 +19,22 @@ public abstract class RuntimeContext implements AutoCloseable {
     protected final Context langContext;
     protected final Value extensionObject;
 
-    /// Secure access to the Polyglot context, preventing multiple threads from using it at the
-    /// same time. Uses a `ReentrantLock` to allow the same thread to acquire multiple leases on the
+    /// Secure access to the Polyglot context, preventing multiple threads from using it at the same
+    /// time. Uses a `ReentrantLock` to allow the same thread to acquire multiple leases on the
     /// context, while still preventing access from multiple threads at the same time.
     private final ReentrantLock contextLock = new ReentrantLock();
 
     protected RuntimeContext(GraalContextSupplier contextSupplier) throws ExtensionLoadException {
         this.langContext = getGraalContext(contextSupplier);
         this.extensionObject = getExtensionObject();
+    }
+
+    /// Calls the `setup` hook on the extension object to perform any necessary setup for the
+    /// extension. If the hook is not implemented, it is silently ignored.
+    public void setup() {
+        if (hasHook(ExtensionHooks.SETUP)) {
+            runHook(ExtensionHooks.SETUP);
+        }
     }
 
     /// @return The underlying GraalVM Polyglot context
@@ -38,8 +46,16 @@ public abstract class RuntimeContext implements AutoCloseable {
     /// @return The programming language the extension is implemented in
     public abstract Language getLang();
 
-    ///  Convenience method to run a specific hook on the extension, passing the given arguments to
-    ///  it.
+    private boolean hasHook(ExtensionHooks hook) {
+        return hook.getValidNames().stream()
+                .flatMap(name ->
+                        Optional.ofNullable(PolyglotHelpers.getDictOrObjectMember(name, extensionObject, true))
+                                .stream())
+                .anyMatch(Value::canExecute);
+    }
+
+    /// Convenience method to run a specific hook on the extension, passing the given arguments to
+    /// it.
     ///
     /// @param hook The hook to run
     /// @param args The arguments to pass to the hook
@@ -65,21 +81,20 @@ public abstract class RuntimeContext implements AutoCloseable {
         return new ContextLease(this);
     }
 
-    /// Closes the associated Polyglot context, freeing up all resources associated with it.
+    /// Runs the destroy hook to clean up resources created by the extension and then closes the
+    /// associated Polyglot context, freeing up all resources associated with it.
     @Override
     public void close() {
+        if (hasHook(ExtensionHooks.DESTROY)) {
+            runHook(ExtensionHooks.DESTROY);
+        }
         langContext.close();
     }
 
     /// Clean up any request state by calling the `cleanup` hook on the extension object, if it
-    // exists.
+    /// exists.
     public void cleanupAfterRequest() {
-        try (var lease = enter()) {
-            var cleanupFn = PolyglotHelpers.getDictOrObjectMember("cleanup", lease.extension());
-            if (cleanupFn != null && cleanupFn.canExecute()) {
-                cleanupFn.executeVoid();
-            }
-        }
+        runHook(ExtensionHooks.CLEANUP);
     }
 
     @Override
@@ -87,8 +102,8 @@ public abstract class RuntimeContext implements AutoCloseable {
         return "RuntimeContext[" + "langContext=" + langContext + ", " + "extensionObject=" + extensionObject + ']';
     }
 
-    /// Run a function within a lease on this context, automatically acquiring and releasing
-    /// the lease.
+    /// Run a function within a lease on this context, automatically acquiring and releasing the
+    /// lease.
     public <T> T run(Function<Value, T> action) {
         try (var lease = enter()) {
             return action.apply(lease.extension());
@@ -97,9 +112,10 @@ public abstract class RuntimeContext implements AutoCloseable {
 
     /// Represents a lease on a [RuntimeContext], obtained by calling [RuntimeContext#enter].
     ///
-    /// Use [#extension()] to access the hooks/extension object of the extension associated with this
-    /// [RuntimeContext].
+    /// Use [#extension()] to access the hooks/extension object of the extension associated with
+    /// this [RuntimeContext].
     public static class ContextLease implements AutoCloseable {
+
         private final RuntimeContext context;
 
         public ContextLease(RuntimeContext context) {

@@ -7,8 +7,10 @@ import org.jspecify.annotations.Nullable;
 
 /// Set of hooks that extensions can implement
 public enum ExtensionHooks {
-    CLEANUP("cleanup"),
     INFO("info"),
+    SETUP("setup"),
+    DESTROY("destroy"),
+    CLEANUP("cleanup"),
     AUTHORIZE("authorize"),
     RESOLVE("resolve"),
     INFO_JSON("augment_info_json", "augmentInfoJson"),

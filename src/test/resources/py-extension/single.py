@@ -11,6 +11,12 @@ ext = py_extension.wolpi_extension()
 def info():
     return ext.info()
 
+def setup():
+    return ext.setup()
+
+def destroy():
+    return ext.destroy()
+
 def cleanup():
     return ext.cleanup()
 

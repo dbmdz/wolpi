@@ -50,10 +50,12 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
@@ -100,8 +102,11 @@ public class ExtensionRuntimeTest {
             new RuntimeContextPooledObjectFactory(new GraalContextSupplier(null)),
             new GenericKeyedObjectPoolConfig<>() {
                 {
+                    setMinIdlePerKey(0);
                     setMaxIdlePerKey(2);
                     setMaxTotalPerKey(4);
+                    setTimeBetweenEvictionRuns(Duration.ofMillis(10));
+                    setMinEvictableIdleDuration(Duration.ofMillis(500));
                     setJmxEnabled(false);
                 }
             });
@@ -503,6 +508,117 @@ public class ExtensionRuntimeTest {
                 assertThat(contextPool.getNumActive()).isEqualTo(2);
                 assertThat(contextPool.getNumIdle()).isZero();
             }
+        }
+
+        @Test
+        @DisplayName("Should run setup, cleanup and destroy hooks appropriately")
+        void shouldRunSetupCleanupAndDestroyHooks() {
+            List<Thread> threads = new ArrayList<>();
+            List<String> threadNames = new ArrayList<>();
+            Path pyHookLog = tempDir.resolve("py-hooks.log");
+            Path jsHookLog = tempDir.resolve("js-hooks.log");
+            List<ExtensionConfig> exts = List.of(
+                    new ExtensionConfig(
+                            Path.of("src/test/resources/py-extension/single.py"),
+                            null,
+                            null,
+                            Map.of("logHooks", pyHookLog.toAbsolutePath().toString()),
+                            false),
+                    new ExtensionConfig(
+                            Path.of("src/test/resources/js-extension/index.js"),
+                            null,
+                            null,
+                            Map.of("logHooks", jsHookLog.toAbsolutePath().toString()),
+                            false));
+            config.extensions().addAll(exts);
+            var registry = new ExtensionRegistry(
+                    config,
+                    pyPiInstaller,
+                    npmInstaller,
+                    null,
+                    new GraalContextSupplier(config),
+                    new GuestContextFactory(
+                            buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
+            for (int i = 0; i < 3; i++) {
+                final int idx = i;
+                Thread t = new Thread(() -> {
+                    try (ExtensionRuntime runtime =
+                            new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool)) {
+                        runtime.resolve("foo-%d".formatted(idx), null, null);
+                    }
+                });
+                t.setName(UUID.randomUUID().toString());
+                threads.add(t);
+                threadNames.add(t.getName());
+            }
+            assertThat(contextPool.getNumActive()).isZero();
+            assertThat(contextPool.getNumIdle()).isZero();
+            // Start all threads
+            threads.forEach(Thread::start);
+            // Wait for all threads to finish
+            threads.forEach(t -> {
+                try {
+                    t.join();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            // The actual order of hook execution is non-deterministic due to multithreading, but we can
+            // check that:
+            // - Each thread ran its own sequence of hooks
+            // - Each thread's hooks are in the correct order: info, setup, resolve, cleanup
+            // - At least one destroy hook was called (we have 2 max idle contexts, so at least one
+            //   context should have been destroyed)
+            Predicate<? super List<? extends String>> hookSequencePredicate = (List<? extends String> seq) -> {
+                // for each setup hook after the first one (for info), there should be
+                // a resolve and cleanup hook after it.
+                int setupCount = 0;
+                int resolveCount = 0;
+                int cleanupCount = 0;
+                for (String hook : seq.subList(2, seq.size())) {
+                    switch (hook) {
+                        case "setup" -> setupCount++;
+                        case "resolve" -> resolveCount++;
+                        case "cleanup" -> cleanupCount++;
+                    }
+                }
+                return setupCount == 3 && resolveCount == 3 && cleanupCount == 3;
+            };
+            assertThat(readHookLog(pyHookLog).stream().map(HookLogEntry::hookName))
+                    .startsWith("info", "destroy")
+                    .endsWith("destroy")
+                    .matches(hookSequencePredicate, "has correct hook sequence");
+            assertThat(readHookLog(jsHookLog).stream().map(HookLogEntry::hookName))
+                    .startsWith("info", "destroy")
+                    .endsWith("destroy")
+                    .matches(hookSequencePredicate, "has correct hook sequence");
+        }
+    }
+
+    private record HookLogEntry(Instant timestamp, String hookName, String threadName) {}
+
+    private List<HookLogEntry> readHookLog(Path hookLogPath) {
+        try {
+            if (!Files.exists(hookLogPath)) {
+                return List.of();
+            }
+            return Files.readAllLines(hookLogPath).stream()
+                    .map(line -> {
+                        var parts = line.split(" ");
+                        if (!parts[0].endsWith("Z")) {
+                            parts[0] = parts[0] + "Z";
+                        }
+                        return new HookLogEntry(
+                                Instant.parse(parts[0]), parts[2], parts[1].substring(1, parts[1].length() - 1));
+                    })
+                    .toList();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 

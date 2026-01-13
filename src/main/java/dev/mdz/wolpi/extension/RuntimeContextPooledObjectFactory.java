@@ -20,22 +20,24 @@ public class RuntimeContextPooledObjectFactory extends BaseKeyedPooledObjectFact
         this.contextSupplier = contextSupplier;
     }
 
-    /// Uses the callback on the [LoadedExtension] to create the [RuntimeContext].
+    /// Uses the callback on the [LoadedExtension] to create the [RuntimeContext] and run
+    /// the `setup` hook.
     @Override
     public RuntimeContext create(LoadedExtension ext) throws Exception {
-        switch (ext) {
-            case JSLoadedExtension jsExt -> {
-                return new JSRuntimeContext(jsExt.source(), jsExt.guestContext(), contextSupplier);
-            }
-            case PythonLoadedExtension pyExt -> {
-                return new PythonRuntimeContext(
-                        pyExt.source(),
-                        pyExt.entryPoint(),
-                        pyExt.virtualEnvironment(),
-                        pyExt.guestContext(),
-                        contextSupplier);
-            }
-        }
+        var ctx =
+                switch (ext) {
+                    case JSLoadedExtension jsExt ->
+                        new JSRuntimeContext(jsExt.source(), jsExt.guestContext(), contextSupplier);
+                    case PythonLoadedExtension pyExt ->
+                        new PythonRuntimeContext(
+                                pyExt.source(),
+                                pyExt.entryPoint(),
+                                pyExt.virtualEnvironment(),
+                                pyExt.guestContext(),
+                                contextSupplier);
+                };
+        ctx.setup();
+        return ctx;
     }
 
     @Override
@@ -50,7 +52,7 @@ public class RuntimeContextPooledObjectFactory extends BaseKeyedPooledObjectFact
         p.getObject().cleanupAfterRequest();
     }
 
-    /// Closes the GraalVM Polyglot [Context] to free up resources when the object is destroyed.
+    /// Closes the GraalVM Polyglot [org.graalvm.polyglot.Context] to free up resources when the object is destroyed.
     @Override
     public void destroyObject(LoadedExtension key, PooledObject<RuntimeContext> p, DestroyMode destroyMode) {
         p.getObject().close();

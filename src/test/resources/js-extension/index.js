@@ -13,6 +13,11 @@ const COLOR_PAT = /^#(?<red>[0-9a-fA-F]{2})(?<green>[0-9a-fA-F]{2})(?<blue>[0-9a
 const VipsOption = Java.type("app.photofox.vipsffm.VipsOption");
 const VipsSize = Java.type("app.photofox.vipsffm.enums.VipsSize")
 const VTarget = Java.type("app.photofox.vipsffm.VTarget");
+const Thread = Java.type("java.lang.Thread");
+const StandardOpenOption = Java.type('java.nio.file.StandardOpenOption');
+const ByteBuffer = Java.type('java.nio.ByteBuffer');
+const Path = Java.type('java.nio.file.Path');
+const Files = Java.type('java.nio.file.Files');
 
 function raiseFromIdentifier(identifier) {
   if (identifier === 'js-raise-http-400') {
@@ -24,8 +29,28 @@ function raiseFromIdentifier(identifier) {
   }
 }
 
+function appendToFile(path, data) {
+  const javaPath = Path.of(path);
+  const chan = Files.newByteChannel(javaPath, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+  try {
+    const buf = ByteBuffer.wrap(data);
+    chan.write(buf);
+  } finally {
+    chan.close();
+  }
+}
+
+function logHookCall(hookName) {
+  if (!wolpi.config?.logHooks) {
+    return;
+  }
+  const entry = `${new Date().toISOString()} [${Thread.currentThread().getName()}] ${hookName}\n`;
+  appendToFile(wolpi.config.logHooks, new TextEncoder().encode(entry));
+}
+
 export default {
   info() {
+    logHookCall("info");
     const System = Java.type("java.lang.System")
     // CHANGE THIS LINE FOR TESTS
     return {
@@ -36,6 +61,7 @@ export default {
   },
 
   authorize(identifier, headers, clientIp) {
+    logHookCall("authorize");
     raiseFromIdentifier(identifier);
     if (!wolpi.config) {
       return true;
@@ -64,6 +90,7 @@ export default {
   },
 
   resolve(identifier, eTag, lastModified) {
+    logHookCall("resolve");
     raiseFromIdentifier(identifier);
     if (eTag === "not-modified") {
       return { notModified: true };
@@ -119,6 +146,7 @@ export default {
   },
 
   augmentInfoJson(identifier, infoJson, iiifVersion) {
+    logHookCall("augmentInfoJson");
     return {
       ...infoJson,
       augmentedFromJS: `${identifier}-${iiifVersion}`
@@ -126,6 +154,7 @@ export default {
   },
 
   preProcessImage(image, identifier, imageInfo, imageRequest) {
+    logHookCall("preProcessImage");
     if (!identifier.startsWith("watermarked:")) {
       return null;
     }
@@ -147,6 +176,7 @@ export default {
   },
 
   preFormat(image, identifier, imageInfo, imageRequest) {
+    logHookCall("preFormat");
     if (imageRequest.formatSpec === "hdr-png") {
       const target = VTarget.newToMemory(wolpi.vipsArena);
       image.writeToTarget(target, ".png");
@@ -171,12 +201,22 @@ export default {
   },
 
   preScale(image, identifier, imageInfo, imageRequest) {
+    logHookCall("preScale");
     if (!imageRequest.sizeSpec.startsWith("custom")) {
       return null;
     }
     return image.thumbnailImage(50, VipsOption.Int("height", 50), VipsOption.Enum("size", VipsSize.SIZE_FORCE));
   },
 
+  setup() {
+    logHookCall("setup");
+  },
+
   cleanup() {
+    logHookCall("cleanup");
+  },
+
+  destroy() {
+    logHookCall("destroy");
   }
 }

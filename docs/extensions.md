@@ -52,15 +52,8 @@ its name and description.
     The `info` hook is called by Wolpi on startup to gather information about the extension.
     It is executed in a different context than the one used when processing requests, so any
     modifications to the extension's state in this hook will not be visible during request processing.
-    If you need to run initialization code for your extension, do so by checking for uninitialized
-    state when you need it, and initializing it on first use.
-
-
-??? bug "TODO"
-    Do we need an additional `initialize` Hook that gets executed whenever an extension is first
-    loaded into the pool? This would be a good place to run expensive setup code that only needs
-    to be run once per extension instance.
-
+    If you need to run initialization code for your extension, use the [setup hook](#setup-and-destroy-hooks)
+    instead.
 
 === "JavaScript"
     ```typescript
@@ -111,6 +104,40 @@ accumulated during the processing of a request and should not persist between re
 === "Python"
     ``` python
     def cleanup() -> None: ...
+    ```
+
+### `setup` and `destroy` Hooks
+
+Use the `setup` hook if you need to run potentially expensive initialization code for your extension
+that  shouldn't be run during a request-response cycle, for example compiling regexes, setting up
+database connections, loading an AI model, etc.
+
+If you need to clean up resources that were opened/allocated in `setup`, implement the `destroy` hook.
+This hook  is called whenever an extension instance is shut down.
+
+!! warning "Don't confuse `cleanup` and `destroy`!"
+
+    The `cleanup` hook is called after each request *to clean up request-scoped state*,
+    while the `destroy` hook is called when the extension instance is being shut down
+    *to clean up resources that were allocated in `setup`*. `destroy` is optional, whereas
+    `cleanup` is mandatory.
+
+=== "JavaScript"
+    ```typescript
+    function setup(
+    ): void;
+
+    function destroy(
+    ): void;
+    ```
+
+=== "Python"
+    ``` python
+    def setup(
+    ) -> None: ...
+
+    def destroy(
+    ) -> None: ...
     ```
 
 ### `authorize` Hook

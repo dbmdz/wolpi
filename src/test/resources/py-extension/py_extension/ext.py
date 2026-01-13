@@ -1,3 +1,4 @@
+import datetime
 import re
 import time
 
@@ -11,9 +12,17 @@ COLOR_PAT = re.compile(r"^#(?P<red>[0-9a-fA-F]{2})(?P<green>[0-9a-fA-F]{2})(?P<b
 VipsOption = java.type("app.photofox.vipsffm.VipsOption")
 VipsSize = java.type("app.photofox.vipsffm.enums.VipsSize")
 VipsBandFormat = java.type("app.photofox.vipsffm.enums.VipsBandFormat")
+Thread = java.type("java.lang.Thread")
+
+def log_hook_call(hook_name: str):
+  if not wolpi.config or not wolpi.config.get("logHooks"):
+    return
+  with open(wolpi.config["logHooks"], "a") as f:
+    f.write(f"{datetime.datetime.now().isoformat()} [{Thread.currentThread().getName()}] {hook_name}\n")
 
 class TestExtension:
   def info(self):
+    log_hook_call("info")
     System = java.type("java.lang.System")
     # CHANGE THIS LINE FOR TESTS
     return {
@@ -34,10 +43,17 @@ class TestExtension:
     if identifier == "py-raise":
       raise Exception("Generic exception from py")
 
+  def setup(self):
+    log_hook_call("setup")
+
   def cleanup(self):
-    pass
+    log_hook_call("cleanup")
+
+  def destroy(self):
+    log_hook_call("destroy")
 
   def authorize(self, identifier: str, headers: dict, client_ip: str) -> bool:
+    log_hook_call("authorize")
     self._raise_from_id(identifier)
     if wolpi.config is None:
       return True
@@ -53,6 +69,7 @@ class TestExtension:
     return True
 
   def resolve(self, identifier, etag, last_modified):
+    log_hook_call("resolve")
     self._raise_from_id(identifier)
     if wolpi.config is None:
       return None
@@ -72,6 +89,7 @@ class TestExtension:
     }
 
   def augment_info_json(self, identifier: str, info_json: dict, iiif_version: int) -> dict:
+    log_hook_call("augmentInfoJson")
     self._raise_from_id(identifier)
     return {
       **info_json,
@@ -79,6 +97,7 @@ class TestExtension:
     }
 
   def pre_process_image(self, image, identifier: str, image_info, image_request):
+    log_hook_call("preProcessImage")
     self._raise_from_id(identifier)
     if not identifier.startswith("watermarked:"):
       return None
@@ -97,6 +116,8 @@ class TestExtension:
       return None
 
   def pre_scale(self, image, identifier: str, image_info, image_request):
+    log_hook_call("preScale")
+    wolpi.logger.debug(f"py: pre_scale called with id: {identifier} and spec: {image_request.sizeSpec}")
     self._raise_from_id(identifier)
     if not image_request.sizeSpec.startswith("custom:"):
       return None
@@ -105,6 +126,7 @@ class TestExtension:
     return image.thumbnailImage(dimensions.width, VipsOption.Int("height", dimensions.height), VipsOption.Enum("size", VipsSize.SIZE_FORCE))
 
   def pre_crop(self, image, identifier: str, image_info, image_request):
+    log_hook_call("preCrop")
     self._raise_from_id(identifier)
     if not image_request.cropSpec.startswith("custom"):
       return None
@@ -112,6 +134,7 @@ class TestExtension:
     return image.extractArea(int(x), int(y), int(width), int(height))
 
   def pre_rotate(self, image, identifier: str, image_info, image_request):
+    log_hook_call("preRotate")
     self._raise_from_id(identifier)
     if not image_request.rotationSpec.startswith("custom"):
       return None
@@ -126,12 +149,14 @@ class TestExtension:
     return rotated
 
   def pre_quality(self, image, identifier: str, image_info, image_request):
+    log_hook_call("preQuality")
     self._raise_from_id(identifier)
     if not image_request.qualitySpec.startswith("custom"):
       return None
     return image.cast(VipsBandFormat.FORMAT_UCHAR).invert()
 
   def pre_format(self, image, identifier: str, image_info, image_request):
+    log_hook_call("preFormat")
     self._raise_from_id(identifier)
     if image_request.formatSpec != "pixl":
       return None
