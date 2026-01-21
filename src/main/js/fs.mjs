@@ -70,7 +70,7 @@ export function readDirSync(path) {
 }
 
 function toStat(javaPath, followSymbolicLinks = true) {
-  const attr = Files.readAttributes(file.toPath(), BasicFileAttributes);
+  const attr = Files.readAttributes(javaPath, BasicFileAttributes);
   if (attr.isSymbolicLink() && followSymbolicLinks) {
     return toStat(Files.readSymbolicLink(javaPath), true);
   }
