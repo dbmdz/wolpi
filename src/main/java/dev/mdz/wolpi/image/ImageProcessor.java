@@ -19,6 +19,7 @@ import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSize;
@@ -52,19 +53,25 @@ public class ImageProcessor {
 
     private final Map<String, List<VipsOption>> formatEncodingOptions;
     private final ExtensionRuntime extensionRuntime;
+    private final WolpiMetrics metrics;
+
+    /// Thread-local to track whether fast path was used for current request
+    private final ThreadLocal<Boolean> usedFastPath = ThreadLocal.withInitial(() -> false);
 
     public ImageProcessor(
             Arena vipsArena,
             WolpiConfig wolpiConfig,
             ImageLoader loader,
             ImageRequestParser parser,
-            ExtensionRuntime extensionRuntime) {
+            ExtensionRuntime extensionRuntime,
+            WolpiMetrics metrics) {
         this.vipsArena = vipsArena;
         this.wolpiConfig = wolpiConfig;
         this.loader = loader;
         this.parser = parser;
         this.formatEncodingOptions = determineEncodingOptions(wolpiConfig.encodingOptions());
         this.extensionRuntime = extensionRuntime;
+        this.metrics = metrics;
     }
 
     /// Convert the encoding options from the config into VipsOption lists for each format.
@@ -162,6 +169,7 @@ public class ImageProcessor {
         // to run through pre-processing
         VImage image = null;
         ImageSize sourceSize;
+        usedFastPath.set(false);
         // We need to load the image if an extension intends to preprocess it
         boolean mayBePreProcessed = extensionRuntime.hasExtensionsForHook(ExtensionHooks.PREPROCESS_IMAGE);
         if (!mayBePreProcessed && imageSource.imageInfo() != null) {
@@ -173,6 +181,7 @@ public class ImageProcessor {
 
         if (!mayBePreProcessed
                 && parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
+            usedFastPath.set(true);
             // Fast path: No cropping, only downscaling, we can make use of libvips' "shrink-on-load"
             // feature for supported image formats like JP2 and TIFF.
             // Benchmarks showed that this is the only case among the common IIIF use cases, where
@@ -289,41 +298,61 @@ public class ImageProcessor {
     }
 
     /// Encode an image to a target format.
+    ///
+    /// This is where all the lazy vips operations are actually executed.
     public EncodedImage encodeImage(VImage image, ImageInfo info, ImageRequest request) throws IOException {
-        var extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
+        // Determine output size and cropped area for metrics
+        var outputSize =
+                dev.mdz.wolpi.metrics.SizeBucket.fromDimension(new ImageSize(image.getWidth(), image.getHeight()));
+        var cropRectangle = parser.parseRegion(request.cropSpec(), info.nativeSize());
+        var croppedArea = dev.mdz.wolpi.metrics.SizeBucket.fromArea(cropRectangle);
+        var requestType = dev.mdz.wolpi.metrics.RequestType.classify(
+                request.cropSpec(), outputSize, cropRectangle, info.nativeSize());
 
-        if (extensionEncoded != null) {
-            return new EncodedImage(
-                    extensionEncoded.data(), extensionEncoded.contentType(), extensionEncoded.extraHeaders());
-        }
+        var timer = metrics.startImageProcessingTimer(
+                request.formatSpec(), outputSize, croppedArea, requestType, usedFastPath.get());
 
-        String suffix = request.formatSpec().toLowerCase();
+        try {
+            var extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
 
-        if (!wolpiConfig.iiif().formats().allowed().contains(suffix)) {
-            throw new IllegalArgumentException("Unsupported output format: " + suffix);
-        }
-        List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
-
-        // Force 1bit output for bitonal images in PNG and GIF formats
-        if (image.getInt("interpretation") == VipsInterpretation.INTERPRETATION_B_W.getRawValue()) {
-            if (suffix.equals("png") || suffix.equals("gif")) {
-                options.add(VipsOption.Int("bitdepth", 1));
-            } else {
-                // Other formats do not perform binarization themselves, so we need to threshold the image
-                image = image.relationalConst(VipsOperationRelational.OPERATION_RELATIONAL_MORE, List.of(128.0));
+            if (extensionEncoded != null) {
+                return new EncodedImage(
+                        extensionEncoded.data(), extensionEncoded.contentType(), extensionEncoded.extraHeaders());
             }
-        }
 
-        String mimeType = Files.probeContentType(Paths.get("image.%s".formatted(suffix)));
-        VTarget writeTarget = VTarget.newToMemory(vipsArena);
-        VBlob buf;
-        if (suffix.equals("pdf")) {
-            buf = image.magicksaveBuffer(VipsOption.String("format", "pdf"));
-        } else {
-            image.writeToTarget(writeTarget, ".%s".formatted(suffix), options.toArray(new VipsOption[0]));
-            buf = writeTarget.getBlob();
+            String suffix = request.formatSpec().toLowerCase();
+
+            if (!wolpiConfig.iiif().formats().allowed().contains(suffix)) {
+                throw new IllegalArgumentException("Unsupported output format: " + suffix);
+            }
+
+            List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
+
+            // Force 1bit output for bitonal images in PNG and GIF formats
+            if (image.getInt("interpretation") == VipsInterpretation.INTERPRETATION_B_W.getRawValue()) {
+                if (suffix.equals("png") || suffix.equals("gif")) {
+                    options.add(VipsOption.Int("bitdepth", 1));
+                } else {
+                    // Other formats do not perform binarization themselves, so we need to threshold the
+                    // image
+                    image = image.relationalConst(VipsOperationRelational.OPERATION_RELATIONAL_MORE, List.of(128.0));
+                }
+            }
+
+            String mimeType = Files.probeContentType(Paths.get("image.%s".formatted(suffix)));
+            VTarget writeTarget = VTarget.newToMemory(vipsArena);
+            VBlob buf;
+            if (suffix.equals("pdf")) {
+                buf = image.magicksaveBuffer(VipsOption.String("format", "pdf"));
+            } else {
+                image.writeToTarget(writeTarget, ".%s".formatted(suffix), options.toArray(new VipsOption[0]));
+                buf = writeTarget.getBlob();
+            }
+            return new EncodedImage(
+                    buf.asArenaScopedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
+        } finally {
+            timer.stop();
+            usedFastPath.remove();
         }
-        return new EncodedImage(
-                buf.asArenaScopedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
     }
 }

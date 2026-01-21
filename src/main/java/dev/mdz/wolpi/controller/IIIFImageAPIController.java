@@ -9,6 +9,7 @@ import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.image.ImageLoader;
 import dev.mdz.wolpi.image.ImageProcessor;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.SourceNotModified;
@@ -50,13 +51,19 @@ public class IIIFImageAPIController {
     private final ImageLoader loader;
     private final ImageProcessor processor;
     private final ImageRequestParser imageRequestParser;
+    private final WolpiMetrics metrics;
 
     public IIIFImageAPIController(
-            WolpiConfig config, ImageLoader loader, ImageProcessor processor, ImageRequestParser imageRequestParser) {
+            WolpiConfig config,
+            ImageLoader loader,
+            ImageProcessor processor,
+            ImageRequestParser imageRequestParser,
+            WolpiMetrics metrics) {
         this.config = config;
         this.loader = loader;
         this.processor = processor;
         this.imageRequestParser = imageRequestParser;
+        this.metrics = metrics;
     }
 
     /// Handle OPTIONS requests for the /info.json endpoint
@@ -252,7 +259,7 @@ public class IIIFImageAPIController {
         if (canonicalRequest != null
                 && !request.equals(canonicalRequest)
                 && config.iiif().features().canonicalRedirect()) {
-            // Redirect to canonical URL
+            // Canonical redirects tracked by Spring Boot as 303s
             String canonicalUrl = canonicalRequest.toRequestPath();
             outHeaders.add("Location", canonicalUrl);
             return ResponseEntity.status(HttpStatus.SEE_OTHER)
@@ -276,6 +283,7 @@ public class IIIFImageAPIController {
                     .contentType(MediaType.TEXT_PLAIN)
                     .body(ByteBuffer.wrap(e.getMessage().getBytes()));
         } catch (VipsError e) {
+            metrics.incrementVipsErrors("image_processing");
             String requestPath = canonicalRequest != null ? canonicalRequest.toRequestPath() : request.toRequestPath();
             log.error("Error processing image request {} due to error in libvips", requestPath, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -314,6 +322,7 @@ public class IIIFImageAPIController {
         // Encode the processed image to the requested output format and return it to the client
         try {
             var encoded = processor.encodeImage(processedImage, imageInfo, request);
+            metrics.incrementImagesProcessed(formatSpec, colorSpec, version);
             if (encoded.extraHeaders() != null) {
                 encoded.extraHeaders()
                         .forEach((header, values) -> values.forEach(value -> outHeaders.add(header, value)));

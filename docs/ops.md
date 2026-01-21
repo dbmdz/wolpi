@@ -210,6 +210,29 @@ used to monitor the health of the  Wolpi instance and ensure that it is running 
 Currently there is no way to hook into the health checks from extensions, but this may be added
 in the future, let us know in a GitHub issue if you need this functionality.
 
+### Metrics
+
+Wolpi exposes various metrics about its operation, performance and resource usage in the
+[Prometheus](https://prometheus.io/) format at the `/monitoring/prometheus` endpoint by default.
+This includes metrics about HTTP requests, response times, memory and CPU usage, as well as
+various internal metrics about image processing operations.
+
+If you have [defined custom metrics in your extensions][extensions-metrics], those will also be
+exposed at this endpoint automatically.
+
+!!! question "But I don't use Prometheus?"
+
+    While Wolpi by default only exposes metrics in the Prometheus format, you can configure it to
+    expose metrics in any format supported by [Micrometer][micrometer] like OTLP or DataDog by
+    setting a few Spring Boot configuration options. Refer to the [Spring Boot
+    documentation][spring-boot-docs] for details on how to configure different metrics exporters.
+    You can then put those values into the [`spring` section of your configuration][wolpi-spring-cfg].
+
+[micrometer]: https://docs.micrometer.io/micrometer/reference/implementations.html
+[spring-boot-docs]: https://docs.spring.io/spring-boot/reference/actuator/metrics.html
+[wolpi-spring-cfg]: ./configuration.md#escape-hatch-spring-boot-configuration
+[extensions-metrics]: ./extensions.md#custom-metrics-from-extensions
+
 ### Structured Logging
 
 If you have an environment where structured logging is used, you can configure Wolpi to log in

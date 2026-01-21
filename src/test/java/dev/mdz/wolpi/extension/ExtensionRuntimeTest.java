@@ -24,6 +24,7 @@ import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.EncodedImage;
@@ -544,11 +545,12 @@ public class ExtensionRuntimeTest {
                     new GraalContextSupplier(config),
                     new GuestContextFactory(
                             buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
+            var metrics = new WolpiMetrics(meterRegistry);
             for (int i = 0; i < 3; i++) {
                 final int idx = i;
                 Thread t = new Thread(() -> {
                     try (ExtensionRuntime runtime =
-                            new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool)) {
+                            new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics)) {
                         runtime.resolve("foo-%d".formatted(idx), null, null);
                     }
                 });
@@ -842,7 +844,8 @@ public class ExtensionRuntimeTest {
                 new GraalContextSupplier(config),
                 new GuestContextFactory(
                         buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
-        return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool);
+        var metrics = new WolpiMetrics(meterRegistry);
+        return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics);
     }
 
     private ExtensionConfig getTestAuthExtension(

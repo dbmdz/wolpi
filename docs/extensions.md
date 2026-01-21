@@ -611,12 +611,12 @@ module `wolpi` that can be imported.
 
     interface WolpiMetrics {
       counter(
-          name: string, description?: string, unit?: string,
+          name: string, unit?: string, description?: string,
           labels?: { [key: string]: string }
       ): { increment(value?: number): void },
 
       gauge(
-          name: string, description?: string, unit?: string,
+          name: string, unit?: string, description?: string,
           labels?: { [key: string]: string }
       ): { set(value: number): void },
 
@@ -685,13 +685,13 @@ module `wolpi` that can be imported.
     class WolpiMetrics:
       def counter(
           self,
-          name: str, description: str | None, unit: str | None,
+          name: str, unit: str | None, description: str | None,
           labels: dict[str, str]
       ) -> CounterMetric: ...
 
       def gauge(
           self,
-          name: str, description: str | None, unit: str | None,
+          name: str, unit: str | None, description: str | None,
           labels: dict[str, str]
       ) -> GaugeMetric: ...
 
@@ -701,10 +701,10 @@ module `wolpi` that can be imported.
       ) -> TimerMetric: ...
 
     class CounterMetric:
-      def increment(self, value: int | None = None) -> None: ...
+      def increment(self, value: float | None = None) -> None: ...
 
     class GaugeMetric:
-      def set(self, value: int) -> None: ...
+      def set(self, value: float) -> None: ...
 
     class RunningTimer:
       def stop(self) -> None: ...
@@ -1329,7 +1329,142 @@ set breakpoints and step through your extension code.
       container at the same absolute path as on your host system. This is a limit of the Graal Debug
       Adapter implementation that does not allow remapping paths at the moment.
 
-## Working with Java classes from extensions
+## Logging from Extensions
+
+You have access to an extensions-specific logger instance via the `wolpi.logger` object. This logger provides
+four logging levels: `debug`, `info`, `warn` and `error`. Each logging method accepts a message string
+and an optional dictionary/object with key-value pairs that will be logged alongside the message for
+structured logging.
+
+=== "JavaScript"
+    ```typescript linenums="1"
+    interface WolpiLogger {
+        debug(message: string, keyVals?: {[key: string]: string}): void;
+        info(message: string, keyVals?: {[key: string]: string}): void;
+        warn(message: string, keyVals?: {[key: string]: string}): void;
+        error(message: string, keyVals?: {[key: string]: string}): void;
+    }
+    ```
+
+    ```typescript linenums="1"
+    wolpi.logger.info('Processing image request', {
+      identifier: identifier,
+      clientIp: clientIp
+    });
+    ```
+
+=== "Python"
+    ```python linenums="1"
+    class WolpiLogger:
+        def debug(self, message: str, keyVals: dict[str, str] | None) -> None: ...
+        def info(self, message: str, keyVals: dict[str, str] | None) -> None: ...
+        def warn(self, message: str, keyVals: dict[str, str] | None) -> None: ...
+        def error(self, message: str, keyVals: dict[str, str] | None) -> None: ...
+    ```
+
+    ```python linenums="1"
+    import wolpi
+
+    wolpi.logger.info(
+        'Processing image request',
+        {
+            'identifier': identifier,
+            'clientIp': client_ip
+        }
+    )
+    ```
+
+## Custom Metrics from Extensions
+
+You can register custom metrics from your extensions using the `wolpi.metrics` object. This object
+provides methods to create counters, gauges and timers. Each method accepts a name for the metric,
+an optional description, an optional unit (except for timers, those are always measured in seconds)
+and an optional dictionary/object with labels to attach to the metric.
+
+=== "JavaScript"
+
+    ```typescript linenums="1"
+    interface WolpiMetrics {
+      counter(
+          name: string, unit?: string, description?: string,
+          labels?: { [key: string]: string }
+      ): { increment(value?: number): void },
+
+      gauge(
+          name: string, unit?: string, description?: string,
+          labels?: { [key: string]: string }
+      ): { set(value: number): void },
+
+      timer(
+          name: string, description?: string,
+          labels?: { [key: string]: string }
+      ): {
+        record(fn: () => void): void,
+        start(): { stop(): void }
+      }
+    }
+    ```
+
+    ```typescript linenums="1"
+    const requestCounter = wolpi.metrics.counter(
+      'custom_extension_requests_total',
+      'requests',
+      'Total number of requests processed by the custom extension',
+      { extension: 'custom-extension' }
+    );
+
+    requestCounter.increment();
+    ```
+
+=== "Python"
+
+    ``` python linenums="1"
+    class WolpiMetrics:
+      def counter(
+          self,
+          name: str, unit: str | None, description: str | None,
+          labels: dict[str, str]
+      ) -> CounterMetric: ...
+
+      def gauge(
+          self,
+          name: str, unit: str | None, description: str | None,
+          labels: dict[str, str]
+      ) -> GaugeMetric: ...
+
+      def timer(
+          self,
+          name: str, description: str | None, labels: dict[str, str]
+      ) -> TimerMetric: ...
+
+    class CounterMetric:
+      def increment(self, value: float | None = None) -> None: ...
+
+    class GaugeMetric:
+      def set(self, value: float) -> None: ...
+
+    class RunningTimer:
+      def stop(self) -> None: ...
+
+    class TimerMetric:
+      def record(self, fn: Callable[[], None]) -> None: ...
+      def start(self) -> RunningTimer: ...
+    ```
+
+    ``` python linenums="1"
+    import wolpi
+
+    request_counter = wolpi.metrics.counter(
+      'custom_extension_requests_total',
+      'requests',
+      'Total number of requests processed by the custom extension',
+      {'extension': 'custom-extension'}
+    )
+
+    request_counter.increment()
+    ```
+
+## Working with Java Classes from Extensions
 
 Extensions have free access to all Java classes on the Wolpi classpath and can use them as needed
 to implement their functionality. To do so, use the *Graal Polyglot API* ([Python][graal-polyglot-py]/[JavaScript][graal-polyglot-js]) to

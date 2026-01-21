@@ -18,6 +18,7 @@ import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -101,6 +102,7 @@ class CliRunnerTest {
 
     // NOTE: This test takes *AGES* (~90sec on my laptop) because pip+venv in GraalPy seems to be
     //       extremely slow.
+    @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "Takes too long on CI")
     @ParameterizedTest(name = "should validate and re-validate on changes in watch mode for {1}-based extension {0}")
     @CsvSource({"test.js,file", "test.py,file", "js-extension,package", "py-extension,package"})
     @DisplayName("should on changes in watch mode")

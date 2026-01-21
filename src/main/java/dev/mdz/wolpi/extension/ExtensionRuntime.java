@@ -9,6 +9,7 @@ import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -216,13 +217,17 @@ public interface ExtensionRuntime extends AutoCloseable {
         /// auth and resolving if multiple extensions are configured.
         private final ExecutorService threadPool;
 
+        private final WolpiMetrics metrics;
+
         public ExtensionRuntimeImpl(
                 ExtensionRegistry registry,
                 KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
-                ExecutorService threadPool) {
+                ExecutorService threadPool,
+                WolpiMetrics metrics) {
             this.registry = registry;
             this.contextPool = ctxPool;
             this.threadPool = threadPool;
+            this.metrics = metrics;
         }
 
         /// Borrow a [RuntimeContext] for a [LoadedExtension] from the pool if it doesn't already exist.
@@ -254,10 +259,17 @@ public interface ExtensionRuntime extends AutoCloseable {
 
             // No need for parallelism if there's only one extension
             if (authExts.size() == 1) {
-                var ctx = ensureRuntimeContext(authExts.get(0));
+                LoadedExtension ext = authExts.get(0);
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, "authorize");
+                var ctx = ensureRuntimeContext(ext);
                 try (var lease = ctx.enter()) {
-                    return runAuthExtension(ctx.getLang(), lease.extension(), identifier, headers, clientIp);
+                    boolean result = runAuthExtension(ctx.getLang(), lease.extension(), identifier, headers, clientIp);
+                    metrics.recordExtensionExecution(timer, extName, "authorize");
+                    return result;
                 } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, "authorize");
                     handleExtensionException(pe);
                 }
             }
@@ -266,8 +278,19 @@ public interface ExtensionRuntime extends AutoCloseable {
             var completionService = new ExecutorCompletionService<Boolean>(threadPool);
             var futs = authExts.stream()
                     .map(e -> completionService.submit(() -> {
+                        String extName = e.extensionInfo().name();
+                        var timer = metrics.startExtensionTimer();
+                        metrics.incrementExtensionInvocations(extName, "authorize");
                         RuntimeContext ctx = ensureRuntimeContext(e);
-                        return ctx.run(ext -> runAuthExtension(ctx.getLang(), ext, identifier, headers, clientIp));
+                        try {
+                            boolean result =
+                                    ctx.run(ext -> runAuthExtension(ctx.getLang(), ext, identifier, headers, clientIp));
+                            metrics.recordExtensionExecution(timer, extName, "authorize");
+                            return result;
+                        } catch (Exception ex) {
+                            metrics.incrementExtensionErrors(extName, "authorize");
+                            throw ex;
+                        }
                     }))
                     .toList();
             boolean authorized = false;
@@ -345,10 +368,17 @@ public interface ExtensionRuntime extends AutoCloseable {
 
             // No need for parallelism if there's only one extension
             if (resolveExts.size() == 1) {
-                RuntimeContext ctx = ensureRuntimeContext(resolveExts.get(0));
+                LoadedExtension ext = resolveExts.get(0);
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, "resolve");
+                RuntimeContext ctx = ensureRuntimeContext(ext);
                 try (var lease = ctx.enter()) {
-                    return runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
+                    ImageSource result = runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
+                    metrics.recordExtensionExecution(timer, extName, "resolve");
+                    return result;
                 } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, "resolve");
                     handleExtensionException(pe);
                 }
             }
@@ -358,9 +388,18 @@ public interface ExtensionRuntime extends AutoCloseable {
             List<Future<ImageSource>> futures = new ArrayList<>();
             for (LoadedExtension resolveExt : resolveExts) {
                 futures.add(completionService.submit(() -> {
+                    String extName = resolveExt.extensionInfo().name();
+                    var timer = metrics.startExtensionTimer();
+                    metrics.incrementExtensionInvocations(extName, "resolve");
                     RuntimeContext ctx = ensureRuntimeContext(resolveExt);
                     try (var lease = ctx.enter()) {
-                        return runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
+                        ImageSource result =
+                                runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
+                        metrics.recordExtensionExecution(timer, extName, "resolve");
+                        return result;
+                    } catch (Exception e) {
+                        metrics.incrementExtensionErrors(extName, "resolve");
+                        throw e;
                     }
                 }));
             }
@@ -437,6 +476,9 @@ public interface ExtensionRuntime extends AutoCloseable {
             List<LoadedExtension> infoJsonExts = registry.getExtensions(ExtensionHooks.INFO_JSON);
             Map<String, Object> augmented = null;
             for (LoadedExtension ext : infoJsonExts) {
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, "augmentInfoJson");
                 RuntimeContext ctx = ensureRuntimeContext(ext);
                 try {
                     var rv = ctx.runHook(
@@ -447,7 +489,9 @@ public interface ExtensionRuntime extends AutoCloseable {
                     if (rv != null && !rv.isNull()) {
                         augmented = rv.as(InfoJson);
                     }
+                    metrics.recordExtensionExecution(timer, extName, "augmentInfoJson");
                 } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, "augmentInfoJson");
                     handleExtensionException(pe);
                 }
             }
@@ -463,6 +507,9 @@ public interface ExtensionRuntime extends AutoCloseable {
             List<LoadedExtension> exts = registry.getExtensions(ExtensionHooks.PREPROCESS_IMAGE);
             VImage processed = null;
             for (LoadedExtension ext : exts) {
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, "preProcessImage");
                 RuntimeContext ctx = ensureRuntimeContext(ext);
                 try {
                     var rv = ctx.runHook(
@@ -472,21 +519,25 @@ public interface ExtensionRuntime extends AutoCloseable {
                             info,
                             request);
                     if (rv == null || rv.isNull()) {
+                        metrics.recordExtensionExecution(timer, extName, "preProcessImage");
                         continue;
                     }
                     VImage tmp = rv.as(VImage.class);
                     if (tmp.getWidth() != image.getWidth() || tmp.getHeight() != image.getHeight()) {
                         log.warn(
                                 "Preprocessing hook in extension {} returned image with different dimensions ({}x{}) than input image ({}x{}), ignoring result.",
-                                ext.extensionInfo().name(),
+                                extName,
                                 tmp.getWidth(),
                                 tmp.getHeight(),
                                 image.getWidth(),
                                 image.getHeight());
+                        metrics.recordExtensionExecution(timer, extName, "preProcessImage");
                         continue;
                     }
                     processed = tmp;
+                    metrics.recordExtensionExecution(timer, extName, "preProcessImage");
                 } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, "preProcessImage");
                     handleExtensionException(pe);
                 }
             }
@@ -506,15 +557,22 @@ public interface ExtensionRuntime extends AutoCloseable {
         private @Nullable VImage runHookWithEarlyExit(
                 ExtensionHooks hook, VImage image, String identifier, ImageInfo info, ImageRequest request) {
             List<LoadedExtension> exts = registry.getExtensions(hook);
-            Throwable err = null;
+            String hookName = hook.name().toLowerCase();
             for (LoadedExtension ext : exts) {
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, hookName);
                 RuntimeContext ctx = ensureRuntimeContext(ext);
                 try {
                     var rv = ctx.runHook(hook, image, identifier, info, request);
                     if (rv != null && !rv.isNull()) {
-                        return rv.as(VImage.class);
+                        VImage result = rv.as(VImage.class);
+                        metrics.recordExtensionExecution(timer, extName, hookName);
+                        return result;
                     }
+                    metrics.recordExtensionExecution(timer, extName, hookName);
                 } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, hookName);
                     handleExtensionException(pe);
                 }
             }
@@ -535,13 +593,20 @@ public interface ExtensionRuntime extends AutoCloseable {
         public @Nullable EncodedImage preFormat(VImage image, String identifier, ImageInfo info, ImageRequest request) {
             List<LoadedExtension> formatExts = registry.getExtensions(ExtensionHooks.FORMAT);
             for (LoadedExtension ext : formatExts) {
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, "preFormat");
                 RuntimeContext ctx = ensureRuntimeContext(ext);
                 try {
                     var rv = ctx.runHook(ExtensionHooks.FORMAT, image, identifier, info, request);
                     if (rv != null && !rv.isNull()) {
-                        return rv.as(EncodedImage.class);
+                        EncodedImage result = rv.as(EncodedImage.class);
+                        metrics.recordExtensionExecution(timer, extName, "preFormat");
+                        return result;
                     }
+                    metrics.recordExtensionExecution(timer, extName, "preFormat");
                 } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, "preFormat");
                     handleExtensionException(pe);
                 }
             }

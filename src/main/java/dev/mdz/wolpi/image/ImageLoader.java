@@ -13,6 +13,7 @@ import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
 import dev.mdz.wolpi.iiif.IIIFImageInfo;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.CustomSourceResolvedImage;
@@ -75,18 +76,23 @@ public class ImageLoader {
     /// IIIF settings from the configuration
     private final IIIFConfig iiifConfig;
 
+    /// Metrics
+    private final WolpiMetrics metrics;
+
     public ImageLoader(
             WolpiConfig cfg,
             Arena arena,
             HttpClient httpClient,
             ExtensionRuntime extensionRuntime,
-            IIIFComplianceRegistry complianceRegistry) {
+            IIIFComplianceRegistry complianceRegistry,
+            WolpiMetrics metrics) {
         this.arena = arena;
         this.httpClient = httpClient;
         this.imageBaseDirectory = cfg.imageBaseDir();
         this.iiifConfig = cfg.iiif();
         this.extensionRuntime = extensionRuntime;
         this.complianceRegistry = complianceRegistry;
+        this.metrics = metrics;
     }
 
     /// Check if access to the image is authorized.
@@ -113,6 +119,7 @@ public class ImageLoader {
     /// @return The resolved image source, or null if it could not be resolved.
     public @Nullable ImageSource resolve(String identifier, @Nullable String eTag, @Nullable Instant lastModified) {
         if (identifier.startsWith(VALIDATION_ID_PREFIX)) {
+            metrics.incrementValidationRequests();
             return resolveValidationImage(identifier);
         }
         ImageSource source = extensionRuntime.resolve(identifier, eTag, lastModified);
@@ -256,17 +263,33 @@ public class ImageLoader {
 
     ///  Load the image in its native size from its source
     public VImage loadImage(ImageSource source) throws IOException, InterruptedException {
-        return switch (source.resolvedImage()) {
-            case FilesystemResolvedImage(Path path) ->
-                VImage.newFromFile(arena, path.toAbsolutePath().toString());
-            case HttpResolvedImage(URI uri, Map<String, String> headers, @Nullable Boolean supportsByteRange) ->
-                loadFromHttp(uri, headers, null, supportsByteRange);
-            case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
-                VImage.newFromSource(arena, srcSupplier.apply(arena));
-            case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
-            case SourceNotModified ignored ->
-                throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
-        };
+        String sourceType;
+        VImage result =
+                switch (source.resolvedImage()) {
+                    case FilesystemResolvedImage(Path path) -> {
+                        sourceType = "filesystem";
+                        yield VImage.newFromFile(arena, path.toAbsolutePath().toString());
+                    }
+                    case HttpResolvedImage(
+                            URI uri,
+                            Map<String, String> headers,
+                            @Nullable Boolean supportsByteRange) -> {
+                        sourceType = "http";
+                        yield loadFromHttp(uri, headers, null, supportsByteRange);
+                    }
+                    case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) -> {
+                        sourceType = "custom";
+                        yield VImage.newFromSource(arena, srcSupplier.apply(arena));
+                    }
+                    case BinaryResolvedImage(byte[] data) -> {
+                        sourceType = "binary";
+                        yield VImage.newFromBytes(arena, data);
+                    }
+                    case SourceNotModified ignored ->
+                        throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
+                };
+        metrics.incrementSourceLoads(sourceType);
+        return result;
     }
 
     private VImage loadFromHttp(

@@ -2,6 +2,7 @@ package dev.mdz.wolpi.image;
 
 import static dev.mdz.wolpi.testutil.WolpiAssertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.ImageSource;
 import java.io.IOException;
@@ -57,8 +59,12 @@ public class ImageProcessorTest {
         arena = Arena.ofConfined();
         var runtime = mock(ExtensionRuntime.class);
         when(runtime.hasExtensionsForHook(any())).thenReturn(false);
-        loader = new ImageLoader(config, arena, null, runtime, null);
-        processor = new ImageProcessor(arena, config, loader, new ImageRequestParser(config), runtime);
+        var metrics = mock(WolpiMetrics.class);
+        var timer = mock(WolpiMetrics.ImageProcessingTimer.class);
+        when(metrics.startImageProcessingTimer(any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(timer);
+        loader = new ImageLoader(config, arena, null, runtime, null, metrics);
+        processor = new ImageProcessor(arena, config, loader, new ImageRequestParser(config), runtime, metrics);
     }
 
     @AfterAll

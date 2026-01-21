@@ -10,10 +10,10 @@ import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.RuntimeContext;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.config.MeterFilterReply;
-import io.micrometer.observation.ObservationPredicate;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.foreign.Arena;
@@ -74,8 +74,9 @@ public class Wolpi implements WebMvcConfigurer {
     public ExtensionRuntime extensionRuntime(
             ExtensionRegistry registry,
             @Qualifier("contextPool") KeyedObjectPool<LoadedExtension, RuntimeContext> ctxPool,
-            @Qualifier("extensionThreadPool") ExecutorService threadPool) {
-        return new ExtensionRuntimeImpl(registry, ctxPool, threadPool);
+            @Qualifier("extensionThreadPool") ExecutorService threadPool,
+            WolpiMetrics metrics) {
+        return new ExtensionRuntimeImpl(registry, ctxPool, threadPool, metrics);
     }
 
     /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
