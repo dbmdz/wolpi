@@ -76,6 +76,19 @@ public class NpmInstaller {
         if (npmPath == null) {
             throw new PackageInstallException("npm executable not configured, cannot install package");
         }
+
+        // Check if package is already installed with the correct version
+        try {
+            String installedVersion = getVersion(packageName);
+            if (version.equals(installedVersion)) {
+                log.info("Package '{}' version {} already installed, skipping installation", packageName, version);
+                return;
+            }
+        } catch (PackageInstallException e) {
+            // Package not installed, continue with installation
+        }
+
+        log.debug("Installing package '{}' version {} from npm registry", packageName, version);
         List<String> args = List.of(
                 "install",
                 "--no-audit",

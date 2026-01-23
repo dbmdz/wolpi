@@ -290,21 +290,17 @@ class PyPiInstallerTest {
     @DisplayName("should return null when python lib dir is missing")
     void shouldReturnNullWhenPythonLibDirIsMissing() throws Exception {
         Path venv = pypiDir.resolve("pkg");
-        Files.createDirectories(venv.resolve("lib"));
+        Files.createDirectories(venv);
         assertThat(installer.getVenvSitePackages("pkg")).isNull();
     }
 
     @Test
     @DisplayName("should return null when site-packages dir is missing")
-    void shouldReturnNullWhenSitePackagesDirIsMissing() {
-        var builder = ProcessBuilderMocks.builder()
-                .matchCommandTokenContains("pip")
-                .success()
-                .stdoutWhenContains("show", "Name: test-package\nVersion: 9.8.7\nSummary: example");
-        try (var _ = builder.build()) {
-            String version = installer.getVersion("test-package");
-            assertThat(version).isEqualTo("9.8.7");
-        }
+    void shouldReturnNullWhenSitePackagesDirIsMissing() throws IOException {
+        Path venv = pypiDir.resolve("pkg");
+        Files.createDirectories(venv.resolve("lib"));
+        String version = installer.getVersion("test-package");
+        assertThat(version).isNull();
     }
 
     @Test

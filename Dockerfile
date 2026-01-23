@@ -60,7 +60,7 @@ RUN java --enable-native-access=ALL-UNNAMED \
          --sun-misc-unsafe-memory-access=allow \
          -jar /app/app.jar \
          install-validator && \
-    mv /app/data /app/.data_preinstalled
+    cp -al /app/data /app/.data_preinstalled
 
 EXPOSE 8080
 

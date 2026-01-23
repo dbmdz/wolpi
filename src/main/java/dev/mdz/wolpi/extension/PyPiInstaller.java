@@ -88,6 +88,14 @@ public class PyPiInstaller {
     public Path install(String packageName, String version, @Nullable URI customIndex, boolean skipDependencies)
             throws PackageInstallException {
         Path venvPath = ensureVenv(packageName);
+
+        String installedVersion = getVersion(packageName);
+        if (version.equals(installedVersion)) {
+            log.info("Package '{}' version {} already installed, skipping installation", packageName, version);
+            return venvPath;
+        }
+
+        log.debug("Installing package '{}' version {} into virtual environment at {}", packageName, version, venvPath);
         List<String> pipArgs = new ArrayList<>();
         pipArgs.add("install");
         if (customIndex != null) {
@@ -240,8 +248,12 @@ public class PyPiInstaller {
 
     // Determine the installed version of the given package, or null if not installed.
     public @Nullable String getVersion(String packageName) {
+        Path venvPath = getVenv(packageName);
+        if (venvPath == null) {
+            return null;
+        }
+
         try {
-            Path venvPath = ensureVenv(packageName);
             String out = runPip(venvPath, "show", packageName);
             return Arrays.stream(out.split("\n"))
                     .filter(line -> line.startsWith("Version:"))
@@ -325,6 +337,7 @@ public class PyPiInstaller {
         }
         Path venvPath = baseDir.resolve(packageName);
         if (!Files.exists(venvPath)) {
+            log.debug("Creating virtual environment for package '{}' at {}", packageName, venvPath);
             try {
                 CommandRunner.runCommand(
                         pythonPath,

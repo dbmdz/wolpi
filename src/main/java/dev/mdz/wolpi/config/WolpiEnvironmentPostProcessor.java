@@ -143,7 +143,8 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
     private MapPropertySource getLoggingOverrides(WolpiConfig config) {
         Map<String, Object> overrides = new HashMap<>();
         if (config.logging() != null) {
-            overrides.put("logging.level.root", config.logging().level().toString());
+            overrides.put(
+                    "logging.level.dev.mdz.wolpi", config.logging().level().toString());
             if (config.logging().format() == LogFormat.JSON) {
                 overrides.put("logging.structured.format.console", "logstash");
                 overrides.put("logging.structured.json.stacktrace.include-common-frames", "false");
