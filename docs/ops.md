@@ -164,8 +164,8 @@
 For container-based deployments, it can make sense to create a custom image based on the official
 Wolpi image, where all the extensions are already pre-installed. This will significantly reduce the
 time until requests can be served, reduce the risk of running into unexpected situations when the
-container is started, as well make it possible to restrict egress traffic for the container (since
-no package indices need to be access to install the extensions). Additionally, it will allow you
+container is started, as well as make it possible to restrict egress traffic for the container (since
+no package indices need to be accessed to install the extensions). Additionally, it will allow you
 to set up your container with a read-only root filesystem, decreasing the attack surface further.
 
 To do so, you have to:
