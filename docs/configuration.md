@@ -26,7 +26,7 @@ There are a few top-level configuration options that control general aspects of 
 
 These options can be set under the `http` section to customize Wolpi's HTTP server behavior:
 
-- `host`: Host or IP to bind the server to, defaults to all interfaces.
+- `host`: Host or IP to bind the server to, defaults to `localhost`.
 - `port`: Port to bind the server to, defaults to 8080.
 - `base-uri`: Base URI the server is accessible at, used for generating absolute URLs in responses,
    such as in the canonical link header. If not set, the server will attempt to determine the base

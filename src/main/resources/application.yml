@@ -13,6 +13,9 @@ server:
   forward-headers-strategy: framework
 
 management:
+  endpoints:
+    web:
+      base-path: "/monitoring"
   endpoint:
     prometheus:
       access: read_only
