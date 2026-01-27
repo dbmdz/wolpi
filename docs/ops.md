@@ -75,13 +75,6 @@
                 - name: wolpi-config
                   mountPath: /app/wolpi.yaml
                   subPath: wolpi.yaml
-              securityContext:
-                runAsUser: 1000
-                runAsGroup: 1000
-                fsGroup: 1000
-                # Set this to `true` if you've baked your extensions into the image to decrease
-                # the attack surface
-                readOnlyRootFilesystem: false
               env:
                 - name: JAVA_TOOL_OPTIONS
                   # Use at most 50% of the container memory for the JVM heap, and start with 12.5%
@@ -90,13 +83,13 @@
                   value: "-XX:MaxRAMPercentage=50.0 -XX:InitialRAMPercentage=12.5"
               resources:
                 requests:
-                  memory: "512m"
+                  memory: "1Gi"
                   cpu: "4"
                 limits:
                   # Wolpi by itself doesn't need a lot of memory since vips loads images in a
                   # streaming fashion, adjust this based on your metrics and expected maximum number
                   # of concurrent requests
-                  memory: "2Gi"
+                  memory: "4Gi"
                   # Adjust CPU limits according to your expected load and available hardware
                   cpu: "8"
               livenessProbe:
@@ -165,8 +158,7 @@ For container-based deployments, it can make sense to create a custom image base
 Wolpi image, where all the extensions are already pre-installed. This will significantly reduce the
 time until requests can be served, reduce the risk of running into unexpected situations when the
 container is started, as well as make it possible to restrict egress traffic for the container (since
-no package indices need to be accessed to install the extensions). Additionally, it will allow you
-to set up your container with a read-only root filesystem, decreasing the attack surface further.
+no package indices need to be accessed to install the extensions).
 
 To do so, you have to:
 
