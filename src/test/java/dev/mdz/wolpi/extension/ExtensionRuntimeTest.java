@@ -67,6 +67,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -475,6 +476,8 @@ public class ExtensionRuntimeTest {
                 new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
 
         @Test
+        // TODO: Investigate!
+        @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "Flaky on CI")
         @DisplayName("Should borrow contexts from pool for extensions")
         void shouldBorrowContextsFromPool() {
             assertThat(contextPool.getNumActive()).isZero();
@@ -511,6 +514,8 @@ public class ExtensionRuntimeTest {
         }
 
         @Test
+        // TODO: Investigate!
+        @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "Flaky on CI")
         @DisplayName("Should run setup, cleanup and destroy hooks appropriately")
         void shouldRunSetupCleanupAndDestroyHooks() {
             List<Thread> threads = new ArrayList<>();

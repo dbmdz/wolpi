@@ -1,9 +1,9 @@
-target/
+/target
 .idea
 *.iws
 *.iml
 *.ipr
-data
-images
-samples/**/build
+/data
+/images
+/samples
 *.egg-info

@@ -7,8 +7,10 @@ import app.photofox.vipsffm.VTarget;
 import app.photofox.vipsffm.VipsHelper;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsDirection;
+import app.photofox.vipsffm.enums.VipsIntent;
 import app.photofox.vipsffm.enums.VipsInterpretation;
 import app.photofox.vipsffm.enums.VipsOperationRelational;
+import app.photofox.vipsffm.enums.VipsPCS;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
@@ -225,6 +227,17 @@ public class ImageProcessor {
         }
         IIIFQuality quality = parser.parseQuality(qualitySpec);
 
+        // Embedded color profiles are converted to sRGB in LAB connection space with perceptual intent
+        boolean hasColorProfile =
+                VipsHelper.image_get_typeof(vipsArena, image.getUnsafeStructAddress(), "icc-profile-data") != 0;
+        if (hasColorProfile) {
+            image = image.iccTransform(
+                    "srgb",
+                    VipsOption.Enum("intent", VipsIntent.INTENT_PERCEPTUAL),
+                    VipsOption.Boolean("embedded", true),
+                    VipsOption.Enum("pcs", VipsPCS.PCS_LAB));
+            image.remove("icc-profile-data");
+        }
         var outputInterpretation =
                 switch (quality) {
                     case COLOR -> VipsInterpretation.INTERPRETATION_sRGB;

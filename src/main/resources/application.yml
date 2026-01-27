@@ -62,7 +62,7 @@ wolpi:
     # python-executable: "/usr/local/bin/graalpy"
 
   # Extension Debugging via Debug Adapter Protocol
-  debug-extensions:
+  extension-debug:
     # Enable or disable extension debugging, global setting for
     # all extensions and languages
     enabled: false
