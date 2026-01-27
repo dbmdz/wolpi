@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 /// extension is handling the syntax for the part of the request.
 @Component
 public class ImageRequestParser {
+    private static final double MAX_ASPECT_RATIO_DIFFERENCE_FOR_EQUALITY = 0.002;
 
     private final IIIFConfig iiifConfig;
 
@@ -386,8 +387,9 @@ public class ImageRequestParser {
     public @Nullable ImageRequest toCanonicalForm(ImageRequest request, ImageSize sourceSize) {
         boolean isV2 = request.version() == IIIFVersion.V2;
         try {
-            ImageSize parsedSize = this.parseSize(request.version(), request.sizeSpec(), sourceSize);
             CropRectangle parsedRegion = this.parseRegion(request.cropSpec(), sourceSize);
+            ImageSize parsedSize = this.parseSize(
+                    request.version(), request.sizeSpec(), new ImageSize(parsedRegion.width(), parsedRegion.height()));
             String canonicalRegion = parsedRegion.x() == 0
                             && parsedRegion.y() == 0
                             && new ImageSize(parsedRegion.width(), parsedRegion.height()).equals(sourceSize)
@@ -408,7 +410,9 @@ public class ImageRequestParser {
                     && (parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height())
                     && sizeIsMax) {
                 canonicalSize = "^max";
-            } else if (isV2 && (parsedSize.aspectRatio() == sourceSize.aspectRatio())) {
+            } else if (isV2
+                    && (Math.abs(parsedSize.aspectRatio() - parsedRegion.aspectRatio()))
+                            < MAX_ASPECT_RATIO_DIFFERENCE_FOR_EQUALITY) {
                 canonicalSize = "%d,".formatted(parsedSize.width());
             } else if (!isV2 && parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height()) {
                 canonicalSize = "^%d,%d".formatted(parsedSize.width(), parsedSize.height());

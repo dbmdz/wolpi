@@ -834,9 +834,19 @@ class ImageRequestParserTest {
         @Test
         @DisplayName("should canonicalize size to width-only for v2 when aspect ratio matches")
         void shouldCanonicalizeSizeToWidthOnlyForV2WhenAspectRatioMatches() {
-            ImageRequest request = new ImageRequest("id", IIIFVersion.V2, "full", "500,", "0", "default", "jpg");
+            ImageRequest request = new ImageRequest("id", IIIFVersion.V2, "full", "500,400", "0", "default", "jpg");
             ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
             assertThat(canonical.sizeSpec()).isEqualTo("500,");
+        }
+
+        @Test
+        @DisplayName("should not canonicalize size from w, to w,h when AR matches for v2")
+        void shouldNotCanonicalizeSizeFromWToWH() {
+            ImageSize sourceSize = new ImageSize(2765, 4296);
+            ImageRequest request =
+                    new ImageRequest("id", IIIFVersion.V2, "68,40,2576,4128", "200,", "0", "default", "jpg");
+            ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
+            assertThat(canonical.sizeSpec()).isEqualTo("200,");
         }
 
         @Test
