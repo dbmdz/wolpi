@@ -839,14 +839,14 @@ class ImageRequestParserTest {
             assertThat(canonical.sizeSpec()).isEqualTo("500,");
         }
 
-        @Test
+        @ParameterizedTest
         @DisplayName("should not canonicalize size from w, to w,h when AR matches for v2")
-        void shouldNotCanonicalizeSizeFromWToWH() {
-            ImageSize sourceSize = new ImageSize(2765, 4296);
-            ImageRequest request =
-                    new ImageRequest("id", IIIFVersion.V2, "68,40,2576,4128", "200,", "0", "default", "jpg");
+        @CsvSource({"1000,800,full,'500,'", "2765,4296,'68,40,2576,4128','200,'", "1481,2434,'0,2048,1481,386','741,"})
+        void shouldNotCanonicalizeSizeFromWToWH(int sourceWidth, int sourceHeight, String cropSpec, String sizeSpec) {
+            ImageSize sourceSize = new ImageSize(sourceWidth, sourceHeight);
+            ImageRequest request = new ImageRequest("id", IIIFVersion.V2, cropSpec, sizeSpec, "0", "default", "jpg");
             ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
-            assertThat(canonical.sizeSpec()).isEqualTo("200,");
+            assertThat(canonical.sizeSpec()).isEqualTo(sizeSpec);
         }
 
         @Test

@@ -22,7 +22,10 @@ import org.springframework.stereotype.Component;
 /// extension is handling the syntax for the part of the request.
 @Component
 public class ImageRequestParser {
-    private static final double MAX_ASPECT_RATIO_DIFFERENCE_FOR_EQUALITY = 0.002;
+    /// Maximum difference in pixels relative the source size between expected and actual width when
+    /// comparing aspect ratios between a source image and a scaled image to determine if they are
+    /// effectively the same.
+    private static final double MAX_ASPECT_RATIO_DIFFERENCE = 1.5;
 
     private final IIIFConfig iiifConfig;
 
@@ -388,11 +391,9 @@ public class ImageRequestParser {
         boolean isV2 = request.version() == IIIFVersion.V2;
         try {
             CropRectangle parsedRegion = this.parseRegion(request.cropSpec(), sourceSize);
-            ImageSize parsedSize = this.parseSize(
-                    request.version(), request.sizeSpec(), new ImageSize(parsedRegion.width(), parsedRegion.height()));
-            String canonicalRegion = parsedRegion.x() == 0
-                            && parsedRegion.y() == 0
-                            && new ImageSize(parsedRegion.width(), parsedRegion.height()).equals(sourceSize)
+            ImageSize regionSize = new ImageSize(parsedRegion.width(), parsedRegion.height());
+            ImageSize parsedSize = this.parseSize(request.version(), request.sizeSpec(), regionSize);
+            String canonicalRegion = parsedRegion.x() == 0 && parsedRegion.y() == 0 && regionSize.equals(sourceSize)
                     ? "full"
                     : "%d,%d,%d,%d"
                             .formatted(parsedRegion.x(), parsedRegion.y(), parsedRegion.width(), parsedRegion.height());
@@ -410,9 +411,7 @@ public class ImageRequestParser {
                     && (parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height())
                     && sizeIsMax) {
                 canonicalSize = "^max";
-            } else if (isV2
-                    && (Math.abs(parsedSize.aspectRatio() - parsedRegion.aspectRatio()))
-                            < MAX_ASPECT_RATIO_DIFFERENCE_FOR_EQUALITY) {
+            } else if (isV2 && doesAspectRatioMatch(regionSize, parsedSize)) {
                 canonicalSize = "%d,".formatted(parsedSize.width());
             } else if (!isV2 && parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height()) {
                 canonicalSize = "^%d,%d".formatted(parsedSize.width(), parsedSize.height());
@@ -441,5 +440,17 @@ public class ImageRequestParser {
         } catch (IllegalArgumentException | NotImplementedException e) {
             return null;
         }
+    }
+
+    ///  Checks if the aspect ratio of the source size matches the aspect ratio of the target size.
+    ///
+    /// To remain scaling-invariant, we first project the expected width of the target size based
+    /// on the source size's aspect ratio and the target size's height, then compare that to the
+    /// actual target width, allowing for a small difference defined by [MAX_ASPECT_RATIO_DIFFERENCE].
+    private boolean doesAspectRatioMatch(ImageSize sourceSize, ImageSize targetSize) {
+        double sourceRatio = sourceSize.aspectRatio();
+        double expectedWidth = targetSize.height() * sourceRatio;
+        double pixelDifference = Math.abs(expectedWidth - targetSize.width());
+        return pixelDifference <= MAX_ASPECT_RATIO_DIFFERENCE;
     }
 }
