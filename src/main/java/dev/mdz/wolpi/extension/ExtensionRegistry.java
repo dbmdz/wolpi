@@ -140,17 +140,6 @@ public class ExtensionRegistry implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        cfg.extensions().forEach(ext -> {
-            if (failedExtensions.contains(ext)) {
-                return;
-            }
-            LoadedExtension loadedExtension = loadedExtensions.get(ext);
-            for (ExtensionHooks hook : loadedExtension.implementedHooks()) {
-                implementedHooks
-                        .computeIfAbsent(hook, (k) -> new CopyOnWriteArrayList<>())
-                        .add(loadedExtension);
-            }
-        });
     }
 
     /// Load an extension based on its definition in the provided configuration.
