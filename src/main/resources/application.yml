@@ -32,6 +32,7 @@ management:
         http.server.requests: []
       slo:
         http.server.requests: 50ms, 200ms, 500ms, 1s, 5s
+        wolpi.extension.pool_wait.seconds: 1ms, 5ms, 10ms, 50ms, 100ms, 200ms, 500ms, 1s
     enable:
       system: false
       jvm:

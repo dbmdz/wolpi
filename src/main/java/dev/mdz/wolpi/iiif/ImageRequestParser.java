@@ -24,8 +24,9 @@ import org.springframework.stereotype.Component;
 public class ImageRequestParser {
     /// Maximum difference in pixels relative the source size between expected and actual width when
     /// comparing aspect ratios between a source image and a scaled image to determine if they are
-    /// effectively the same.
-    private static final double MAX_ASPECT_RATIO_DIFFERENCE = 1.5;
+    /// effectively the same. We're a bit more generous here to account for rounding errors when scaling
+    /// images.
+    private static final double MAX_ASPECT_RATIO_DIFFERENCE = 3;
 
     private final IIIFConfig iiifConfig;
 
