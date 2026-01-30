@@ -1,6 +1,7 @@
 package dev.mdz.wolpi.extension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import dev.mdz.wolpi.config.ExtensionConfig;
@@ -11,15 +12,17 @@ import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
+import dev.mdz.wolpi.extension.model.LoadedExtension;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,15 +53,15 @@ class ExtensionRegistryTest {
     @DisplayName("should not load extensions when config is empty")
     @Test
     void shouldNotLoadExtensionsWhenConfigIsEmpty() {
-        var registry = buildRegistryWithExtension(null, null, null, null);
+        var registry = buildRegistryWithExtensions();
         assertThat(registry.getExtensions()).isEmpty();
     }
 
     @DisplayName("should load a single JavaScript file")
     @Test
-    void shouldLoadSingleJsFile() throws IOException {
+    void shouldLoadSingleJsFile() {
         Path source = Path.of("src/test/resources/test.js");
-        var registry = buildRegistryWithExtension(source, null, null, Map.of());
+        var registry = buildRegistryWithExtensions(new ExtensionConfig(source, null, null, Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS File Extension");
@@ -66,9 +69,10 @@ class ExtensionRegistryTest {
 
     @DisplayName("should load a single Python file")
     @Test
-    void shouldLoadSinglePyFile() throws IOException {
+    void shouldLoadSinglePyFile() {
         Path source = Path.of("src/test/resources/test.py");
-        var registry = buildRegistryWithExtension(source, null, null, Collections.emptyMap());
+        var registry =
+                buildRegistryWithExtensions(new ExtensionConfig(source, null, null, Collections.emptyMap(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY File Extension");
@@ -93,13 +97,14 @@ class ExtensionRegistryTest {
         when(npmInstaller.getVersion("js-extension")).thenReturn("1.0.0");
 
         // Install from local path
-        var registry = buildRegistryWithExtension(source, null, null, Map.of());
+        var registry = buildRegistryWithExtensions(new ExtensionConfig(source, null, null, Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
 
         // Install from npm
-        registry = buildRegistryWithExtension(null, new PkgSource("js-extension", "1.0.0", null), null, Map.of());
+        registry = buildRegistryWithExtensions(
+                new ExtensionConfig(null, new PkgSource("js-extension", "1.0.0", null), null, Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
@@ -133,24 +138,58 @@ class ExtensionRegistryTest {
                 .thenReturn(new EntryPoint("py_extension", "wolpi_extension"));
 
         // Install from local path
-        var registry = buildRegistryWithExtension(source, null, null, Map.of());
+        var registry = buildRegistryWithExtensions(new ExtensionConfig(source, null, null, Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
 
         // Instal from PyPI
-        registry = buildRegistryWithExtension(null, null, new PkgSource("py-extension", "1.0.0", null), Map.of());
+        registry = buildRegistryWithExtensions(
+                new ExtensionConfig(null, null, new PkgSource("py-extension", "1.0.0", null), Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
     }
 
-    private ExtensionRegistry buildRegistryWithExtension(
-            Path path, PkgSource npm, PkgSource pypi, Map<String, Object> cfg) {
-        List<ExtensionConfig> exts = new ArrayList<>();
-        if (path != null || npm != null || pypi != null) {
-            exts.add(new ExtensionConfig(path, npm, pypi, cfg, false));
-        }
+    @DisplayName("should list each extension once per hook and maintain their original order even after reload")
+    @Test
+    void shouldListEachExtensionOnlyOnce(@TempDir Path tempDir) throws IOException, InterruptedException {
+        Path tempSource = tempDir.resolve("test.py");
+        Files.copy(Path.of("src/test/resources/test.py"), tempSource);
+        ExtensionConfig pyExtentionConfig = new ExtensionConfig(tempSource, null, null, Collections.emptyMap(), true);
+        var registry = buildRegistryWithExtensions(
+                pyExtentionConfig,
+                new ExtensionConfig(Path.of("src/test/resources/test.js"), null, null, Map.of(), false));
+        assertThat(registry.getExtensions()).hasSize(2);
+        List<LoadedExtension> authorizeExtensions = registry.getExtensions(ExtensionHooks.AUTHORIZE);
+        assertThat(authorizeExtensions)
+                .hasSize(2)
+                .satisfiesExactly(
+                        ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test PY File Extension"),
+                        ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test JS File Extension"));
+        List<LoadedExtension> resolveExtensions = registry.getExtensions(ExtensionHooks.RESOLVE);
+        assertThat(resolveExtensions).isEmpty();
+
+        Files.writeString(pyExtentionConfig.path(), """
+
+def resolve(self, identifier, etag, last_modified):
+  log_hook_call("resolve")
+""", StandardOpenOption.APPEND);
+        // wait for reload
+        Thread.sleep(1000);
+        authorizeExtensions = registry.getExtensions(ExtensionHooks.AUTHORIZE);
+        assertThat(authorizeExtensions)
+                .hasSize(2)
+                .satisfiesExactly(
+                        ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test PY File Extension"),
+                        ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test JS File Extension"));
+        resolveExtensions = registry.getExtensions(ExtensionHooks.RESOLVE);
+        assertThat(resolveExtensions)
+                .hasSize(1)
+                .satisfiesExactly(ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test PY File Extension"));
+    }
+
+    private ExtensionRegistry buildRegistryWithExtensions(ExtensionConfig... exts) {
         WolpiConfig wolpiConfig = new WolpiConfig(
                 Path.of("/data"),
                 null,
@@ -158,7 +197,7 @@ class ExtensionRegistryTest {
                 null,
                 null,
                 null,
-                exts,
+                List.of(exts),
                 null,
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 null,
@@ -167,7 +206,7 @@ class ExtensionRegistryTest {
                 wolpiConfig,
                 pyPiInstaller,
                 npmInstaller,
-                null,
+                mock(GenericKeyedObjectPool.class),
                 new GraalContextSupplier(wolpiConfig),
                 new GuestContextFactory(buildProperties, httpClient, Arena.ofAuto(), null, null));
     }
