@@ -349,7 +349,7 @@ public class ImageProcessor {
                 buf = writeTarget.getBlob();
             }
             return new EncodedImage(
-                    buf.asArenaScopedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
+                    buf.asClonedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
         } finally {
             timer.stop();
             usedFastPath.remove();
