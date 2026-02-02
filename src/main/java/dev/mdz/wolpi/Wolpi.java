@@ -14,6 +14,7 @@ import dev.mdz.wolpi.metrics.WolpiMetrics;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.config.MeterFilterReply;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.foreign.Arena;
@@ -77,6 +78,11 @@ public class Wolpi implements WebMvcConfigurer {
             @Qualifier("extensionThreadPool") ExecutorService threadPool,
             WolpiMetrics metrics) {
         return new ExtensionRuntimeImpl(registry, ctxPool, threadPool, metrics);
+    }
+
+    @PreDestroy
+    public void shutdownHook() {
+        Vips.shutdown();
     }
 
     /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
