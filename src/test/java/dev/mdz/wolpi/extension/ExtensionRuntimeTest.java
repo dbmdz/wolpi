@@ -14,6 +14,7 @@ import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.CacheControlHeaders;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionPoolConfig;
+import dev.mdz.wolpi.config.WolpiConfig.ExtensionRuntimeConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.exceptions.ExtensionExecutionException;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
@@ -164,6 +165,7 @@ public class ExtensionRuntimeTest {
                 mock(IIIFConfig.class),
                 mock(CacheControlHeaders.class),
                 new ArrayList<>(),
+                mock(ExtensionRuntimeConfig.class),
                 mock(ExtensionPoolConfig.class),
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 mock(PackagingConfig.class),

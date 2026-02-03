@@ -33,9 +33,9 @@ public record WolpiConfig(
         @NestedConfigurationProperty @Nullable HttpConfig http,
         @NestedConfigurationProperty @Nullable LoggingConfig logging,
         @NestedConfigurationProperty IIIFConfig iiif,
-        // TODO: Implement!
         @NestedConfigurationProperty CacheControlHeaders cacheControlHeaders,
         @NestedConfigurationProperty List<ExtensionConfig> extensions,
+        @NestedConfigurationProperty ExtensionRuntimeConfig extensionRuntime,
         @NestedConfigurationProperty ExtensionPoolConfig extensionPool,
         @NestedConfigurationProperty ExtensionDebugConfig extensionDebug,
         @NestedConfigurationProperty PackagingConfig packaging,
@@ -59,6 +59,14 @@ public record WolpiConfig(
     ///                       allow for downloading and installing packages.
     public record PackagingConfig(
             @Nullable Path npmExecutable, @Nullable Path pythonExecutable, Duration installTimeout) {}
+
+    /// Configuration for the extension runtimes.
+    ///
+    /// @param enablePythonNativeModules Whether to enable support for native Python modules in
+    ///                                  extensions (e.g. numpy). Enabled by default, disable if
+    ///                                  you want to restrict extensions to pure Python code only.
+    public record ExtensionRuntimeConfig(
+            @DefaultValue("true") boolean enablePythonNativeModules) {}
 
     /// Configures limits for the pool handing out extension contexts to requests.
     ///

@@ -64,10 +64,14 @@ public class GraalContextSupplier {
     private static final Pattern URI_PATTERN = Pattern.compile("^https?://.*$");
 
     private final HostAccess hostAccess;
+    private final boolean enablePythonNativeModules;
 
     private Engine graalEngine;
 
     public GraalContextSupplier(@Nullable WolpiConfig config) {
+        this.enablePythonNativeModules = config == null
+                || config.extensionRuntime() == null
+                || config.extensionRuntime().enablePythonNativeModules();
         this.hostAccess = buildHostAccess();
         var engineBuilder = Engine.newBuilder("python", "js").allowExperimentalOptions(true);
         if (config != null) {
@@ -181,8 +185,8 @@ public class GraalContextSupplier {
                 .allowCreateThread(true)
                 .allowCreateProcess(true)
                 .allowExperimentalOptions(true)
-                .allowNativeAccess(true)
-                .option("python.IsolateNativeModules", "true");
+                .allowNativeAccess(this.enablePythonNativeModules)
+                .option("python.IsolateNativeModules", String.valueOf(this.enablePythonNativeModules));
         if (venvPath != null) {
             Path pythonExecutable = Stream.of("graalpy", "python3", "python")
                     .map(cmd -> venvPath.resolve("bin", cmd))

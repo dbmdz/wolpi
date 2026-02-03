@@ -49,6 +49,7 @@ class NpmInstallerTest {
                 Collections.emptyList(),
                 null,
                 null,
+                null,
                 new PackagingConfig(npmPath, null, Duration.ofSeconds(5)),
                 Collections.emptyMap());
         installer = new NpmInstaller(config, new JsonMapper());
@@ -131,6 +132,7 @@ class NpmInstallerTest {
                 null,
                 null,
                 Collections.emptyList(),
+                null,
                 null,
                 null,
                 new PackagingConfig(null, null, Duration.ofSeconds(5)),

@@ -55,6 +55,7 @@ public class ImageProcessorTest {
                 null,
                 null,
                 null,
+                null,
                 Map.of());
         arena = Arena.ofConfined();
         var runtime = mock(ExtensionRuntime.class);

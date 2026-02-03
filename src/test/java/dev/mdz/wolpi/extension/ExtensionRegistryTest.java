@@ -199,6 +199,7 @@ def resolve(self, identifier, etag, last_modified):
                 null,
                 List.of(exts),
                 null,
+                null,
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 null,
                 null);
