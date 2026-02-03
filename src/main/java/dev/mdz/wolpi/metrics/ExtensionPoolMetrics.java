@@ -81,7 +81,7 @@ public class ExtensionPoolMetrics {
                             .register(meterRegistry));
 
             eventCounters.put(
-                    new PoolEventKey(extName, PoolEvent.CREATED),
+                    new PoolEventKey(extName, PoolEvent.DESTROYED),
                     Counter.builder("wolpi.extensions.pool.events")
                             .tag("extension_name", extName)
                             .tag("event", "destroyed")
@@ -89,7 +89,7 @@ public class ExtensionPoolMetrics {
                             .register(meterRegistry));
 
             eventCounters.put(
-                    new PoolEventKey(extName, PoolEvent.CREATED),
+                    new PoolEventKey(extName, PoolEvent.BORROWED),
                     Counter.builder("wolpi.extensions.pool.events")
                             .tag("extension_name", extName)
                             .tag("event", "borrowed")
@@ -97,7 +97,7 @@ public class ExtensionPoolMetrics {
                             .register(meterRegistry));
 
             eventCounters.put(
-                    new PoolEventKey(extName, PoolEvent.CREATED),
+                    new PoolEventKey(extName, PoolEvent.RETURNED),
                     Counter.builder("wolpi.extensions.pool.events")
                             .tag("extension_name", extName)
                             .tag("event", "returned")

@@ -228,36 +228,36 @@ standard library.  Wolpi exposes the following metrics to monitor pool behavior:
 
 **Gauge Metrics** (current state):
 
-- `wolpi_extensions_pooled{extension_name="...", state="active"}`: Number of contexts currently
+- `wolpi_extensions_pool{extension_name="...", state="active"}`: Number of contexts currently
   borrowed from the pool and processing requests
-- `wolpi_extensions_pooled{extension_name="...", state="idle"}`: Number of contexts available
+- `wolpi_extensions_pool{extension_name="...", state="idle"}`: Number of contexts available
   in the pool, ready to handle requests without initialization overhead
-- `wolpi_extensions_pool_waiting{extension_name="..."}`: Number of threads currently waiting
+- `wolpi_extensions_pool{extension_name="...", state="client_waiting"}`: Number of threads currently waiting
   for a context to become available (indicates pool exhaustion)
 
 **Counter Metrics** (cumulative totals):
 
-- `wolpi_extensions_pool_created{extension_name="..."}`: Total number of contexts created since
+- `wolpi_extensions_pool_events{extension_name="...", event="created"}`: Total number of contexts created since
   startup. Ideally this should stabilize after initial warm-up.
-- `wolpi_extensions_pool_destroyed{extension_name="..."}`: Total number of contexts destroyed.
+- `wolpi_extensions_pool_events{extension_name="...", event="destroyed"}`: Total number of contexts destroyed.
   Frequent destruction indicates pool eviction or scaling down.
-- `wolpi_extensions_pool_borrowed{extension_name="..."}`: Total number of times a context was
+- `wolpi_extensions_pool_events{extension_name="...", event="borrowed"}`: Total number of times a context was
   borrowed from the pool.
-- `wolpi_extensions_pool_returned{extension_name="..."}`: Total number of times a context was
+- `wolpi_extensions_pool_events{extension_name="...", event="returned"}`: Total number of times a context was
   returned to the pool after processing a request.
 
 **Example Prometheus Queries**:
 
 ```promql
 # Pool utilization (percentage of contexts in use)
-wolpi_extensions_pooled{state="active"} /
-  (wolpi_extensions_pooled{state="active"} + wolpi_extensions_pooled{state="idle"}) * 100
+wolpi_extensions_pool{state="active"} /
+  (wolpi_extensions_pool{state="active"} + wolpi_extensions_pool{state="idle"}) * 100
 
 # Rate of context creation (contexts/sec) - should be near zero after warm-up
-rate(wolpi_extensions_pool_created[5m])
+rate(wolpi_extensions_pool_events{event="created"}[5m])
 
 # Contexts created but not yet destroyed (should match active + idle)
-wolpi_extensions_pool_created - wolpi_extensions_pool_destroyed
+wolpi_extensions_pool_events{event="created"} - wolpi_extensions_pool_events{event="destroyed"}
 
 # Average pool wait time when exhausted (requires wolpi.extension.pool_wait.seconds histogram)
 rate(wolpi_extension_pool_wait_seconds_sum[5m]) /
