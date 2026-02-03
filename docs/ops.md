@@ -258,10 +258,6 @@ rate(wolpi_extensions_pool_events{event="created"}[5m])
 
 # Contexts created but not yet destroyed (should match active + idle)
 wolpi_extensions_pool_events{event="created"} - wolpi_extensions_pool_events{event="destroyed"}
-
-# Average pool wait time when exhausted (requires wolpi.extension.pool_wait.seconds histogram)
-rate(wolpi_extension_pool_wait_seconds_sum[5m]) /
-  rate(wolpi_extension_pool_wait_seconds_count[5m])
 ```
 
 **Tuning Tips**:
