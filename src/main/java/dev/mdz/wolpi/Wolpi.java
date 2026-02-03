@@ -22,6 +22,7 @@ import java.net.http.HttpClient;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -29,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
-import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
@@ -88,26 +88,52 @@ public class Wolpi implements WebMvcConfigurer {
     /// Pool of [RuntimeContext]s for each [LoadedExtension] to be reused across requests.
     @Bean("contextPool")
     public GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool(
-            WolpiConfig wolpiConfig, GraalContextSupplier contextSupplier) {
+            GenericKeyedObjectPoolConfig<RuntimeContext> cfg, GraalContextSupplier contextSupplier) {
+        return new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(contextSupplier), cfg);
+    }
+
+    @Bean
+    GenericKeyedObjectPoolConfig<RuntimeContext> poolConfig(WolpiConfig wolpiConfig) {
         var cfg = new GenericKeyedObjectPoolConfig<RuntimeContext>();
-        cfg.setMaxIdlePerKey(wolpiConfig.extensionPool().maxIdle());
-        cfg.setMaxTotalPerKey(wolpiConfig.extensionPool().maxTotal());
+
+        // Default minIdle to CPU core count if not explicitly configured
+        var minIdle = wolpiConfig.extensionPool().minIdle() != null
+                ? wolpiConfig.extensionPool().minIdle()
+                : Runtime.getRuntime().availableProcessors();
+        var maxIdle = wolpiConfig.extensionPool().maxIdle() != null
+                ? wolpiConfig.extensionPool().maxIdle()
+                : 2 * minIdle;
+        var maxTotal = wolpiConfig.extensionPool().maxTotal() != null
+                ? wolpiConfig.extensionPool().maxTotal()
+                : 2 * maxIdle;
+
+        cfg.setMinIdlePerKey(minIdle);
+        cfg.setMaxIdlePerKey(maxIdle);
+        cfg.setMaxTotalPerKey(maxTotal);
+
+        // Configure eviction to free up memory when load decreases, while keeping
+        // at least minIdle contexts warm to avoid expensive recompilation.
+        // - Hard limit (minEvictableIdleTime): Practically never evict below minIdle
+        // - Soft limit (softMinEvictableIdleTime): Evict contexts above minIdle after configured timeout
+        // - Eviction runs every 2 minutes to check for stale contexts
+        cfg.setMinEvictableIdleDuration(Duration.ofDays(365));
+        cfg.setSoftMinEvictableIdleDuration(wolpiConfig.extensionPool().evictionTimeout());
+        cfg.setTimeBetweenEvictionRuns(Duration.ofMinutes(2));
+
         // Disable bean self-registration via JMX
         cfg.setJmxEnabled(false);
-        return new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(contextSupplier), cfg);
+        return cfg;
     }
 
     /// Pool to run extension code in parallel, used for auth and resolving to reduce latency.
     @Bean("extensionThreadPool")
-    public ThreadPoolExecutor extensionThreadPool(WolpiConfig wolpiConfig) {
+    public ThreadPoolExecutor extensionThreadPool(
+            WolpiConfig wolpiConfig, GenericKeyedObjectPoolConfig<RuntimeContext> poolConfig) {
         return new ThreadPoolExecutor(
                 // coreSize = 1 thread per extension
                 wolpiConfig.extensions().size(),
                 // maxSize = 1 thread per total number of contexts.
-                Math.max(
-                        1,
-                        wolpiConfig.extensions().size()
-                                * wolpiConfig.extensionPool().maxTotal()),
+                Math.max(1, wolpiConfig.extensions().size() * poolConfig.getMaxTotalPerKey()),
                 60L,
                 TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(),
@@ -132,7 +158,7 @@ public class Wolpi implements WebMvcConfigurer {
 
     /// Register the conversion service needed for case-insensitive enum conversion
     @Override
-    public void addFormatters(@NonNull FormatterRegistry registry) {
+    public void addFormatters(FormatterRegistry registry) {
         ApplicationConversionService.configure(registry);
     }
 

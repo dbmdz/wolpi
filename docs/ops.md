@@ -220,6 +220,63 @@ various internal metrics about image processing operations.
 If you have [defined custom metrics in your extensions][extensions-metrics], those will also be
 exposed at this endpoint automatically.
 
+#### Extension Pool Metrics
+
+Understanding the behavior of the extension context pool is crucial for tuning performance,
+especially for Python extension that have significant startup overhead due to the large
+standard library.  Wolpi exposes the following metrics to monitor pool behavior:
+
+**Gauge Metrics** (current state):
+
+- `wolpi_extensions_pooled{extension_name="...", state="active"}`: Number of contexts currently
+  borrowed from the pool and processing requests
+- `wolpi_extensions_pooled{extension_name="...", state="idle"}`: Number of contexts available
+  in the pool, ready to handle requests without initialization overhead
+- `wolpi_extensions_pool_waiting{extension_name="..."}`: Number of threads currently waiting
+  for a context to become available (indicates pool exhaustion)
+
+**Counter Metrics** (cumulative totals):
+
+- `wolpi_extensions_pool_created{extension_name="..."}`: Total number of contexts created since
+  startup. Ideally this should stabilize after initial warm-up.
+- `wolpi_extensions_pool_destroyed{extension_name="..."}`: Total number of contexts destroyed.
+  Frequent destruction indicates pool eviction or scaling down.
+- `wolpi_extensions_pool_borrowed{extension_name="..."}`: Total number of times a context was
+  borrowed from the pool.
+- `wolpi_extensions_pool_returned{extension_name="..."}`: Total number of times a context was
+  returned to the pool after processing a request.
+
+**Example Prometheus Queries**:
+
+```promql
+# Pool utilization (percentage of contexts in use)
+wolpi_extensions_pooled{state="active"} /
+  (wolpi_extensions_pooled{state="active"} + wolpi_extensions_pooled{state="idle"}) * 100
+
+# Rate of context creation (contexts/sec) - should be near zero after warm-up
+rate(wolpi_extensions_pool_created[5m])
+
+# Contexts created but not yet destroyed (should match active + idle)
+wolpi_extensions_pool_created - wolpi_extensions_pool_destroyed
+
+# Average pool wait time when exhausted (requires wolpi.extension.pool_wait.seconds histogram)
+rate(wolpi_extension_pool_wait_seconds_sum[5m]) /
+  rate(wolpi_extension_pool_wait_seconds_count[5m])
+```
+
+**Tuning Tips**:
+
+- If `pool_waiting` is frequently non-zero, increase `max-total` to allow more concurrent contexts.
+  This is a trade-off, since more contexts use more memory
+- If `created` keeps increasing during normal operation, your `min-idle` is too low or
+  `eviction-timeout` is too short
+- Monitor `active` during peak load to set appropriate `min-idle` and `max-idle` values
+- High `destroyed` rate indicates aggressive eviction - consider increasing `eviction-timeout`
+
+See the [extension pool configuration documentation][pool-config] for details on these parameters.
+
+[pool-config]: ./configuration.md#extension-pool-configuration
+
 !!! question "But I don't use Prometheus?"
 
     While Wolpi by default only exposes metrics in the Prometheus format, you can configure it to

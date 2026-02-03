@@ -72,8 +72,17 @@ wolpi:
   #      version: "0.1.0"
   #      index: "https://pypi.org.tld/simple/"
   extension-pool:
-    max-total: 16
-    max-idle: 4
+    # Minimum number of idle contexts to always keep warm (defaults to CPU core count)
+    # min-idle: 4
+
+    # Maximum number of idle contexts in the pool (defaults to 2x min-idle)
+    # max-idle: 8
+
+    # Maximum number of contexts in the pool (defaults to 2 x max-idle
+    # max-total: 16
+
+    # Time after which idle contexts above min-idle are evicted (defaults to 30 minutes)
+    eviction-timeout: 30m
   packaging:
     install-timeout: 180s
 

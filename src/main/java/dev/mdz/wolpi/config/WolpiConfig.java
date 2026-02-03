@@ -75,14 +75,29 @@ public record WolpiConfig(
     /// initialized. More total extensions means more concurrent requests can be handled, but also
     /// more memory usage.
     ///
+    /// @param minIdle Minimum number of idle extension contexts to keep in the pool per configured
+    ///                extension. Contexts will be kept in hte pool even if idle to avoid expensive
+    ///                recompilation of extension code. Defaults to the number of logical CPU cores
+    ///                if not specified. These extensions will be kept in the pool until the server
+    ///                is shut down, i.e. they will not be evicted even after the eviction timeout.
     /// @param maxIdle Maximum number of idle extension contexts to keep in the pool per configured
     ///                extension. Set this to the expected average number of concurrent requests.
+    ///                These extensions will be kept in the pool until the eviction timeout is reached.
+    ///                Defaults to twice the minIdle value.
     /// @param maxTotal Maximum number of total extension contexts to keep in the pool per configured
     ///                 extension (i.e. idle + in-use). When the pool has more total contexts than
     ///                 this for a given extension, requests for new contexts for that extension will
     ///                 block until a context is returned to the pool. Set this to the expected
-    ///                 maximum number of concurrent requests.
-    public record ExtensionPoolConfig(int maxIdle, int maxTotal) {}
+    ///                 maximum number of concurrent requests. Defaults to twice the maxIdle value.
+    /// @param evictionTimeout Duration after which idle contexts above minIdle will be evicted from
+    ///                        the pool. Defaults to 30 minutes. This helps free up memory when load
+    ///                        decreases, while keeping at least minIdle contexts warm to handle
+    ///                        subsequent requests without recompilation overhead.
+    public record ExtensionPoolConfig(
+            @Nullable Integer minIdle,
+            @Nullable Integer maxIdle,
+            @Nullable Integer maxTotal,
+            @DefaultValue("30m") Duration evictionTimeout) {}
 
     ///  Configures debugging  for Wolpi extensions.
     ///

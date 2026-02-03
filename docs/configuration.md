@@ -215,18 +215,45 @@ packaging:
 ### Extension Pool Configuration
 
 Wolpi runs extensions from a pool of cached extension instances to improve performance (essential, especially with Python
-extensions, where the initialization can take upwards of a second). You can configure the size of this pool through the
-`extensions.pool-size` option.
+extensions, where the initialization can take upwards of a second). You can configure the behavior of this pool through the
+`extension-pool` section.
 
-- `max-total`: Maximum number of extension instances to keep in the pool **per extension**, defaults to 16.
-   If you have many memory-intensive extensions enabled, you might want to lower this to keep  overall memory
-  usage down.
-- `min-idle`: Minimum number of idle extension instances to keep in the pool **per extension**, defaults to 4.
-   This is a value that should be tuned based on your expected concurrency and request rate. Ideally  you would
-   set this to a value that allows handling your normal expected peak concurrency without  having to create new
-   extension instances on demand.
+**Why is this important?** GraalVM/GraalPy contexts require expensive JIT compilation when first created. Keeping
+contexts warm in the pool avoids this compilation overhead on every request, dramatically improving performance.
 
-For more information about the extension pool, refer to the [section in the extension documentation](./extensions.md#extension-lifecycle).
+Available configuration options:
+
+- `min-idle`: Minimum number of idle extension contexts to keep warm in the pool **per extension**. Defaults to
+  the number of logical CPU cores on your system. These contexts are kept alive indefinitely to avoid expensive
+  recompilation of extension code. Set this based on your expected average concurrent load.
+
+- `max-idle`: Maximum number of idle extension contexts to keep in the pool **per extension**, defaults to 4.
+  When the pool has more than `min-idle` idle contexts, they will be evicted after `eviction-timeout` (see below).
+  Set this to your expected peak concurrent load to avoid blocking requests during traffic spikes.
+
+- `max-total`: Maximum number of total extension contexts (idle + in-use) to keep in the pool **per extension**,
+  defaults to 16. When this limit is reached, new requests will block until a context becomes available. Set this
+  to your absolute maximum concurrent requests, but keep in mind that more contexts means more memory usage.
+
+- `eviction-timeout`: Duration after which idle contexts above `min-idle` will be evicted from the pool, defaults
+  to 30 minutes. This helps free up memory when load decreases, while keeping at least `min-idle` contexts warm
+  to handle subsequent requests without expensive recompilation overhead.
+
+**Example configuration:**
+
+```yaml
+extension-pool:
+  min-idle: 8        # Keep 8 contexts always warm
+  max-idle: 16       # Allow up to 16 idle contexts during peaks
+  max-total: 32      # Allow up to 32 total contexts (idle + active)
+  eviction-timeout: 1h  # Evict idle contexts above min-idle after 1 hour
+```
+
+**Performance tip:** For high-traffic deployments, set `min-idle` equal to your typical concurrent request count
+to ensure contexts are always warm and ready. For memory-constrained environments, use a lower `min-idle` value
+and rely on the pool's ability to grow dynamically up to `max-total`.
+
+For more information about the extension pool and lifecycle, refer to the [section in the extension documentation](./extensions.md#extension-lifecycle).
 
 ## Full example configuration
 
