@@ -76,7 +76,7 @@ public record WolpiConfig(
     /// more memory usage.
     ///
     /// @param minIdle Minimum number of idle extension contexts to keep in the pool per configured
-    ///                extension. Contexts will be kept in hte pool even if idle to avoid expensive
+    ///                extension. Contexts will be kept in the pool even if idle to avoid expensive
     ///                recompilation of extension code. Defaults to the number of logical CPU cores
     ///                if not specified. These extensions will be kept in the pool until the server
     ///                is shut down, i.e. they will not be evicted even after the eviction timeout.
