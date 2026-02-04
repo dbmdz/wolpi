@@ -1286,7 +1286,7 @@ dependencies, we recommend using a tool like [mise][mise].
 [mise]: https://mise.jdx.dev/
 
 ### Debugging Extensions
-Wolpi provides support for the "Advanced Debugging Protocol" (ADP), which allows you to connect a
+Wolpi provides support for the "Debug Adapter Protocol" (DAP), which allows you to connect a
 debugger to it and set breakpoints, step through code, and inspect variables inside your extensions.
 
 To enable debugging, set the `wolpi.extension-debug` section in your config:
@@ -1297,7 +1297,7 @@ extension-debug:
   # all extensions and languages
   enabled: true
   # Host and port to listen on for debugger connections
-  host: localhost
+  host: localhost  # use 0.0.0.0 when debugging in a Docker container
   port: 4711
   # Suspend execution at first source line
   suspend: false
