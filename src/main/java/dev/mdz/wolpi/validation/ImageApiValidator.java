@@ -65,7 +65,7 @@ public class ImageApiValidator {
         if (!VALIDATOR_VERSION.equals(this.pyPiInstaller.getVersion("iiif-validator-ng"))) {
             log.info("Installing iiif-validator-ng package for IIIF Image API validation...");
             try {
-                this.venvPath = this.pyPiInstaller.install("iiif-validator-ng", VALIDATOR_VERSION, null, true);
+                this.venvPath = this.pyPiInstaller.install("iiif-validator-ng", VALIDATOR_VERSION, null, null, true);
             } catch (PackageInstallException e) {
                 log.error(
                         "Failed to install iiif-validator-ng package for IIIF Image API validation, cannot proceed.",

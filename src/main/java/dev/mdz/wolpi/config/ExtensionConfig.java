@@ -23,6 +23,15 @@ public record ExtensionConfig(
         if (config != null) {
             config = (Map<String, Object>) fixConfig(config);
         }
+
+        if (pypi != null && pypi.indexAuth != null && pypi.indexAuth.token != null) {
+            throw new IllegalArgumentException("PyPI index authentication only supports username/password.");
+        }
+
+        if (npm != null && npm.indexAuth != null && !npm.pkg.startsWith("@")) {
+            throw new IllegalArgumentException(
+                    "npm index authentication is only supported for scoped packages (e.g., @org/package).");
+        }
     }
 
     private static @Nullable Object fixConfig(@Nullable Object input) {
@@ -70,5 +79,24 @@ public record ExtensionConfig(
     }
 
     public record PkgSource(
-            String pkg, String version, @Nullable URI index) {}
+            String pkg,
+            String version,
+            @Nullable URI index,
+            @Nullable IndexAuth indexAuth) {}
+
+    public record IndexAuth(
+            @Nullable String username,
+            @Nullable String password,
+            @Nullable String token) {
+        public IndexAuth {
+            if ((username != null && password == null) || (username == null && password != null)) {
+                throw new IllegalArgumentException(
+                        "Both username and password must be provided for index authentication.");
+            }
+            if (token != null && username != null) {
+                throw new IllegalArgumentException(
+                        "Cannot provide both token and username/password for index authentication.");
+            }
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.extension;
 
+import dev.mdz.wolpi.config.ExtensionConfig.IndexAuth;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -7,6 +8,8 @@ import dev.mdz.wolpi.extension.util.CommandRunner;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -85,7 +88,12 @@ public class PyPiInstaller {
     /// @param version      exact version (no ranges)
     /// @param customIndex  optional custom PyPI index URI
     /// @param skipDependencies  if true, do not install dependencies of the package
-    public Path install(String packageName, String version, @Nullable URI customIndex, boolean skipDependencies)
+    public Path install(
+            String packageName,
+            String version,
+            @Nullable URI customIndex,
+            @Nullable IndexAuth indexAuth,
+            boolean skipDependencies)
             throws PackageInstallException {
         Path venvPath = ensureVenv(packageName);
 
@@ -93,6 +101,19 @@ public class PyPiInstaller {
         if (version.equals(installedVersion)) {
             log.info("Package '{}' version {} already installed, skipping installation", packageName, version);
             return venvPath;
+        }
+
+        if (customIndex != null && indexAuth != null && indexAuth.username() != null && indexAuth.password() != null) {
+            String urlString = customIndex.toString();
+            if (!urlString.contains("://")) {
+                log.warn(
+                        "Custom index URL '{}' does not contain a valid scheme, cannot embed credentials", customIndex);
+            } else {
+                String encodedUsername = URLEncoder.encode(indexAuth.username(), StandardCharsets.UTF_8);
+                String encodedPassword = URLEncoder.encode(indexAuth.password(), StandardCharsets.UTF_8);
+                customIndex =
+                        URI.create(urlString.replace("://", "://%s:%s@".formatted(encodedUsername, encodedPassword)));
+            }
         }
 
         log.debug("Installing package '{}' version {} into virtual environment at {}", packageName, version, venvPath);
@@ -115,9 +136,11 @@ public class PyPiInstaller {
     /// @param packageName  name of the package
     /// @param version      exact version (no ranges)
     /// @param customIndex  optional custom PyPI index URI
-    public void installExtension(String packageName, String version, @Nullable URI customIndex)
+    /// @param indexAuth    optional authentication credentials for the custom index
+    public void installExtension(
+            String packageName, String version, @Nullable URI customIndex, @Nullable IndexAuth indexAuth)
             throws PackageInstallException, ExtensionLoadException {
-        this.install(packageName, version, customIndex, false);
+        this.install(packageName, version, customIndex, indexAuth, false);
         verifyInstalledExtension(packageName);
     }
 

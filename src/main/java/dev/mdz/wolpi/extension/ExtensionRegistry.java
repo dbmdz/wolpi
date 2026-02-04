@@ -313,7 +313,8 @@ public class ExtensionRegistry implements AutoCloseable {
                 pyInstaller.installExtension(
                         config.pypi().pkg(),
                         config.pypi().version(),
-                        config.pypi().index());
+                        config.pypi().index(),
+                        config.pypi().indexAuth());
                 sitePackagesPath = pyInstaller.getVenvSitePackages(config.pypi().pkg());
                 if (sitePackagesPath == null) {
                     throw new ExtensionLoadException("Could not find virtual environment for installed package: "
@@ -415,7 +416,10 @@ public class ExtensionRegistry implements AutoCloseable {
                 }
             } else if (config.npm() != null) {
                 jsInstaller.installExtension(
-                        config.npm().pkg(), config.npm().version(), config.npm().index());
+                        config.npm().pkg(),
+                        config.npm().version(),
+                        config.npm().index(),
+                        config.npm().indexAuth());
                 entryPoint = jsInstaller.getWolpiEntryPoint(config.npm().pkg());
                 packageName = config.npm().pkg();
             } else {

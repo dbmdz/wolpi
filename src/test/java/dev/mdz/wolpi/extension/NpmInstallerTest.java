@@ -3,6 +3,7 @@ package dev.mdz.wolpi.extension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.mdz.wolpi.config.ExtensionConfig.IndexAuth;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -76,7 +77,7 @@ class NpmInstallerTest {
         var builder =
                 ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
         try (var _ = builder.build()) {
-            installer.installExtension("test-package", "1.2.3", URI.create("https://registry.npmjs.org"));
+            installer.installExtension("test-package", "1.2.3", URI.create("https://registry.npmjs.org"), null);
         }
     }
 
@@ -113,7 +114,8 @@ class NpmInstallerTest {
                             .failure()
                             .stderr("npm install failed");
                     try (var _ = builder.build()) {
-                        installer.installExtension("test-package", "1.2.3", URI.create("https://registry.npmjs.org"));
+                        installer.installExtension(
+                                "test-package", "1.2.3", URI.create("https://registry.npmjs.org"), null);
                     }
                 })
                 .isInstanceOf(PackageInstallException.class)
@@ -142,7 +144,7 @@ class NpmInstallerTest {
 
             NpmInstaller installerWithoutNode = new NpmInstaller(config, new JsonMapper());
             assertThatThrownBy(() -> installerWithoutNode.installExtension(
-                            "test-package", "1.2.3", URI.create("https://registry.npmjs.org")))
+                            "test-package", "1.2.3", URI.create("https://registry.npmjs.org"), null))
                     .isInstanceOf(PackageInstallException.class)
                     .hasMessageContaining("npm executable not configured");
         }
@@ -298,5 +300,113 @@ class NpmInstallerTest {
         assertThatThrownBy(() -> installer.installExtensionFromLocalDirectory(dir))
                 .isInstanceOf(PackageInstallException.class)
                 .hasMessageContaining("must exist and contain a package.json");
+    }
+
+    @Test
+    @DisplayName("should install scoped package with custom registry and auth")
+    void shouldInstallScopedPackageWithCustomRegistryAndAuth() throws Exception {
+        Path packageDir = nodeModulesDir.resolve("@scope").resolve("test-package");
+        Files.createDirectories(packageDir);
+        Files.writeString(packageDir.resolve("package.json"), """
+        {
+          "name": "@scope/test-package",
+          "version": "1.0.0",
+          "exports": "index.js"
+        }
+        """);
+
+        var builder =
+                ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
+        try (var _ = builder.build()) {
+            var auth = new IndexAuth("testuser", "testpass", null);
+            installer.installExtension(
+                    "@scope/test-package", "1.0.0", URI.create("https://registry.example.com"), auth);
+        }
+    }
+
+    @Test
+    @DisplayName("should install scoped package without auth")
+    void shouldInstallScopedPackageWithoutAuth() throws Exception {
+        Path packageDir = nodeModulesDir.resolve("@scope").resolve("test-package");
+        Files.createDirectories(packageDir);
+        Files.writeString(packageDir.resolve("package.json"), """
+        {
+          "name": "@scope/test-package",
+          "version": "1.0.0",
+          "exports": "index.js"
+        }
+        """);
+
+        var builder =
+                ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
+        try (var _ = builder.build()) {
+            installer.installExtension(
+                    "@scope/test-package", "1.0.0", URI.create("https://registry.example.com"), null);
+        }
+    }
+
+    @Test
+    @DisplayName("should install non-scoped package with custom registry")
+    void shouldInstallNonScopedPackageWithCustomRegistry() throws Exception {
+        Path packageDir = nodeModulesDir.resolve("test-package");
+        Files.createDirectories(packageDir);
+        Files.writeString(packageDir.resolve("package.json"), """
+        {
+          "name": "test-package",
+          "version": "1.0.0",
+          "exports": "index.js"
+        }
+        """);
+
+        var builder =
+                ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
+        try (var _ = builder.build()) {
+            installer.installExtension("test-package", "1.0.0", URI.create("https://registry.example.com"), null);
+        }
+    }
+
+    @Test
+    @DisplayName("should install scoped package with token auth")
+    void shouldInstallScopedPackageWithTokenAuth() throws Exception {
+        Path packageDir = nodeModulesDir.resolve("@scope").resolve("test-package");
+        Files.createDirectories(packageDir);
+        Files.writeString(packageDir.resolve("package.json"), """
+        {
+          "name": "@scope/test-package",
+          "version": "1.0.0",
+          "exports": "index.js"
+        }
+        """);
+
+        var builder =
+                ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
+        try (var _ = builder.build()) {
+            var auth = new IndexAuth(null, null, "my-token-123");
+            installer.installExtension(
+                    "@scope/test-package", "1.0.0", URI.create("https://registry.example.com"), auth);
+        }
+    }
+
+    @Test
+    @DisplayName("should skip installation if package version already installed")
+    void shouldSkipInstallationIfVersionAlreadyInstalled() throws Exception {
+        Path packageDir = nodeModulesDir.resolve("test-package");
+        Files.createDirectories(packageDir);
+        Files.writeString(packageDir.resolve("package.json"), """
+        {
+          "name": "test-package",
+          "version": "1.2.3",
+          "exports": "index.js"
+        }
+        """);
+
+        var builder =
+                ProcessBuilderMocks.builder().matchCommandTokenContains("npm").success();
+        try (var _ = builder.build()) {
+            // First installation
+            installer.installExtension("test-package", "1.2.3", null, null);
+            // Second installation should be skipped
+            installer.installExtension("test-package", "1.2.3", null, null);
+        }
     }
 }

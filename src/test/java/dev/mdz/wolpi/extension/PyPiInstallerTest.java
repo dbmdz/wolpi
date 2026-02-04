@@ -3,6 +3,7 @@ package dev.mdz.wolpi.extension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.mdz.wolpi.config.ExtensionConfig.IndexAuth;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
@@ -74,7 +75,7 @@ class PyPiInstallerTest {
             Files.writeString(
                     distInfoLocation.resolve("entry_points.txt"), "[wolpi]\nmy-ext = my_pkg.main:get_extension");
 
-            installer.installExtension("test-package", "1.2.3", URI.create("https://example.com/simple"));
+            installer.installExtension("test-package", "1.2.3", URI.create("https://example.com/simple"), null);
         }
     }
 
@@ -113,7 +114,8 @@ class PyPiInstallerTest {
                             .failure()
                             .stderr("pip install failed");
                     try (var _ = builder.build()) {
-                        installer.installExtension("test-package", "1.2.3", URI.create("https://example.com/simple"));
+                        installer.installExtension(
+                                "test-package", "1.2.3", URI.create("https://example.com/simple"), null);
                     }
                 })
                 .isInstanceOf(PackageInstallException.class)
@@ -142,7 +144,7 @@ class PyPiInstallerTest {
 
             PyPiInstaller installerWithoutPython = new PyPiInstaller(config, new JsonMapper());
             assertThatThrownBy(() -> installerWithoutPython.installExtension(
-                            "test-package", "1.2.3", URI.create("https://example.com/simple")))
+                            "test-package", "1.2.3", URI.create("https://example.com/simple"), null))
                     .isInstanceOf(PackageInstallException.class)
                     .hasMessageContaining("Python executable not configured or not found")
                     .hasMessageContaining("test-package");
@@ -339,5 +341,74 @@ class PyPiInstallerTest {
         assertThatThrownBy(() -> installer.installExtensionFromLocalDirectory(dir, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("pyproject.toml");
+    }
+
+    @Test
+    @DisplayName("should install package with custom index and auth credentials")
+    void shouldInstallPackageWithCustomIndexAndAuth() throws Exception {
+        Path distInfoLocation =
+                pypiDir.resolve("test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
+        String inspectOutput = String.format(
+                "{" + "\"installed\": [{\"metadata\": {\"name\": \"test-package\"}, \"metadata_location\": \"%s\"}]}",
+                distInfoLocation);
+        var builder = ProcessBuilderMocks.builder()
+                .matchCommandTokenContains("pip")
+                .success()
+                .stdoutWhenContains("inspect", inspectOutput);
+        try (var _ = builder.build()) {
+            Files.createDirectories(distInfoLocation);
+            Files.writeString(
+                    distInfoLocation.resolve("entry_points.txt"), "[wolpi]\nmy-ext = my_pkg.main:get_extension");
+
+            var auth = new IndexAuth("testuser", "testpass", null);
+            installer.install("test-package", "1.2.3", URI.create("https://example.com/simple"), auth, false);
+        }
+    }
+
+    @Test
+    @DisplayName("should install package without auth when credentials not provided")
+    void shouldInstallPackageWithoutAuthWhenCredentialsNotProvided() throws Exception {
+        Path distInfoLocation =
+                pypiDir.resolve("test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
+        String inspectOutput = String.format(
+                "{" + "\"installed\": [{\"metadata\": {\"name\": \"test-package\"}, \"metadata_location\": \"%s\"}]}",
+                distInfoLocation);
+        var builder = ProcessBuilderMocks.builder()
+                .matchCommandTokenContains("pip")
+                .success()
+                .stdoutWhenContains("inspect", inspectOutput);
+        try (var _ = builder.build()) {
+            Files.createDirectories(distInfoLocation);
+            Files.writeString(
+                    distInfoLocation.resolve("entry_points.txt"), "[wolpi]\nmy-ext = my_pkg.main:get_extension");
+
+            installer.install("test-package", "1.2.3", URI.create("https://example.com/simple"), null, false);
+        }
+    }
+
+    @Test
+    @DisplayName("should skip installation if package version already installed")
+    void shouldSkipInstallationIfVersionAlreadyInstalled() throws Exception {
+        Path distInfoLocation =
+                pypiDir.resolve("test-package", "lib", "python3.11", "site-packages", "test_package-1.2.3.dist-info");
+        String inspectOutput = String.format(
+                "{" + "\"installed\": [{\"metadata\": {\"name\": \"test-package\"}, \"metadata_location\": \"%s\"}]}",
+                distInfoLocation);
+        var builder = ProcessBuilderMocks.builder()
+                .matchCommandTokenContains("pip")
+                .success()
+                .stdoutWhenContains("show", "Version: 1.2.3\nName: test-package")
+                .stdoutWhenContains("inspect", inspectOutput);
+        try (var _ = builder.build()) {
+            Files.createDirectories(distInfoLocation);
+            Files.writeString(
+                    distInfoLocation.resolve("entry_points.txt"), "[wolpi]\nmy-ext = my_pkg.main:get_extension");
+
+            // First call should trigger installation
+            Path result1 = installer.install("test-package", "1.2.3", null, null, false);
+            // Second call should skip installation because version matches
+            Path result2 = installer.install("test-package", "1.2.3", null, null, false);
+            assertThat(result1).isEqualTo(result2);
+        }
     }
 }

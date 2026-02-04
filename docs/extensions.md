@@ -779,10 +779,23 @@ extensions:
       pkg: "hello-js-package"
       version: "1.0.0"
       # index: "https://custom-registry.example.com"
+      # You can optionally provide username/password or token authentication for the
+      # custom registry. Note: authentication is only supported for scoped packages
+      # (e.g., @org/package), not regular unscoped packages.
+      # indexAuth:
+      #   username: <your-username-here>
+      #   password: <your-password-here>
+      #   # OR use token auth instead:
+      #   # token: <your-npm-token-here>
   - pypi:
       pkg: "hello-py-package"
       version: "1.0.0"
       # index: "https://custom-pypi.example.com/simple"
+      # If you use a custom PyPI index that requires authentication, provide
+      # the credentials here
+      # indexAuth:
+      #   username: <your-username-here>
+      #   password: <your-password-here>
     config:
       apiUrl: "https://api.example.com"
 ```

@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.extension;
 
+import dev.mdz.wolpi.config.ExtensionConfig.IndexAuth;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -71,7 +73,8 @@ public class NpmInstaller {
     /// @param version        exact version (no ranges)
     /// @param customRegistry optional custom npm registry URI
     /// @throws PackageInstallException if the installation fails
-    public void installExtension(String packageName, String version, @Nullable URI customRegistry)
+    public void installExtension(
+            String packageName, String version, @Nullable URI customRegistry, @Nullable IndexAuth registryAuth)
             throws PackageInstallException, ExtensionLoadException {
         if (npmPath == null) {
             throw new PackageInstallException("npm executable not configured, cannot install package");
@@ -89,6 +92,12 @@ public class NpmInstaller {
         }
 
         log.debug("Installing package '{}' version {} from npm registry", packageName, version);
+        String npmScope;
+        if (packageName.startsWith("@")) {
+            npmScope = packageName.split("/")[0];
+        } else {
+            npmScope = null;
+        }
         List<String> args = List.of(
                 "install",
                 "--no-audit",
@@ -99,15 +108,52 @@ public class NpmInstaller {
                 baseDir.toString(),
                 baseDir.toString(),
                 "%s@%s".formatted(packageName, version));
+        Path customTempConfig = null;
         if (customRegistry != null) {
+            try {
+                customTempConfig = Files.createTempFile("wolpi-npmrc-", ".tmp");
+                if (npmScope == null) {
+                    Files.writeString(customTempConfig, "registry=%s\n".formatted(customRegistry));
+                } else {
+                    StringBuilder npmrcContent = new StringBuilder();
+                    npmrcContent.append("%s:registry=%s\n".formatted(npmScope, customRegistry));
+                    if (registryAuth != null) {
+                        // Host with `//` prefixed, e.g. `//registry.example.com/`
+                        String registryHost = customRegistry
+                                .toString()
+                                .substring(customRegistry.toString().indexOf("://") + 1);
+
+                        if (registryAuth.token() != null) {
+                            npmrcContent.append("%s:_authToken=%s\n".formatted(registryHost, registryAuth.token()));
+                        } else if (registryAuth.username() != null && registryAuth.password() != null) {
+                            String auth = Base64.getEncoder()
+                                    .encodeToString("%s:%s"
+                                            .formatted(registryAuth.username(), registryAuth.password())
+                                            .getBytes());
+                            npmrcContent.append("%s:_auth=%s\n".formatted(registryHost, auth));
+                        }
+                    }
+                    Files.writeString(customTempConfig, npmrcContent.toString());
+                }
+            } catch (IOException e) {
+                throw new PackageInstallException("Failed to create temporary npm config file for custom registry", e);
+            }
             args = new ArrayList<>(args);
-            args.add(1, "--registry");
-            args.add(2, customRegistry.toString());
+            args.add(1, "--userconfig");
+            args.add(2, customTempConfig.toString());
         }
         try {
             CommandRunner.runCommand(npmPath, baseDir, processTimeout, args.toArray(String[]::new));
         } catch (IOException | InterruptedException e) {
             throw new PackageInstallException(e);
+        } finally {
+            if (customTempConfig != null) {
+                try {
+                    Files.deleteIfExists(customTempConfig);
+                } catch (IOException e) {
+                    log.warn("Failed to delete temporary npm config file: " + customTempConfig, e);
+                }
+            }
         }
         verifyInstalledPackage(packageName);
     }
@@ -166,8 +212,9 @@ public class NpmInstaller {
                 throw new IllegalArgumentException("Invalid scoped package name: " + packageName);
             }
             root = nm.resolve(parts[0]).resolve(parts[1]);
+        } else {
+            root = nm.resolve(packageName);
         }
-        root = nm.resolve(packageName);
         if (!Files.isDirectory(root)) {
             return null;
         }

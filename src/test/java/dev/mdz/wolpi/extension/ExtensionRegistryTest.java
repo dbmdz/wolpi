@@ -104,7 +104,7 @@ class ExtensionRegistryTest {
 
         // Install from npm
         registry = buildRegistryWithExtensions(
-                new ExtensionConfig(null, new PkgSource("js-extension", "1.0.0", null), null, Map.of(), false));
+                new ExtensionConfig(null, new PkgSource("js-extension", "1.0.0", null, null), null, Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("JavaScript Test Extension");
@@ -145,7 +145,7 @@ class ExtensionRegistryTest {
 
         // Instal from PyPI
         registry = buildRegistryWithExtensions(
-                new ExtensionConfig(null, null, new PkgSource("py-extension", "1.0.0", null), Map.of(), false));
+                new ExtensionConfig(null, null, new PkgSource("py-extension", "1.0.0", null, null), Map.of(), false));
         assertThat(registry.getExtensions()).hasSize(1);
         loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test Python Extension");
