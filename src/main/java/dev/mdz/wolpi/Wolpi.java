@@ -23,6 +23,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -31,6 +33,7 @@ import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -39,6 +42,8 @@ import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.format.FormatterRegistry;
@@ -57,7 +62,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableConfigurationProperties(WolpiConfig.class)
 @EnableWebMvc
 @Configuration(proxyBeanMethods = false)
-public class Wolpi implements WebMvcConfigurer {
+public class Wolpi implements WebMvcConfigurer, ApplicationContextAware {
+    private List<String> activeProfiles = List.of();
 
     /// Creates a new FFM Memory [Arena] for use by libvips
     /// This bean is request-scoped because a confined [Arena] is not thread-safe (and a shared Arena
@@ -82,6 +88,11 @@ public class Wolpi implements WebMvcConfigurer {
 
     @PreDestroy
     public void shutdownHook() {
+        if (activeProfiles.stream().anyMatch(p -> p.startsWith("test"))) {
+            // Skip VIPS shutdown in unit/integration-tests where we restart the app multiple times
+            // inside the same process
+            return;
+        }
         Vips.shutdown();
     }
 
@@ -227,5 +238,10 @@ public class Wolpi implements WebMvcConfigurer {
         Vips.disableOperationCache();
         SpringApplication app = new SpringApplication(Wolpi.class);
         app.run(args);
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.activeProfiles = Arrays.asList(applicationContext.getEnvironment().getActiveProfiles());
     }
 }
