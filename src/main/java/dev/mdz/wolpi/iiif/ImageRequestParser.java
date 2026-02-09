@@ -22,12 +22,6 @@ import org.springframework.stereotype.Component;
 /// extension is handling the syntax for the part of the request.
 @Component
 public class ImageRequestParser {
-    /// Maximum difference in pixels relative the source size between expected and actual width when
-    /// comparing aspect ratios between a source image and a scaled image to determine if they are
-    /// effectively the same. We're a bit more generous here to account for rounding errors when scaling
-    /// images.
-    private static final double MAX_ASPECT_RATIO_DIFFERENCE = 3;
-
     private final IIIFConfig iiifConfig;
 
     public ImageRequestParser(WolpiConfig config) {
@@ -443,15 +437,45 @@ public class ImageRequestParser {
         }
     }
 
-    ///  Checks if the aspect ratio of the source size matches the aspect ratio of the target size.
+    /// Checks if the aspect ratio of the source size matches the aspect ratio of the target size,
+    /// with a 1-pixel rounding error tolerance in either dimension.
     ///
-    /// To remain scaling-invariant, we first project the expected width of the target size based
-    /// on the source size's aspect ratio and the target size's height, then compare that to the
-    /// actual target width, allowing for a small difference defined by [MAX_ASPECT_RATIO_DIFFERENCE].
-    private boolean doesAspectRatioMatch(ImageSize sourceSize, ImageSize targetSize) {
-        double sourceRatio = sourceSize.aspectRatio();
-        double expectedWidth = targetSize.height() * sourceRatio;
-        double pixelDifference = Math.abs(expectedWidth - targetSize.width());
-        return pixelDifference <= MAX_ASPECT_RATIO_DIFFERENCE;
+    /// Uses the cross-product method to avoid division and potential issues with very small or
+    /// very large aspect ratios:
+    ///
+    /// Standard logic (using height-based scaling with floating point division):
+    ///
+    /// ```
+    /// // sw = source width, sh = source height
+    /// // tw = target width, th = target height
+    /// scale = th / sh;
+    /// expectedWidth = sw * scale;
+    /// isMatch = Math.abs(expectedWidth - tw) < 1.0;
+    /// ```
+    ///
+    /// We can remove the division from the equation by rearranging it like this:
+    /// ```
+    /// // (1) Full term
+    /// Math.abs((sw * (th / sh)) - tw) < 1.0
+    /// // (2) Multiply entire expression by sh to remove need for floating point division
+    /// Math.abs((sw * th) - (tw * sh)) < sh
+    /// ```
+    private boolean doesAspectRatioMatch(ImageSize source, ImageSize target) {
+        if (source.width() == 0 || source.height() == 0) {
+            // A source image with a zero dimension does not have an aspect ratio
+            return false;
+        }
+
+        // How off is the target size is from the expected size if we were to scale the source size
+        // to match the target size?
+        // spotless:off
+        long delta = Math.abs(
+                ((long) target.width() * source.height()) -
+                ((long) source.width() * target.height())
+        );
+        // spotless:on
+
+        // We accept the match if it fits within EITHER dimension's constraint.
+        return delta < source.height() || delta < source.width();
     }
 }
