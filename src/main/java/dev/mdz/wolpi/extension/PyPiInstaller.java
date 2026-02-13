@@ -56,12 +56,15 @@ public class PyPiInstaller {
     private final Duration processTimeout;
     private final JsonMapper jsonMapper;
     private final TomlMapper tomlMapper;
+    private final boolean debuggingRequested;
 
     public PyPiInstaller(WolpiConfig config, JsonMapper jsonMapper) throws IOException {
         this.processTimeout = config.packaging().installTimeout();
         this.jsonMapper = jsonMapper;
         this.tomlMapper = new TomlMapper();
         this.baseDir = config.dataDirectory().resolve("pypi").toAbsolutePath().normalize();
+        this.debuggingRequested =
+                config.extensionDebug() != null && config.extensionDebug().enabled();
         Files.createDirectories(this.baseDir);
 
         Path pythonPath = config.packaging().pythonExecutable();
@@ -148,7 +151,7 @@ public class PyPiInstaller {
     ///
     /// @param localPackageDir  path to the local package directory
     /// @param skipDependencies if true, do not install dependencies of the package
-    public void installFromLocalDirectory(Path localPackageDir, boolean skipDependencies, boolean editable)
+    public void installFromLocalDirectory(Path localPackageDir, boolean skipDependencies)
             throws PackageInstallException {
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
             throw new IllegalArgumentException(
@@ -157,9 +160,11 @@ public class PyPiInstaller {
         ParsedPackage pkgInfo = parsePyprojectToml(localPackageDir);
         Path existingSitePackages = getVenvSitePackages(pkgInfo.name());
         if (existingSitePackages != null) {
+            // If the package is installed editable, it means it's already tracking the local
+            // directory, so we can skip installation
             boolean isInstalledEditable = Files.exists(existingSitePackages.resolve(
                     "__editable__.%s-%s.pth".formatted(pkgInfo.name().replace('-', '_'), pkgInfo.version())));
-            if (editable && isInstalledEditable || (!editable && !isInstalledEditable)) {
+            if (isInstalledEditable) {
                 log.debug("Package '{}' already installed, skipping installation", pkgInfo.name());
                 return;
             }
@@ -169,28 +174,27 @@ public class PyPiInstaller {
                 venvPath,
                 "install",
                 skipDependencies ? "--no-deps" : "",
-                editable ? "-e" : "", // editable, i.e. local modifications are reflected in the installed package
+                supportsEditableInstalls() ? "-e" : "",
                 localPackageDir.toAbsolutePath().toString());
     }
 
     /// Install a Wolpi extension package from a local directory containing a `pyproject.toml` file.
     ///
     /// @return the name of the installed package as specified in `pyproject.toml`
-    public String installExtensionFromLocalDirectory(Path localPackageDir, boolean editable)
+    public String installExtensionFromLocalDirectory(Path localPackageDir, boolean liveReload)
             throws PackageInstallException, ExtensionLoadException {
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
             throw new IllegalArgumentException(
                     "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);
         }
-        if (editable && !supportsPackageLiveReload()) {
+        if ((liveReload || debuggingRequested) && !supportsEditableInstalls()) {
             log.warn(
-                    "Editable installation requested, but the current Python executable does not support it, please configure GraalPy {} for package installation. Disabling live reload for {}",
+                    "Debugging or live-reloading requested, but the current Python executable does not support editable installations, please configure GraalPy {} for package installation. Debugging and live-reloading not supported for {}.",
                     EXPECTED_GRAALPY_VERSION,
                     localPackageDir);
-            editable = false;
         }
         String packageName = parsePackageNameFromPyproject(localPackageDir);
-        installFromLocalDirectory(localPackageDir, false, editable);
+        installFromLocalDirectory(localPackageDir, false);
         verifyInstalledExtension(packageName);
         return packageName;
     }
@@ -288,11 +292,13 @@ public class PyPiInstaller {
         }
     }
 
-    /// Check if the installer supports live reloading of packages.
+    /// Check if the installer supports "editable" package installation, i.e. where the code
+    /// is loaded from the source directory and not copied into the virtual environment.
     ///
-    /// This is only the case if the configured Python executable is GraalPy, as the editable
-    /// installation with CPython doesn't seeem to work with GraalPy.
-    public boolean supportsPackageLiveReload() {
+    /// This allows live-reloading of code changes without re-installing the package and source-level
+    /// debugging with proper file paths, but it only works with GraalPy and not with CPython for
+    /// some reason, possibly due to how the editable installation is implemented in pip.
+    public boolean supportsEditableInstalls() {
         if (pythonPath == null) {
             throw new IllegalStateException("Python executable not configured or not found.");
         }

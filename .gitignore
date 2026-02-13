@@ -6,4 +6,6 @@
 /data
 /images
 /samples
-*.egg-info
+**/*.egg-info
+**/__pycache__
+**/build

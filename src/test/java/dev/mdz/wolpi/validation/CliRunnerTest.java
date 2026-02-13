@@ -111,7 +111,7 @@ class CliRunnerTest {
             throws Exception {
         if (sourceType.equals("package") && originalSource.startsWith("py-")) {
             assumeTrue(
-                    pyPiInstaller.supportsPackageLiveReload(),
+                    pyPiInstaller.supportsEditableInstalls(),
                     "Graal Python not available, skipping python package test.");
         } else if (sourceType.equals("package") && originalSource.startsWith("js-")) {
             assumeTrue(

@@ -138,10 +138,16 @@ public class ExtensionRuntimeTest {
         graalPy.toFile().setExecutable(true);
         Path libPath = venvPath.resolve("lib/python3.11/site-packages");
         Files.createDirectories(libPath);
-        Path source = Path.of("src/test/resources/py-extension");
-        Files.walk(source).filter(s -> s != source).forEach(s -> {
+        Path source = Path.of("src/test/resources/py-extension/py_extension");
+        Path destination = libPath.resolve("py_extension");
+        Files.walk(source).forEach(s -> {
             try {
-                Files.copy(s, libPath.resolve(source.relativize(s)));
+                Path target = destination.resolve(source.relativize(s));
+                if (Files.isDirectory(s)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.copy(s, target);
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

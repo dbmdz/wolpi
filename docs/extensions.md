@@ -1334,13 +1334,10 @@ set breakpoints and step through your extension code.
 
 !!! warning "Debugging with the Wolpi container"
 
-    Debugging extensions with Wolpi running in a container has some caveats:
-
-    - `live-reload: true` must be set for the extension in the config
-    - Breakpoints only work if the path to the extension inside the container matches the path
-      on the host machine. To achieve this, mount the directory with your extensions into the
-      container at the same absolute path as on your host system. This is a limit of the Graal Debug
-      Adapter implementation that does not allow remapping paths at the moment.
+    Breakpoints only work if the path to the extension inside the container matches the path
+    on the host machine. To achieve this, mount the directory with your extensions into the
+    container at the same absolute path as on your host system. This is a limit of the Graal Debug
+    Adapter implementation that does not allow remapping paths at the moment.
 
 ## Logging from Extensions
 
