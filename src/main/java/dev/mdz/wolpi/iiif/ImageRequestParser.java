@@ -157,18 +157,25 @@ public class ImageRequestParser {
             if (px < 0 || px > 100 || py < 0 || py > 100 || pw < 0 || pw > 100 || ph < 0 || ph > 100) {
                 throw new IllegalArgumentException("Percent values must be between 0 and 100.");
             }
-            if (px + pw > 100 || py + ph > 100) {
-                throw new IllegalArgumentException("Crop exceeds image dimensions.");
-            }
             if (pw <= 0 || ph <= 0) {
                 throw new IllegalArgumentException("Width and height must be greater than 0.");
             }
 
-            return new CropRectangle(
-                    (int) Math.floor(nativeWidth * (px / 100.0)),
-                    (int) Math.floor(nativeHeight * (py / 100.0)),
-                    (int) Math.floor(nativeWidth * (pw / 100.0)),
-                    (int) Math.floor(nativeHeight * (ph / 100.0)));
+            // If the requested region extends beyond the bounds of the image, we crop it to the
+            // image bounds, so we need to ensure that the calculated pixel values are within the
+            // image bounds.
+            int finalX = (int) Math.floor(nativeWidth * (px / 100.0));
+            int finalY = (int) Math.floor(nativeHeight * (py / 100.0));
+            int finalW = (int) Math.floor(nativeWidth * (pw / 100.0));
+            finalW = Math.min(finalW, nativeWidth - finalX);
+            int finalH = (int) Math.floor(nativeHeight * (ph / 100.0));
+            finalH = Math.min(finalH, nativeHeight - finalY);
+
+            if (finalW <= 0 || finalH <= 0) {
+                throw new IllegalArgumentException("Crop results in empty region.");
+            }
+
+            return new CropRectangle(finalX, finalY, finalW, finalH);
         } else {
             if (!supported.byPixels()) {
                 throw new IllegalArgumentException("Pixel-based cropping is not supported in this configuration.");
@@ -184,12 +191,19 @@ public class ImageRequestParser {
             if (x < 0 || y < 0 || w < 0 || h < 0) {
                 throw new IllegalArgumentException("Crop coordinates and dimensions must be non-negative.");
             }
-            if (x > nativeWidth || y > nativeHeight) {
-                throw new IllegalArgumentException("Crop coordinates exceed image dimensions.");
+
+            // If the requested region extends beyond the bounds of the image, we crop it to the
+            // image bounds, so we need to ensure that the calculated pixel values are within the
+            // image bounds.
+            if (w > (nativeWidth - x)) {
+                w = nativeWidth - x;
+            }
+            if (h > (nativeHeight - y)) {
+                h = nativeHeight - y;
             }
 
-            if (x + w > nativeWidth || y + h > nativeHeight) {
-                throw new IllegalArgumentException("Crop exceeds image dimensions.");
+            if (w <= 0 || h <= 0) {
+                throw new IllegalArgumentException("Crop results in empty region.");
             }
 
             return new CropRectangle(x, y, w, h);

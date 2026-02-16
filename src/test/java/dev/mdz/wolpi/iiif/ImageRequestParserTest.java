@@ -314,8 +314,6 @@ class ImageRequestParserTest {
                     "-10,0,100,100",
                     "0,-10,100,100",
                     "1000,1000,100,100",
-                    "500,500,600,600",
-                    "pct:50,50,60,60",
                     "pct:-10,10,20,30",
                     "pct:110,10,20,30",
                     "pct:10,-10,20,30",
@@ -329,6 +327,16 @@ class ImageRequestParserTest {
         void shouldThrowForInvalidOrOutOfBoundsRegions(String spec) {
             assertThatExceptionOfType(IllegalArgumentException.class)
                     .isThrownBy(() -> parser.parseRegion(spec, sourceSize));
+        }
+
+        @ParameterizedTest
+        @CsvSource({"'200,300,1000,800', 800, 500", "'500,500,600,600', 500, 300", "'pct:50,50,60,60', 500, 400"})
+        @DisplayName("should truncate width and height for out-of-bounds regions")
+        void shouldTruncateOutOfBoundsRegions(String spec, int expectedWidth, int expectedHeight) {
+            CropRectangle result = parser.parseRegion(spec, sourceSize);
+
+            assertThat(result.width()).isEqualTo(expectedWidth);
+            assertThat(result.height()).isEqualTo(expectedHeight);
         }
 
         @Test
@@ -788,8 +796,7 @@ class ImageRequestParserTest {
         @DisplayName("should canonicalize full region and max size for v3")
         @CsvSource({"'0,0,1000,800', '1000,800'", "'pct:0,0,100,100', 'pct:100'"})
         void shouldCanonicalizeFullRegionAndMaxSize(String cropSpec, String sizeSpec) {
-            ImageRequest request =
-                    new ImageRequest("id", IIIFVersion.V3, cropSpec, sizeSpec, "0", "default", "jpg");
+            ImageRequest request = new ImageRequest("id", IIIFVersion.V3, cropSpec, sizeSpec, "0", "default", "jpg");
             ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
             assertThat(canonical.cropSpec()).isEqualTo("full");
             assertThat(canonical.sizeSpec()).isEqualTo("max");
@@ -799,8 +806,7 @@ class ImageRequestParserTest {
         @DisplayName("should canonicalize max size for v3 when it matches region size")
         @CsvSource({"'100,100,900,700', '900,700'", "'pct:10,20,40,40', '400,'"})
         void shouldCanonicalizeFullSize(String cropSpec, String sizeSpec) {
-            ImageRequest request =
-                    new ImageRequest("id", IIIFVersion.V3, cropSpec, sizeSpec, "0", "default", "jpg");
+            ImageRequest request = new ImageRequest("id", IIIFVersion.V3, cropSpec, sizeSpec, "0", "default", "jpg");
             ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
             assertThat(canonical.sizeSpec()).isEqualTo("max");
         }
