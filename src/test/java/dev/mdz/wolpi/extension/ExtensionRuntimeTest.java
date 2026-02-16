@@ -463,8 +463,8 @@ public class ExtensionRuntimeTest {
                 "Should raise generic ExtensionExecutionError if an extension raises a generic error during resolving")
         void shouldRaiseGenericErrorOnResolvingError(String lang, String cardinality) {
             List<ExtensionConfig> exts = new ArrayList<>();
-            exts.add(getTestAuthExtension(TestExtensionType.PY_SINGLE, null, null, null, Map.of()));
-            exts.add(getTestAuthExtension(TestExtensionType.JS, null, null, null, Map.of()));
+            exts.add(getTestResolverExtension("py-", TestResolvingType.HTTP));
+            exts.add(getTestResolverExtension("js-", TestResolvingType.FILESYSTEM));
             if (cardinality.equals("single")) {
                 exts.remove(lang.equals("js") ? 0 : 1);
             }

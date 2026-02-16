@@ -423,7 +423,12 @@ public interface ExtensionRuntime extends AutoCloseable {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
-                    handleExtensionException(e.getCause());
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    log.warn("Resolver extension raised an error.", cause);
+                    if (err == null) {
+                        err = cause;
+                    }
+                    completed++;
                 }
             }
 
