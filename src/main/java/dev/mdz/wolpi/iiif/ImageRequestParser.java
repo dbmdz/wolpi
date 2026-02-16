@@ -397,18 +397,18 @@ public class ImageRequestParser {
                     || parsedSize.height() == iiifConfig.limits().maxHeight()
                     || (long) parsedSize.width() * parsedSize.height()
                             == iiifConfig.limits().maxArea();
-            if (parsedSize.equals(sourceSize)
-                    || (parsedSize.width() < sourceSize.width()
-                            && parsedSize.height() < sourceSize.height()
+            if (parsedSize.equals(regionSize)
+                    || (parsedSize.width() < regionSize.width()
+                            && parsedSize.height() < regionSize.height()
                             && sizeIsMax)) {
                 canonicalSize = isV2 ? "full" : "max";
             } else if (!isV2
-                    && (parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height())
+                    && (parsedSize.width() > regionSize.width() || parsedSize.height() > regionSize.height())
                     && sizeIsMax) {
                 canonicalSize = "^max";
             } else if (isV2 && doesAspectRatioMatch(regionSize, parsedSize)) {
                 canonicalSize = "%d,".formatted(parsedSize.width());
-            } else if (!isV2 && parsedSize.width() > sourceSize.width() || parsedSize.height() > sourceSize.height()) {
+            } else if (!isV2 && parsedSize.width() > regionSize.width() || parsedSize.height() > regionSize.height()) {
                 canonicalSize = "^%d,%d".formatted(parsedSize.width(), parsedSize.height());
             } else {
                 canonicalSize = "%d,%d".formatted(parsedSize.width(), parsedSize.height());

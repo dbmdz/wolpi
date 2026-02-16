@@ -784,13 +784,24 @@ class ImageRequestParserTest {
 
         private final ImageSize sourceSize = new ImageSize(1000, 800);
 
-        @Test
-        @DisplayName("should canonicalize full region and max size")
-        void shouldCanonicalizeFullRegionAndMaxSize() {
+        @ParameterizedTest
+        @DisplayName("should canonicalize full region and max size for v3")
+        @CsvSource({"'0,0,1000,800', '1000,800'", "'pct:0,0,100,100', 'pct:100'"})
+        void shouldCanonicalizeFullRegionAndMaxSize(String cropSpec, String sizeSpec) {
             ImageRequest request =
-                    new ImageRequest("id", IIIFVersion.V3, "0,0,1000,800", "1000,800", "0", "default", "jpg");
+                    new ImageRequest("id", IIIFVersion.V3, cropSpec, sizeSpec, "0", "default", "jpg");
             ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
             assertThat(canonical.cropSpec()).isEqualTo("full");
+            assertThat(canonical.sizeSpec()).isEqualTo("max");
+        }
+
+        @ParameterizedTest
+        @DisplayName("should canonicalize max size for v3 when it matches region size")
+        @CsvSource({"'100,100,900,700', '900,700'", "'pct:10,20,40,40', '400,'"})
+        void shouldCanonicalizeFullSize(String cropSpec, String sizeSpec) {
+            ImageRequest request =
+                    new ImageRequest("id", IIIFVersion.V3, cropSpec, sizeSpec, "0", "default", "jpg");
+            ImageRequest canonical = parser.toCanonicalForm(request, sourceSize);
             assertThat(canonical.sizeSpec()).isEqualTo("max");
         }
 
