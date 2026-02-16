@@ -259,7 +259,7 @@ public class IIIFImageAPIController {
         if (canonicalRequest != null
                 && !request.equals(canonicalRequest)
                 && config.iiif().features().canonicalRedirect()) {
-            // Canonical redirects tracked by Spring Boot as 303s
+            // Canonical redirects tracked by Spring Boot as 302s
             String canonicalUrl = canonicalRequest.toRequestPath();
             outHeaders.add("Location", canonicalUrl);
             return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
