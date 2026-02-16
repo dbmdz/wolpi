@@ -262,7 +262,7 @@ public class IIIFImageAPIController {
             // Canonical redirects tracked by Spring Boot as 303s
             String canonicalUrl = canonicalRequest.toRequestPath();
             outHeaders.add("Location", canonicalUrl);
-            return ResponseEntity.status(HttpStatus.SEE_OTHER)
+            return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
                     .headers(outHeaders)
                     .contentType(MediaType.TEXT_PLAIN)
                     .body(ByteBuffer.wrap(("See: " + canonicalUrl).getBytes()));
