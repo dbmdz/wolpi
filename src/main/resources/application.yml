@@ -173,3 +173,7 @@ wolpi:
       max-width: 0
       max-height: 0
       max-area: 0
+
+springdoc:
+  api-docs:
+    path: /api-docs

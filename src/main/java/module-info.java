@@ -31,6 +31,7 @@ open module wolpi {
     requires tools.jackson.databind;
     requires tools.jackson.dataformat.toml;
     requires micrometer.observation;
+    requires org.springdoc.openapi.common;
 
     exports dev.mdz.wolpi;
     exports dev.mdz.wolpi.config;
