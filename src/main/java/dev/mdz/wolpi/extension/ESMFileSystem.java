@@ -19,6 +19,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /// Very basic Truffle filesystem that can resolve `wolpi:` paths to JS sources inside
@@ -32,28 +34,42 @@ import org.jspecify.annotations.Nullable;
 public class ESMFileSystem implements org.graalvm.polyglot.io.FileSystem {
 
     private static final String WOLPI_INTERNAL_SCHEME = "wolpi:";
+    private static final Pattern NESTED_JAR_PATTERN =
+            Pattern.compile("^jar:nested:(?<outerJar>.+\\.jar)/!(?<innerParent>.+)!.+$");
     private final FileSystem defaultFs;
     private final @Nullable Path wolpiPathPrefix;
     private final @Nullable FileSystem jarFs;
 
     public ESMFileSystem() {
+        this(resolveCodeSourceLocation());
+    }
+
+    // jar:nested:/local/applications/wolpi-0.1.0-SNAPSHOT.jar/!BOOT-INF/classes/!/js/fetch.mjs
+    ESMFileSystem(String jarLocation) {
         this.defaultFs = java.nio.file.FileSystems.getDefault();
+        // Spring Boot builds a nested JAR by default, which has a special URL format that we need to handle.
+        Matcher m = NESTED_JAR_PATTERN.matcher(jarLocation);
         try {
-            String jarLocation = getClass()
-                    .getProtectionDomain()
-                    .getCodeSource()
-                    .getLocation()
-                    .toString();
-            Path absolutePath = Path.of(jarLocation.replace("file:", "")).toAbsolutePath();
-            if (jarLocation.endsWith(".jar")) {
-                this.jarFs = FileSystems.newFileSystem(absolutePath);
+            if (m.matches()) {
+                Path outerJarPath = Path.of(m.group("outerJar")).toAbsolutePath();
+                this.jarFs = FileSystems.newFileSystem(outerJarPath);
+                if (m.group("innerParent").endsWith(".jar")) {
+                    throw new RuntimeException(
+                            "Inner JARs in nested JARs are not supported: %s".formatted(m.group("innerParent")));
+                }
+                this.wolpiPathPrefix = jarFs.getPath(m.group("innerParent"));
+            } else if (jarLocation.endsWith(".jar")) {
+                this.jarFs = FileSystems.newFileSystem(
+                        Path.of(jarLocation.replace("file:", "")).toAbsolutePath());
                 this.wolpiPathPrefix = null;
             } else {
                 this.jarFs = null;
-                this.wolpiPathPrefix = absolutePath;
+                this.wolpiPathPrefix =
+                        defaultFs.getPath(jarLocation.replace("file:", "")).toAbsolutePath();
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException(
+                    "Failed to initialize ESMFileSystem with jar location: %s".formatted(jarLocation), e);
         }
     }
 
@@ -158,5 +174,13 @@ public class ESMFileSystem implements org.graalvm.polyglot.io.FileSystem {
             return path.resolveSibling(lastPath.substring(0, lastPath.indexOf('?')));
         }
         return path;
+    }
+
+    private static String resolveCodeSourceLocation() {
+        return ESMFileSystem.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation()
+                .toString();
     }
 }
