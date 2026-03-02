@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.graalvm.polyglot.Context;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -36,6 +38,7 @@ public class ImageApiValidator {
     private static final String VALIDATION_IMAGE_PNG = "67352ccc-d1b0-11e1-89ae-279075081939-png";
     private static final List<String> PYVIPS_SHIM_LOCATIONS = List.of(
             "/python/pyvips_shim.py", "/classes/python/pyvips_shim.py", "/BOOT-INF/classes/python/pyvips_shim.py");
+    private static final Pattern NESTED_JAR_PATTERN = Pattern.compile("^jar:nested:(?<outerJar>.+\\.jar)/!.+$");
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -179,7 +182,11 @@ public class ImageApiValidator {
         Path shimLocation;
         boolean deleteShimAfter;
         try {
-            if (jarLocation.endsWith(".jar")) {
+            Matcher m = NESTED_JAR_PATTERN.matcher(jarLocation);
+            if (m.matches()) {
+                absolutePath = Path.of(m.group("outerJar")).toAbsolutePath();
+            }
+            if (absolutePath.endsWith(".jar")) {
                 try (var jarFs = FileSystems.newFileSystem(absolutePath)) {
                     // GraalPy can't import code from a JAR directly, so we write the shim to a temp
                     // file with restricted permissions first
@@ -204,8 +211,9 @@ public class ImageApiValidator {
                     deleteShimAfter = true;
                 }
             } else {
+                var finalPath = absolutePath;
                 shimLocation = PYVIPS_SHIM_LOCATIONS.stream()
-                        .map(p -> absolutePath.resolveSibling(p.substring(1)))
+                        .map(p -> finalPath.resolveSibling(p.substring(1)))
                         .filter(Files::exists)
                         .findFirst()
                         .orElseThrow(() -> new IOException("Failed to locate pyvips_shim.py at expected locations"));
