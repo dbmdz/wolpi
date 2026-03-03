@@ -39,7 +39,7 @@ public record ExtensionGuestContext(
 
     @Override
     public @Nullable String baseUri() {
-        if (this.baseUri != null) {
+        if (this.baseUri != null && !this.baseUri.isBlank()) {
             return this.baseUri;
         }
         try {

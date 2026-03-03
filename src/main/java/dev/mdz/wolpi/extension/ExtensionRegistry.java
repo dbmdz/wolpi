@@ -375,7 +375,10 @@ public class ExtensionRegistry implements AutoCloseable {
 
         String baseUri = null;
         if (wolpiConfig != null && wolpiConfig.http() != null) {
-            baseUri = wolpiConfig.http().baseUri();
+            var configuredBaseUri = wolpiConfig.http().baseUri();
+            if (configuredBaseUri != null && !configuredBaseUri.isBlank()) {
+                baseUri = configuredBaseUri;
+            }
         }
         var guestCtx = guestContextFactory.createGuestContext(
                 packageName, extensionVersion, config.config(), Language.PYTHON, baseUri);
@@ -482,7 +485,10 @@ public class ExtensionRegistry implements AutoCloseable {
 
         String baseUri = null;
         if (wolpiConfig != null && wolpiConfig.http() != null) {
-            baseUri = wolpiConfig.http().baseUri();
+            var configuredBaseUri = wolpiConfig.http().baseUri();
+            if (configuredBaseUri != null && !configuredBaseUri.isBlank()) {
+                baseUri = configuredBaseUri;
+            }
         }
         var guestCtx = guestContextFactory.createGuestContext(
                 packageName, extensionVersion, config.config(), Language.JAVASCRIPT, baseUri);

@@ -137,6 +137,15 @@ public class ValidatingRunner implements ApplicationRunner, ApplicationListener<
     /// Capture the server port once Tomcat is initialized
     @Override
     public void onApplicationEvent(WebServerInitializedEvent event) {
+        String namespace = event.getApplicationContext().getServerNamespace();
+
+        // Main server process has no namespace, all other webserver
+        // processes are unrelated (e.g. Spring Boot Actuator's management server)
+        // and should be ignored for validation
+        if (namespace != null && !namespace.isBlank()) {
+            return;
+        }
+
         this.serverPort = event.getWebServer().getPort();
     }
 }

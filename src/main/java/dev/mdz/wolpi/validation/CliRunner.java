@@ -172,6 +172,10 @@ public class CliRunner implements CommandLineRunner, Runnable {
         /// called.
         @Override
         public void onApplicationEvent(WebServerInitializedEvent event) {
+            String namespace = event.getApplicationContext().getServerNamespace();
+            if (namespace != null && !namespace.isBlank()) {
+                return;
+            }
             this.serverPort = event.getWebServer().getPort();
         }
 

@@ -125,8 +125,9 @@ public class ImageApiValidator {
     /// @return `true` if all tests passed with the extension enabled, `false` if any test failed
     public boolean validateExtension(LoadedExtension ext, int port) {
         log.info(
-                "Running IIIF Image API validation tests with extension '{}'...",
-                ext.extensionInfo().name());
+                "Running IIIF Image API validation tests with extension '{}' against localhost:{}...",
+                ext.extensionInfo().name(),
+                port);
         for (IIIFVersion version : IIIFVersion.values()) {
             Map<ValidationTest, List<ValidationResult>> results;
             try (var ignored = extensionRegistry.temporarilyIsolateExtension(ext)) {
@@ -186,8 +187,9 @@ public class ImageApiValidator {
             if (m.matches()) {
                 absolutePath = Path.of(m.group("outerJar")).toAbsolutePath();
             }
-            if (absolutePath.endsWith(".jar")) {
-                try (var jarFs = FileSystems.newFileSystem(absolutePath)) {
+            var finalPath = absolutePath;
+            if (finalPath.toString().endsWith(".jar")) {
+                try (var jarFs = FileSystems.newFileSystem(finalPath)) {
                     // GraalPy can't import code from a JAR directly, so we write the shim to a temp
                     // file with restricted permissions first
                     if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
@@ -206,17 +208,18 @@ public class ImageApiValidator {
                             .filter(Files::exists)
                             .findFirst()
                             .orElseThrow(() ->
-                                    new IOException("Failed to locate pyvips_shim.py in JAR at expected locations"));
+                                    new IOException("Failed to locate pyvips_shim.py in JAR at expected locations in %s"
+                                            .formatted(finalPath)));
                     Files.write(shimLocation, Files.readAllBytes(shimJarLocation));
                     deleteShimAfter = true;
                 }
             } else {
-                var finalPath = absolutePath;
                 shimLocation = PYVIPS_SHIM_LOCATIONS.stream()
                         .map(p -> finalPath.resolveSibling(p.substring(1)))
                         .filter(Files::exists)
                         .findFirst()
-                        .orElseThrow(() -> new IOException("Failed to locate pyvips_shim.py at expected locations"));
+                        .orElseThrow(() -> new IOException(
+                                "Failed to locate pyvips_shim.py at expected locations in %s".formatted(finalPath)));
                 deleteShimAfter = false;
             }
         } catch (IOException e) {

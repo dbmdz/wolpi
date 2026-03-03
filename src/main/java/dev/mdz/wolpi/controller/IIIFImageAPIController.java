@@ -149,7 +149,7 @@ public class IIIFImageAPIController {
         }
 
         String baseUrl;
-        if (config.http() != null && config.http().baseUri() != null) {
+        if (hasConfiguredBaseUri()) {
             baseUrl = "%s/v%d/%s".formatted(config.http().baseUri(), version.value(), identifier);
         } else {
             baseUrl = request.getRequestURL().toString().replace("/info.json", "");
@@ -295,7 +295,7 @@ public class IIIFImageAPIController {
         List<String> linkHeaderUrls = new ArrayList<>();
         if (canonicalRequest != null && config.iiif().features().canonicalLinkHeader()) {
             String canonicalUrl;
-            if (config.http() != null && config.http().baseUri() != null) {
+            if (hasConfiguredBaseUri()) {
                 canonicalUrl = "%s%s".formatted(config.http().baseUri(), canonicalRequest.toRequestPath());
             } else {
                 canonicalUrl = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -378,5 +378,11 @@ public class IIIFImageAPIController {
             outHeaders.setAccessControlMaxAge(86400L);
         }
         return ResponseEntity.ok().headers(outHeaders).build();
+    }
+
+    private boolean hasConfiguredBaseUri() {
+        return config.http() != null
+                && config.http().baseUri() != null
+                && !config.http().baseUri().isBlank();
     }
 }

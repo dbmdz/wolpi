@@ -58,6 +58,15 @@ public class ControllerTest {
     }
 
     @Test
+    public void testInfoJsonWithEmptyBaseUriFallsBackToRequestUrl() throws Exception {
+        when(wolpiConfig.http()).thenReturn(new HttpConfig("localhost", 31337, 8, 200, 200, ""));
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/info.json")
+                        .header("Host", "example.com:8217"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("http://example.com:8217/v3/67352ccc-d1b0-11e1-89ae-279075081939"));
+    }
+
+    @Test
     public void testImageWithLinkCanonicalHeaderAndCustomBaseUri() throws Exception {
         when(wolpiConfig.http())
                 .thenReturn(new HttpConfig("localhost", 31337, 8, 200, 200, "https://example.com/iiif"));
@@ -68,6 +77,19 @@ public class ControllerTest {
                                         "Link",
                                         containsString(
                                                 "<https://example.com/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg>; rel=\"canonical\"")));
+    }
+
+    @Test
+    public void testImageWithLinkCanonicalHeaderAndEmptyBaseUriFallsBackToRequestUrl() throws Exception {
+        when(wolpiConfig.http()).thenReturn(new HttpConfig("localhost", 31337, 8, 200, 200, ""));
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg")
+                        .header("Host", "example.com:8217"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        header().string(
+                                        "Link",
+                                        containsString(
+                                                "<http://example.com:8217/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg>; rel=\"canonical\"")));
     }
 
     @Test
