@@ -96,7 +96,19 @@ public class ControllerTest {
     public void testImageCanonicalRedirectReturns301AndCanonicalLocation() throws Exception {
         mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/color.jpg"))
                 .andExpect(status().isMovedPermanently())
-                .andExpect(
-                        header().string("Location", "/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg"));
+                .andExpect(header().string(
+                                "Location",
+                                containsString("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg")));
+    }
+
+    @Test
+    public void testImageCanonicalRedirectIncludesContextPath() throws Exception {
+        mockMvc.perform(get("/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/color.jpg")
+                        .contextPath("/iiif"))
+                .andExpect(status().isMovedPermanently())
+                .andExpect(header().string(
+                                "Location",
+                                containsString(
+                                        "/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg")));
     }
 }

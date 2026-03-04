@@ -259,8 +259,12 @@ public class IIIFImageAPIController {
         if (canonicalRequest != null
                 && !request.equals(canonicalRequest)
                 && config.iiif().features().canonicalRedirect()) {
-            // Canonical redirects tracked by Spring Boot as 302s
-            String canonicalUrl = canonicalRequest.toRequestPath();
+            // Prepend servlet context or X-Forwarded-Prefix to the canonical URL if we have it, to
+            // make sure the client ends up at the correct URL even if we're running behind a reverse
+            // proxy with a prefix or in a servlet context
+            String canonicalUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(canonicalRequest.toRequestPath())
+                    .toUriString();
             outHeaders.add("Location", canonicalUrl);
             return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
                     .headers(outHeaders)
