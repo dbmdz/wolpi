@@ -13,7 +13,7 @@ COPY pom.xml .
 RUN mvn -q dependency:resolve-plugins dependency:go-offline
 
 # And only the copy the full source tree and build
-COPY . .
+COPY src ./src
 RUN mvn package -DskipTests -Dspotless.check.skip=true
 
 # Stage 2: Create the runtime image with GraalVM
@@ -27,7 +27,6 @@ RUN apt-get update -q && \
     apt-get install -qq -y --no-install-recommends \
         libvips42t64 libglib2.0-0t64 ca-certificates curl npm build-essential libffi-dev patchelf libjemalloc2 && \
     rm -rf /var/lib/apt/lists/*
-
 
 # Create symlink for libvips, liblib and libgobject so vips-ffm can find them
 RUN ln -s /usr/lib/x86_64-linux-gnu/libvips.so.42 /usr/lib/x86_64-linux-gnu/libvips.so && \
