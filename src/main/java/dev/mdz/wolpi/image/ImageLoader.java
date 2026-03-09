@@ -39,6 +39,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -225,13 +226,26 @@ public class ImageLoader {
         return augmented != null ? augmented : infoJson;
     }
 
-    /// Load an image from a source, applying shrink-on-load according to the target size.
+    /// Load an image from a source via libvips' thumbnail API for downscaled requests.
     ///
-    /// This can be much faster than loading the full image and then scaling it down, as it allows
-    /// vips to exploit characteristics of the image format to load an already scaled-down version
-    /// without applying any scaling itself. The performance edge disappears when only requesting
-    /// regions of an image, so in those cases the other overload of this method should be used.
+    /// This is used both for uncropped downscale requests and for the thumbnail-then-crop fast
+    /// path in [ImageProcessor].
     public VImage loadImage(ImageSource source, ImageSize targetSize) throws IOException, InterruptedException {
+        VImage result = loadThumbnailImage(source, targetSize);
+        metrics.incrementSourceLoads(sourceTypeMetricLabel(source));
+        return result;
+    }
+
+    ///  Load the image in its native size from its source
+    public VImage loadImage(ImageSource source) throws IOException, InterruptedException {
+        VImage result = openImage(source);
+        metrics.incrementSourceLoads(sourceTypeMetricLabel(source));
+        return result;
+    }
+
+    /// Loads a whole image through libvips' thumbnail API for uncropped downscale-only requests.
+    private VImage loadThumbnailImage(ImageSource source, ImageSize targetSize)
+            throws IOException, InterruptedException {
         return switch (source.resolvedImage()) {
             case FilesystemResolvedImage(Path path) ->
                 VImage.thumbnail(
@@ -261,42 +275,56 @@ public class ImageLoader {
         };
     }
 
-    ///  Load the image in its native size from its source
-    public VImage loadImage(ImageSource source) throws IOException, InterruptedException {
-        String sourceType;
-        VImage result =
-                switch (source.resolvedImage()) {
-                    case FilesystemResolvedImage(Path path) -> {
-                        sourceType = "filesystem";
-                        yield VImage.newFromFile(arena, path.toAbsolutePath().toString());
-                    }
-                    case HttpResolvedImage(
-                            URI uri,
-                            Map<String, String> headers,
-                            @Nullable Boolean supportsByteRange) -> {
-                        sourceType = "http";
-                        yield loadFromHttp(uri, headers, null, supportsByteRange);
-                    }
-                    case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) -> {
-                        sourceType = "custom";
-                        yield VImage.newFromSource(arena, srcSupplier.apply(arena));
-                    }
-                    case BinaryResolvedImage(byte[] data) -> {
-                        sourceType = "binary";
-                        yield VImage.newFromBytes(arena, data);
-                    }
-                    case SourceNotModified ignored ->
-                        throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
-                };
-        metrics.incrementSourceLoads(sourceType);
-        return result;
+    /// Opens the source directly in its native size, without any thumbnail processing.
+    private VImage openImage(ImageSource source) throws IOException, InterruptedException {
+        return switch (source.resolvedImage()) {
+            case FilesystemResolvedImage(Path path) ->
+                VImage.newFromFile(arena, path.toAbsolutePath().toString());
+            case HttpResolvedImage(URI uri, Map<String, String> headers, @Nullable Boolean supportsByteRange) ->
+                loadFromHttp(uri, headers, null, supportsByteRange);
+            case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
+                VImage.newFromSource(arena, srcSupplier.apply(arena));
+            case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
+            default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
+        };
     }
 
+    /// Classifies the resolved source into the metric label used for load counters.
+    private String sourceTypeMetricLabel(ImageSource source) {
+        return switch (source.resolvedImage()) {
+            case FilesystemResolvedImage ignored -> "filesystem";
+            case HttpResolvedImage ignored -> "http";
+            case CustomSourceResolvedImage ignored -> "custom";
+            case BinaryResolvedImage ignored -> "binary";
+            case SourceNotModified ignored ->
+                throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
+        };
+    }
+
+    /// Loads an HTTP source either directly or via libvips' thumbnail API, depending on whether a
+    /// target size was requested.
     private VImage loadFromHttp(
             URI uri,
             @Nullable Map<String, String> headers,
             @Nullable ImageSize targetSize,
             @Nullable Boolean supportsByteRanges)
+            throws IOException, InterruptedException {
+        HttpResponse<InputStream> response = fetchFromHttp(uri, headers);
+        if (targetSize == null) {
+            return VImage.newFromStream(arena, response.body());
+        }
+
+        var src = newFromInputStream(arena, response.body());
+        return VImage.thumbnailSource(
+                arena,
+                src,
+                targetSize.width(),
+                VipsOption.Int("height", targetSize.height()),
+                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+    }
+
+    /// Fetches the remote HTTP source as an input stream for the current request.
+    private HttpResponse<InputStream> fetchFromHttp(URI uri, @Nullable Map<String, String> headers)
             throws IOException, InterruptedException {
         // TODO: If the endpoint supports byte ranges, use a custom VSource implementation that
         //       leverages partial reads via byte-range requests
@@ -311,17 +339,7 @@ public class ImageLoader {
         if (response.statusCode() >= 400) {
             throw new IOException("Failed to load image from %s: %d".formatted(uri, response.statusCode()));
         }
-        if (targetSize == null) {
-            return VImage.newFromStream(arena, response.body());
-        } else {
-            var src = newFromInputStream(arena, response.body());
-            return VImage.thumbnailSource(
-                    arena,
-                    src,
-                    targetSize.width(),
-                    VipsOption.Int("height", targetSize.height()),
-                    VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-        }
+        return response;
     }
 
     ///  Get image metadata from a loaded VImage.
@@ -355,6 +373,10 @@ public class ImageLoader {
                             .toList()));
         }
 
-        return new ImageInfo(new ImageSize(image.getWidth(), image.getHeight()), sizes, tileSizes);
+        return new ImageInfo(
+                image.getString("vips-loader").toLowerCase(Locale.ROOT),
+                new ImageSize(image.getWidth(), image.getHeight()),
+                sizes,
+                tileSizes);
     }
 }
