@@ -17,17 +17,15 @@ public class ImageDimensionsMath {
         double scaleX = levelSize.width() / (double) sourceSize.width();
         double scaleY = levelSize.height() / (double) sourceSize.height();
 
-        int levelLeft = (int) Math.floor(crop.x() * scaleX);
-        int levelTop = (int) Math.floor(crop.y() * scaleY);
-        int levelRight = (int) Math.ceil((crop.x() + crop.width()) * scaleX);
-        int levelBottom = (int) Math.ceil((crop.y() + crop.height()) * scaleY);
+        // X and Y are clamped to [0, level{Width/Height} -1]
+        int x = Math.max(0, Math.min((int) Math.floor(crop.x() * scaleX), levelSize.width() - 1));
+        int y = Math.max(0, Math.min((int) Math.floor(crop.y() * scaleY), levelSize.height() - 1));
 
-        levelLeft = Math.max(0, Math.min(levelSize.width() - 1, levelLeft));
-        levelTop = Math.max(0, Math.min(levelSize.height() - 1, levelTop));
-        levelRight = Math.max(levelLeft + 1, Math.min(levelSize.width(), levelRight));
-        levelBottom = Math.max(levelTop + 1, Math.min(levelSize.height(), levelBottom));
+        // Width and height are clamped to [1, levelWidth/Height - x/y]
+        int width = Math.max(1, Math.min((int) Math.ceil(crop.width() * scaleX), levelSize.width() - x));
+        int height = Math.max(1, Math.min((int) Math.ceil(crop.height() * scaleY), levelSize.height() - y));
 
-        return new CropRectangle(levelLeft, levelTop, levelRight - levelLeft, levelBottom - levelTop);
+        return new CropRectangle(x, y, width, height);
     }
 
     /// Computes the overall scaling factor from original image size to target size
