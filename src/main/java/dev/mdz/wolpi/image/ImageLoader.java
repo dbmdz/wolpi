@@ -43,6 +43,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -54,6 +56,7 @@ import org.springframework.stereotype.Component;
 public class ImageLoader {
     // Hardcoded identifier for official IIIF Image API Validation image
     private static final String VALIDATION_ID_PREFIX = "67352ccc-d1b0-11e1-89ae-279075081939";
+    private static final Pattern VIPS_LOADER_PAT = Pattern.compile("(?<format>[a-zA-Z0-9]+)load(?:_source|_buffer)?");
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -374,9 +377,23 @@ public class ImageLoader {
         }
 
         return new ImageInfo(
-                image.getString("vips-loader").toLowerCase(Locale.ROOT),
+                vipsLoaderToFormatString(image.getString("vips-loader").toLowerCase(Locale.ROOT)),
                 new ImageSize(image.getWidth(), image.getHeight()),
                 sizes,
                 tileSizes);
+    }
+
+    private static @Nullable String vipsLoaderToFormatString(String vipsLoader) {
+        Matcher matcher = VIPS_LOADER_PAT.matcher(vipsLoader);
+        if (!matcher.matches()) {
+            log.warn("Unexpected vips loader '{}', cannot map to format!", vipsLoader);
+            return null;
+        }
+        String format = matcher.group("format").toLowerCase(Locale.ROOT);
+        // Kakadu JPEG 2000 loader identifies itself as "kakaduloader", but we want to report the format as "jp2k"
+        if (format.equals("kakadu")) {
+            format = "jp2k";
+        }
+        return format;
     }
 }
