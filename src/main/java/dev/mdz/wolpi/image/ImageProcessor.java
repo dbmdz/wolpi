@@ -272,7 +272,7 @@ public class ImageProcessor {
     ///
     /// This is faster for formats that support native cropped loads (Pyramid TIFs, JPEG2000), and
     /// is necessary when extensions need to hook into the cropping or scaling steps, since we have
-    /// to respect the order of operations as defined by the IIIF spec in those cases..
+    /// to respect the order of operations as defined by the IIIF spec in those cases.
     ///
     /// @param image         the image to crop and scale
     /// @param request       the original IIIF request, used for parsing the crop and size
