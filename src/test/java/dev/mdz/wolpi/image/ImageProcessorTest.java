@@ -2,7 +2,6 @@ package dev.mdz.wolpi.image;
 
 import static dev.mdz.wolpi.testutil.WolpiAssertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -62,7 +61,7 @@ public class ImageProcessorTest {
         when(runtime.hasExtensionsForHook(any())).thenReturn(false);
         var metrics = mock(WolpiMetrics.class);
         var timer = mock(WolpiMetrics.ImageProcessingTimer.class);
-        when(metrics.startImageProcessingTimer(any(), any(), any(), any(), anyBoolean()))
+        when(metrics.startImageProcessingTimer(any(), any(), any(), any(), any()))
                 .thenReturn(timer);
         loader = new ImageLoader(config, arena, null, runtime, null, metrics);
         processor = new ImageProcessor(arena, config, loader, new ImageRequestParser(config), runtime, metrics);

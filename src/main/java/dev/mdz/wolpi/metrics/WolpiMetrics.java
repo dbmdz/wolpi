@@ -50,7 +50,7 @@ public class WolpiMetrics {
         private final SizeBucket outputSize;
         private final SizeBucket croppedArea;
         private final RequestType requestType;
-        private final boolean usedFastPath;
+        private final ScaleCropMode scaleCropMode;
 
         ImageProcessingTimer(
                 Timer.Sample sample,
@@ -59,14 +59,14 @@ public class WolpiMetrics {
                 SizeBucket outputSize,
                 SizeBucket croppedArea,
                 RequestType requestType,
-                boolean usedFastPath) {
+                ScaleCropMode scaleCropMode) {
             this.sample = sample;
             this.registry = registry;
             this.format = format;
             this.outputSize = outputSize;
             this.croppedArea = croppedArea;
             this.requestType = requestType;
-            this.usedFastPath = usedFastPath;
+            this.scaleCropMode = scaleCropMode;
         }
 
         public void stop() {
@@ -76,7 +76,7 @@ public class WolpiMetrics {
                     .tag("output_size", outputSize.toTag())
                     .tag("cropped_area", croppedArea.toTag())
                     .tag("request_type", requestType.toTag())
-                    .tag("fast_path", usedFastPath ? "shrink_on_load" : "none")
+                    .tag("scale_crop_mode", scaleCropMode.toString().toLowerCase(Locale.ROOT))
                     .register(registry));
         }
     }
@@ -86,9 +86,9 @@ public class WolpiMetrics {
             SizeBucket outputSize,
             SizeBucket croppedArea,
             RequestType requestType,
-            boolean usedFastPath) {
+            ScaleCropMode scaleCropMode) {
         return new ImageProcessingTimer(
-                Timer.start(registry), registry, format, outputSize, croppedArea, requestType, usedFastPath);
+                Timer.start(registry), registry, format, outputSize, croppedArea, requestType, scaleCropMode);
     }
 
     public void incrementImagesProcessed(String format, String quality, IIIFVersion iiifVersion) {

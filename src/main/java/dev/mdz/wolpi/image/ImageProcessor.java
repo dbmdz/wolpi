@@ -20,6 +20,7 @@ import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.CropRectangle;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
+import dev.mdz.wolpi.metrics.ScaleCropMode;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -51,7 +52,7 @@ public class ImageProcessor {
     // Formats for which it is faster to do a thumbnail-then-crop approach for cropped downscale
     // requests, as opposed to loading the full image and cropping in-memory. This is based on
     // empirical testing of libvips' performance characteristics.
-    private static final Set<String> THUMBNAIL_THEN_CROP_FORMATS =
+    private static final Set<String> SCALE_THEN_CROP_FORMATS =
             Set.of("jpeg", "uhdr", "png", "heif", "pdf", "svg", "webp");
 
     private final Arena vipsArena;
@@ -64,8 +65,9 @@ public class ImageProcessor {
     private final ExtensionRuntime extensionRuntime;
     private final WolpiMetrics metrics;
 
-    /// Thread-local to track whether fast path was used for current request
-    private final ThreadLocal<Boolean> usedFastPath = ThreadLocal.withInitial(() -> false);
+    /// Thread-local to track which scale/crop mode was used
+    private final ThreadLocal<ScaleCropMode> scaleCropModeUsed =
+            ThreadLocal.withInitial(() -> ScaleCropMode.CROP_THEN_SCALE);
 
     public ImageProcessor(
             Arena vipsArena,
@@ -179,7 +181,6 @@ public class ImageProcessor {
         VImage image = null;
         ImageInfo imageInfo = imageSource.imageInfo();
         ImageSize sourceSize;
-        usedFastPath.set(false);
         // We need to load the image immediately if an extension intends to preprocess it
         boolean hasCustomPreProcessing = extensionRuntime.hasExtensionsForHook(ExtensionHooks.PREPROCESS_IMAGE);
         boolean hasCustomCrop = extensionRuntime.hasExtensionsForHook(ExtensionHooks.CROP);
@@ -207,56 +208,19 @@ public class ImageProcessor {
 
         if (!hasCustomPreProcessing
                 && parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
-            usedFastPath.set(true);
-            // Fast Path I: uncropped downscale requests can be delegated directly to libvips'
-            // thumbnail API.
+            // Fast Path: Uncropped downscaled image - we can load directly into the target size without
+            // needing to load the full image first
+            scaleCropModeUsed.set(ScaleCropMode.SCALE_NO_CROP);
             image = loader.loadImage(imageSource, parser.parseSize(request.version(), request.sizeSpec(), sourceSize));
-        } else if (!hasCustomProcessing
-                && shouldUseThumbnailCropFastPath(imageInfo, sourceSize, regionCrop, targetSize)) {
-            // Fast Path II: cropped downscale requests can be efficiently handled by first loading
-            // a thumbnail of the whole image at the requested downsample factor, and then cropping
-            // in-memory. This avoids loading the full-resolution image and cropping in-memory,
-            // which for certain formats can be much slower.
-            usedFastPath.set(true);
-
-            // Size parameter targets the crop region, so we need to calculate the scaling factor
-            // from the crop region to the target size, and apply that to the source size to get
-            // the size for the initial thumbnail load
-            var scaleFactor = ImageDimensionsMath.getScalingFactor(regionCrop.size(), targetSize);
-            image = loader.loadImage(imageSource, sourceSize.scale(scaleFactor));
-            var loadedSize = new ImageSize(image.getWidth(), image.getHeight());
-
-            // The crop rectangle is defined in the coordinates of the original image, but we need to remap it to the
-            // coordinates of the loaded thumbnail image before cropping
-            var remappedCrop = ImageDimensionsMath.remapCrop(regionCrop, sourceSize, loadedSize);
-            VImage cropped = cropImage(image, remappedCrop, loadedSize);
-
-            // Now we can do a final scale to the (possibly not AR-matching) target size
-            image = scaleImage(cropped, targetSize);
+        } else if (!hasCustomProcessing && shouldUseScaleThenCrop(imageInfo, sourceSize, regionCrop, targetSize)) {
+            scaleCropModeUsed.set(ScaleCropMode.SCALE_THEN_CROP);
+            image = scaleThenCrop(imageSource, sourceSize, regionCrop, targetSize);
         } else {
-            // No fast path, do the full processing pipeline with extension hooks at each step.
+            scaleCropModeUsed.set(ScaleCropMode.CROP_THEN_SCALE);
             if (image == null) {
                 image = loader.loadImage(imageSource);
             }
-
-            var preprocessed = extensionRuntime.preProcessImage(image, request.identifier(), imageInfo, request);
-            if (preprocessed == null) {
-                preprocessed = image;
-            }
-
-            VImage cropped = extensionRuntime.preCrop(preprocessed, request.identifier(), imageInfo, request);
-            if (cropped == null) {
-                cropped = cropImage(preprocessed, request, sourceSize);
-            }
-            sourceSize = new ImageSize(cropped.getWidth(), cropped.getHeight());
-
-            VImage scaled = extensionRuntime.preScale(cropped, request.identifier(), imageInfo, request);
-            if (scaled == null) {
-                scaled = scaleImage(cropped, request, sourceSize);
-            }
-
-            // Use the scaled image for further processing
-            image = scaled;
+            image = cropAndScale(image, request, imageInfo, sourceSize);
         }
 
         VImage rotated = extensionRuntime.preRotate(image, request.identifier(), imageInfo, request);
@@ -270,6 +234,70 @@ public class ImageProcessor {
         }
 
         return modifiedImage;
+    }
+
+    /// Perform cropping and scaling by first scaling and then cropping.
+    ///
+    /// This is an optimization for requests that involve cropping a downscaled image without custom
+    /// extension logic, where it can be more efficient to do the scaling first and then crop the smaller
+    /// image, as opposed to loading the full image and cropping in-memory. This does not apply for
+    /// every format, so this method should only be used for image formats that do not have native support
+    /// for cropped loads, and where benchmarks have shown that this approach is faster.
+    ///
+    /// @param imageSource   Source to load the image from
+    /// @param sourceSize    Size of the original source image
+    /// @param regionCrop    Crop rectangle in the coordinates of the original source image
+    /// @param targetSize    Target size to scale to after cropping
+    /// @return the cropped and scaled image
+    private VImage scaleThenCrop(
+            ImageSource imageSource, ImageSize sourceSize, CropRectangle regionCrop, ImageSize targetSize)
+            throws IOException, InterruptedException {
+        // Size parameter targets the crop region, so we need to calculate the scaling factor
+        // from the crop region to the target size, and apply that to the source size to get
+        // the size for the initial thumbnail load
+        var scaleFactor = ImageDimensionsMath.getScalingFactor(regionCrop.size(), targetSize);
+        VImage image = loader.loadImage(imageSource, sourceSize.scale(scaleFactor));
+        var loadedSize = new ImageSize(image.getWidth(), image.getHeight());
+
+        // The crop rectangle is defined in the coordinates of the original image, but we need to remap it to the
+        // coordinates of the loaded thumbnail image before cropping
+        var remappedCrop = ImageDimensionsMath.remapCrop(regionCrop, sourceSize, loadedSize);
+        VImage cropped = cropImage(image, remappedCrop, loadedSize);
+
+        // Now we can do a final scale to the (possibly not AR-matching) target size
+        return scaleImage(cropped, targetSize);
+    }
+
+    /// Perform cropping and scaling with extension hooks.
+    ///
+    /// This is faster for formats that support native cropped loads (Pyramid TIFs, JPEG2000), and
+    /// is necessary when extensions need to hook into the cropping or scaling steps, since we have
+    /// to respect the order of operations as defined by the IIIF spec in those cases..
+    ///
+    /// @param image         the image to crop and scale
+    /// @param request       the original IIIF request, used for parsing the crop and size
+    /// @param imageInfo     the ImageInfo for the image, used for passing to extensions
+    /// @param sourceSize    the size of the image, used for parsing the crop and size params
+    /// @return the cropped and scaled image
+    private VImage cropAndScale(VImage image, ImageRequest request, ImageInfo imageInfo, ImageSize sourceSize)
+            throws NotImplementedException {
+        var preprocessed = extensionRuntime.preProcessImage(image, request.identifier(), imageInfo, request);
+        if (preprocessed == null) {
+            preprocessed = image;
+        }
+
+        VImage cropped = extensionRuntime.preCrop(preprocessed, request.identifier(), imageInfo, request);
+        if (cropped == null) {
+            cropped = cropImage(preprocessed, request, sourceSize);
+        }
+        ImageSize croppedSize = new ImageSize(cropped.getWidth(), cropped.getHeight());
+
+        VImage scaled = extensionRuntime.preScale(cropped, request.identifier(), imageInfo, request);
+        if (scaled == null) {
+            scaled = scaleImage(cropped, request, croppedSize);
+        }
+
+        return scaled;
     }
 
     private VImage changeImageQuality(ImageRequest request, VImage image) {
@@ -319,8 +347,8 @@ public class ImageProcessor {
         return rotated;
     }
 
-    /// Returns whether a cropped tile request should use the thumbnail-then-crop fast path.
-    private boolean shouldUseThumbnailCropFastPath(
+    /// Returns whether we should use the scale-then-crop appraoch for a request
+    private boolean shouldUseScaleThenCrop(
             ImageInfo imageInfo,
             ImageSize sourceSize,
             @Nullable CropRectangle cropRectangle,
@@ -333,12 +361,12 @@ public class ImageProcessor {
             return false;
         }
         // Would it actually be faster with the format?
-        if (imageInfo.format() == null || !THUMBNAIL_THEN_CROP_FORMATS.contains(imageInfo.format())) {
+        if (imageInfo.format() == null || !SCALE_THEN_CROP_FORMATS.contains(imageInfo.format())) {
             return false;
         }
-        // Are we downscaling?
-        var cropSize = new ImageSize(cropRectangle.width(), cropRectangle.height());
-        return ImageDimensionsMath.getScalingFactor(cropSize, targetSize) < 1.0;
+        // Are we actually downscaling? Note that scaling will be done on the **cropped** image, not
+        // the original source image
+        return ImageDimensionsMath.getScalingFactor(cropRectangle.size(), targetSize) < 1.0;
     }
 
     /// Scales an image according to the size parameter of an IIIF request.
@@ -387,7 +415,7 @@ public class ImageProcessor {
                 request.cropSpec(), outputSize, cropRectangle, info.nativeSize());
 
         var timer = metrics.startImageProcessingTimer(
-                request.formatSpec(), outputSize, croppedArea, requestType, usedFastPath.get());
+                request.formatSpec(), outputSize, croppedArea, requestType, scaleCropModeUsed.get());
 
         try {
             var extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
@@ -429,7 +457,7 @@ public class ImageProcessor {
                     buf.asClonedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
         } finally {
             timer.stop();
-            usedFastPath.remove();
+            scaleCropModeUsed.remove();
         }
     }
 }
