@@ -28,7 +28,7 @@ def resolve(identifier, etag=None, last_modified=None):
         return
     identifier = identifier[3:]  # Remove 'py-' prefix
     # The `wolpi` module provides access to the Wolpi context, including the configuration for the extensions.
-    base_dir = Path(wolpi.config()['baseDirectory'])
+    base_dir = Path(wolpi.config['baseDirectory'])
     for path in base_dir.iterdir():
         if path.stem == identifier and path.suffix in IMAGE_EXTENSIONS:
             return {'path': str(path.absolute())}

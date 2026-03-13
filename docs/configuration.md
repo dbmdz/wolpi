@@ -197,7 +197,7 @@ You can limit the image formats that users can request through the `iiif.feature
 
 For details on how extensions are configured, refer to the [extensions section in the documentation][exts-doc].
 
-[exts-doc]: ./extensions.md/#extension-configuration
+[exts-doc]: ./extension-use.md#configuration
 
 ### Extension Packaging Configuration
 
@@ -253,7 +253,7 @@ extension-pool:
 to ensure contexts are always warm and ready. For memory-constrained environments, use a lower `min-idle` value
 and rely on the pool's ability to grow dynamically up to `max-total`.
 
-For more information about the extension pool and lifecycle, refer to the [section in the extension documentation](./extensions.md#extension-lifecycle).
+For more information about the extension pool and lifecycle, refer to the [section in the extension documentation](./extension-development.md#extension-lifecycle).
 
 ## Full example configuration
 

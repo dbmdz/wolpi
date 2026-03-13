@@ -52,12 +52,14 @@ Image API specification):
       custom smart cropping algorithms or image filters)
     * Implement custom output formats or customize the encodinging of existing formats
 
-Refer to the [extension documentation][exts-doc] to learn how to install, configure and write
-your own Wolpi extensions.
+Refer to the [extension usage documentation][exts-usage-doc] to learn how to install and configure
+existing Wolpi extensions. To learn how to write your own extensions, refer to the
+[extension development documentation][exts-dev-doc].
 
 [auth]: https://iiif.io/api/auth/2.0/
 [extra-services]: https://iiif.io/api/image/3.0/#58-linking-properties
-[exts-doc]: ./extensions.md
+[exts-usage-doc]: ./extension-use.md
+[exts-dev-doc]: ./extension-development.md
 
 ## Operating Wolpi
 

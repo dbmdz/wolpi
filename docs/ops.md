@@ -284,7 +284,7 @@ See the [extension pool configuration documentation][pool-config] for details on
 [micrometer]: https://docs.micrometer.io/micrometer/reference/implementations.html
 [spring-boot-docs]: https://docs.spring.io/spring-boot/reference/actuator/metrics.html
 [wolpi-spring-cfg]: ./configuration.md#escape-hatch-spring-boot-configuration
-[extensions-metrics]: ./extensions.md#custom-metrics-from-extensions
+[extensions-metrics]: ./extension-development.md#custom-metrics-from-extensions
 
 ### Structured Logging
 
@@ -329,7 +329,7 @@ also be included as separate fields in the JSON object.
 
 [tomcat-access-logging]: https://docs.spring.io/spring-boot/how-to/webserver.html#howto.webserver.configure-access-logs
 [wolpi-spring-cfg]: ./configuration.md#escape-hatch-spring-boot-configuration
-[extensions-log]: ./extensions.md#logging-from-extensions
+[extensions-log]: ./extension-development.md#logging-from-extensions
 
 
 ## Caching
