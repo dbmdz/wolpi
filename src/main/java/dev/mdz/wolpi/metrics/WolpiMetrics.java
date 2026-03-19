@@ -26,7 +26,7 @@ public class WolpiMetrics {
                 .description("Images successfully processed and encoded")
                 .withRegistry(registry);
         this.sourceLoadsCounter = Counter.builder("wolpi.source.loads.total")
-                .description("Image loads by source type")
+                .description("Image loads by source type and method")
                 .withRegistry(registry);
         this.vipsErrorsCounter = Counter.builder("wolpi.vips.errors.total")
                 .description("Errors from libvips operations")
@@ -114,8 +114,11 @@ public class WolpiMetrics {
                 .increment();
     }
 
-    public void incrementSourceLoads(String sourceType) {
-        this.sourceLoadsCounter.withTag("source_type", sourceType).increment();
+    public void incrementSourceLoads(String sourceType, LoadType loadType) {
+        this.sourceLoadsCounter
+                .withTags(
+                        "source_type", sourceType, "load_type", loadType.name().toLowerCase(Locale.ROOT))
+                .increment();
     }
 
     public Timer.Sample startExtensionTimer() {

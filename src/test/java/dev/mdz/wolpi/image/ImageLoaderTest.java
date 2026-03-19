@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.Vips;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.model.ImageSource;
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.nio.file.Path;
 import java.util.Map;
@@ -49,11 +51,12 @@ class ImageLoaderTest {
 
     @ParameterizedTest(name = "should map ''{0}'' to format ''{1}''")
     @CsvSource({"embedded_icc_colorspace.jpg, jpeg", "embedded_icc_colorspace.jp2, jp2k"})
-    void testImageInfoFormatExtraction(String imageName, String expectedFormat) {
+    void testImageInfoFormatExtraction(String imageName, String expectedFormat)
+            throws IOException, InterruptedException {
         VImage image = VImage.newFromFile(
                 arena, Path.of("src/test/resources/images", imageName).toString());
 
-        var info = imageLoader.getImageInfo(image);
+        var info = imageLoader.getImageInfo(new ImageSource(imageName, null, null, null), image);
 
         assertThat(info).isNotNull();
         assertThat(info.format()).isEqualTo(expectedFormat);

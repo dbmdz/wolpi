@@ -186,9 +186,10 @@ public class ImageProcessor {
         boolean hasCustomCrop = extensionRuntime.hasExtensionsForHook(ExtensionHooks.CROP);
         boolean hasCustomScale = extensionRuntime.hasExtensionsForHook(ExtensionHooks.SCALE);
         boolean hasCustomProcessing = hasCustomPreProcessing || hasCustomScale || hasCustomCrop;
+
         if (hasCustomProcessing || imageInfo == null) {
             image = loader.loadImage(imageSource);
-            imageInfo = loader.getImageInfo(image);
+            imageInfo = loader.getImageInfo(imageSource);
             sourceSize = new ImageSize(image.getWidth(), image.getHeight());
         } else {
             sourceSize = imageInfo.nativeSize();
@@ -211,10 +212,11 @@ public class ImageProcessor {
             // Fast Path: Uncropped downscaled image - we can load directly into the target size without
             // needing to load the full image first
             scaleCropModeUsed.set(ScaleCropMode.SCALE_NO_CROP);
-            image = loader.loadImage(imageSource, parser.parseSize(request.version(), request.sizeSpec(), sourceSize));
+            image = loader.loadImage(
+                    imageInfo, imageSource, parser.parseSize(request.version(), request.sizeSpec(), sourceSize));
         } else if (!hasCustomProcessing && shouldUseScaleThenCrop(imageInfo, sourceSize, regionCrop, targetSize)) {
             scaleCropModeUsed.set(ScaleCropMode.SCALE_THEN_CROP);
-            image = scaleThenCrop(imageSource, sourceSize, regionCrop, targetSize);
+            image = scaleThenCrop(imageSource, imageInfo, regionCrop, targetSize);
         } else {
             scaleCropModeUsed.set(ScaleCropMode.CROP_THEN_SCALE);
             if (image == null) {
@@ -245,23 +247,24 @@ public class ImageProcessor {
     /// for cropped loads, and where benchmarks have shown that this approach is faster.
     ///
     /// @param imageSource   Source to load the image from
-    /// @param sourceSize    Size of the original source image
+    /// @param imageInfo     Information about the image
     /// @param regionCrop    Crop rectangle in the coordinates of the original source image
     /// @param targetSize    Target size to scale to after cropping
     /// @return the cropped and scaled image
     private VImage scaleThenCrop(
-            ImageSource imageSource, ImageSize sourceSize, CropRectangle regionCrop, ImageSize targetSize)
+            ImageSource imageSource, ImageInfo imageInfo, CropRectangle regionCrop, ImageSize targetSize)
             throws IOException, InterruptedException {
         // Size parameter targets the crop region, so we need to calculate the scaling factor
         // from the crop region to the target size, and apply that to the source size to get
         // the size for the initial thumbnail load
         var scaleFactor = ImageDimensionsMath.getScalingFactor(regionCrop.size(), targetSize);
-        VImage image = loader.loadImage(imageSource, sourceSize.scale(scaleFactor));
+        VImage image =
+                loader.loadImage(imageInfo, imageSource, imageInfo.nativeSize().scale(scaleFactor));
         var loadedSize = new ImageSize(image.getWidth(), image.getHeight());
 
         // The crop rectangle is defined in the coordinates of the original image, but we need to remap it to the
         // coordinates of the loaded thumbnail image before cropping
-        var remappedCrop = ImageDimensionsMath.remapCrop(regionCrop, sourceSize, loadedSize);
+        var remappedCrop = ImageDimensionsMath.remapCrop(regionCrop, imageInfo.nativeSize(), loadedSize);
         VImage cropped = cropImage(image, remappedCrop, loadedSize);
 
         // Now we can do a final scale to the (possibly not AR-matching) target size
@@ -360,10 +363,7 @@ public class ImageProcessor {
         if (cropRectangle.width() == sourceSize.width() && cropRectangle.height() == sourceSize.height()) {
             return false;
         }
-        // Would it actually be faster with the format?
-        if (imageInfo.format() == null || !SCALE_THEN_CROP_FORMATS.contains(imageInfo.format())) {
-            return false;
-        }
+
         // Are we actually downscaling? Note that scaling will be done on the **cropped** image, not
         // the original source image
         return ImageDimensionsMath.getScalingFactor(cropRectangle.size(), targetSize) < 1.0;

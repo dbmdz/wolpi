@@ -52,6 +52,9 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// Check if there are any extensions registered for the given hook.
     boolean hasExtensionsForHook(ExtensionHooks extensionHooks);
 
+    // TODO: We need a way to tell if an extension will run custom logic for crop/scale/rotate/quality
+    //       so we can be more aggressive with optimizations
+
     /// Check if the request with the given identifier, headers and client IP is authorized to access
     /// the image with the given identifier.
     ///

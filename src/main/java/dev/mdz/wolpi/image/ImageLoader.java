@@ -13,6 +13,7 @@ import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
 import dev.mdz.wolpi.iiif.IIIFImageInfo;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
+import dev.mdz.wolpi.metrics.LoadType;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
@@ -38,10 +39,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,9 +57,14 @@ import org.springframework.stereotype.Component;
 /// ImageLoader is responsible for resolving and loading images from various sources.
 @Component
 public class ImageLoader {
-    // Hardcoded identifier for official IIIF Image API Validation image
+    /// Hardcoded identifier for official IIIF Image API Validation image
     private static final String VALIDATION_ID_PREFIX = "67352ccc-d1b0-11e1-89ae-279075081939";
+
+    /// Pattern to extract the format name from a vips loader nickname
     private static final Pattern VIPS_LOADER_PAT = Pattern.compile("(?<format>[a-zA-Z0-9]+)load(?:_source|_buffer)?");
+
+    /// Formats that support direct decoding of lower-resolution variants of the image
+    private static final Set<String> SHRINK_ON_LOAD_FORMATS = Set.of("jp2k", "heif", "tiff");
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -196,15 +204,19 @@ public class ImageLoader {
     }
 
     /// Get the image information for the given source.
+    ///
     /// If the image source does not already provide image information, this will load the image and
-    /// extract the information from it.
+    /// extract the information from it and update the source with it.
     public @Nullable ImageInfo getImageInfo(ImageSource source) {
         if (source.imageInfo() != null) {
             return source.imageInfo();
         }
         try {
             var image = loadImage(source);
-            return getImageInfo(image);
+            var info = getImageInfo(source, image);
+            // Getting the image information is expensive, cache it
+            source.setImageInfo(info);
+            return info;
         } catch (IOException | InterruptedException e) {
             log.warn("Failed to load image to obtain image information for id={}", source.identifier(), e);
             return null;
@@ -229,65 +241,127 @@ public class ImageLoader {
         return augmented != null ? augmented : infoJson;
     }
 
-    /// Load an image from a source via libvips' thumbnail API for downscaled requests.
-    ///
-    /// This is used both for uncropped downscale requests and for the thumbnail-then-crop fast
-    /// path in [ImageProcessor].
-    public VImage loadImage(ImageSource source, ImageSize targetSize) throws IOException, InterruptedException {
-        VImage result = loadThumbnailImage(source, targetSize);
-        metrics.incrementSourceLoads(sourceTypeMetricLabel(source));
-        return result;
+    /// Load an image from a source in a lower resolution, using one of the supported
+    /// shrink-on-load patterns if possible.
+    public VImage loadImage(ImageInfo info, ImageSource source, ImageSize targetSize)
+            throws IOException, InterruptedException {
+        if (SHRINK_ON_LOAD_FORMATS.contains(info.format())) {
+            return loadImageUsingShrinkOnLoad(info, source, targetSize);
+        } else {
+            return loadThumbnailImage(source, targetSize);
+        }
     }
 
     ///  Load the image in its native size from its source
     public VImage loadImage(ImageSource source) throws IOException, InterruptedException {
         VImage result = openImage(source);
-        metrics.incrementSourceLoads(sourceTypeMetricLabel(source));
+        metrics.incrementSourceLoads(sourceTypeMetricLabel(source), LoadType.OPEN);
         return result;
     }
 
-    /// Loads a whole image through libvips' thumbnail API for uncropped downscale-only requests.
-    private VImage loadThumbnailImage(ImageSource source, ImageSize targetSize)
+    public VImage loadImageUsingShrinkOnLoad(ImageInfo info, ImageSource source, ImageSize targetSize)
             throws IOException, InterruptedException {
-        return switch (source.resolvedImage()) {
-            case FilesystemResolvedImage(Path path) ->
-                VImage.thumbnail(
-                        arena,
-                        path.toString(),
-                        targetSize.width(),
-                        VipsOption.Int("height", targetSize.height()),
-                        VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-            case HttpResolvedImage(URI uri, Map<String, String> headers, Boolean supportsByteRange) ->
-                loadFromHttp(uri, headers, targetSize, supportsByteRange);
-            case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
-                VImage.thumbnailSource(
-                        arena,
-                        srcSupplier.apply(arena),
-                        targetSize.width(),
-                        VipsOption.Int("height", targetSize.height()),
-                        VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-            case BinaryResolvedImage(byte[] data) ->
-                VImage.thumbnailBuffer(
-                        arena,
-                        VBlob.newFromBytes(arena, data),
-                        targetSize.width(),
-                        VipsOption.Int("height", targetSize.height()),
-                        VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-            case SourceNotModified ignored ->
-                throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
+        // Use shrink-on-load only (i.e. without additional downscaling) only if the format supports
+        // it directly in good quality and the requested size matches one of the available sizes
+        if (!SHRINK_ON_LOAD_FORMATS.contains(info.format()) || !info.sizes().contains(targetSize)) {
+            return loadThumbnailImage(source, targetSize);
+        }
+
+        VipsOption[] loadOptions = getShrinkOnLoadOptions(info, source, targetSize);
+        VImage image = openImage(source, loadOptions);
+        if (targetSize.width() != image.getWidth() || targetSize.height() != image.getHeight()) {
+            // Mismatch between assumed requested size and what we got back, can happen if the
+            // TIFF wasn't actually pyramidal, we fall back to regular vips_thumbnail in that case
+            log.warn(
+                    "Requested precise shrink-on-load for image '{}' (fmt={}), but the loaded image "
+                            + "size {}x{} does not match the requested target size {}x{}. Falling back to "
+                            + "thumbnail loading.",
+                    source.identifier(),
+                    info.format(),
+                    image.getWidth(),
+                    image.getHeight(),
+                    targetSize.width(),
+                    targetSize.height());
+            return loadThumbnailImage(source, targetSize);
+        }
+
+        metrics.incrementSourceLoads(sourceTypeMetricLabel(source), LoadType.SHRINK_ON_LOAD);
+        return image;
+    }
+
+    private VipsOption[] getShrinkOnLoadOptions(ImageInfo info, ImageSource source, ImageSize targetSize)
+            throws IOException, InterruptedException {
+        int sizeIndex = info.sizes().stream()
+                .sorted(Comparator.comparing(size -> -size.width() * size.height()))
+                .toList()
+                .indexOf(targetSize);
+        if (sizeIndex <= 0) {
+            return new VipsOption[] {};
+        }
+        // We checked against SHRINK_ON_LOAD_FORMATS already, so this should never be null
+        assert info.format() != null;
+        return switch (info.format()) {
+            // TODO: Support OpenSlide via `level` option
+            case "jp2k" -> new VipsOption[] {VipsOption.Int("page", sizeIndex)};
+            case "tiff" -> {
+                VImage image = openImage(source);
+                if (image.getInt("n-pages") != null) {
+                    yield new VipsOption[] {VipsOption.Int("page", sizeIndex)};
+                } else if (image.getInt("n-subifds") != null) {
+                    yield new VipsOption[] {VipsOption.Int("subifd", sizeIndex - 1)};
+                } else {
+                    yield new VipsOption[] {};
+                }
+            }
+            case "heif" -> new VipsOption[] {VipsOption.Boolean("thumbnail", true)};
+            default -> new VipsOption[] {};
         };
     }
 
-    /// Opens the source directly in its native size, without any thumbnail processing.
-    private VImage openImage(ImageSource source) throws IOException, InterruptedException {
+    /// Loads a whole image through libvips' thumbnail API.
+    private VImage loadThumbnailImage(ImageSource source, ImageSize targetSize)
+            throws IOException, InterruptedException {
+        var img =
+                switch (source.resolvedImage()) {
+                    case FilesystemResolvedImage(Path path) ->
+                        VImage.thumbnail(
+                                arena,
+                                path.toString(),
+                                targetSize.width(),
+                                VipsOption.Int("height", targetSize.height()),
+                                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+                    case HttpResolvedImage(URI uri, Map<String, String> headers, Boolean supportsByteRange) ->
+                        loadFromHttp(uri, headers, targetSize, supportsByteRange);
+                    case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
+                        VImage.thumbnailSource(
+                                arena,
+                                srcSupplier.apply(arena),
+                                targetSize.width(),
+                                VipsOption.Int("height", targetSize.height()),
+                                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+                    case BinaryResolvedImage(byte[] data) ->
+                        VImage.thumbnailBuffer(
+                                arena,
+                                VBlob.newFromBytes(arena, data),
+                                targetSize.width(),
+                                VipsOption.Int("height", targetSize.height()),
+                                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+                    case SourceNotModified ignored ->
+                        throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
+                };
+        metrics.incrementSourceLoads(sourceTypeMetricLabel(source), LoadType.THUMBNAIL);
+        return img;
+    }
+
+    private VImage openImage(ImageSource source, VipsOption... options) throws IOException, InterruptedException {
         return switch (source.resolvedImage()) {
             case FilesystemResolvedImage(Path path) ->
-                VImage.newFromFile(arena, path.toAbsolutePath().toString());
+                VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
             case HttpResolvedImage(URI uri, Map<String, String> headers, @Nullable Boolean supportsByteRange) ->
-                loadFromHttp(uri, headers, null, supportsByteRange);
+                loadFromHttp(uri, headers, null, supportsByteRange, options);
             case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
-                VImage.newFromSource(arena, srcSupplier.apply(arena));
-            case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data);
+                VImage.newFromSource(arena, srcSupplier.apply(arena), options);
+            case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
             default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
         };
     }
@@ -310,27 +384,25 @@ public class ImageLoader {
             URI uri,
             @Nullable Map<String, String> headers,
             @Nullable ImageSize targetSize,
-            @Nullable Boolean supportsByteRanges)
+            @Nullable Boolean supportsByteRanges,
+            VipsOption... options)
             throws IOException, InterruptedException {
         HttpResponse<InputStream> response = fetchFromHttp(uri, headers);
         if (targetSize == null) {
-            return VImage.newFromStream(arena, response.body());
+            return VImage.newFromStream(arena, response.body(), options);
         }
 
         var src = newFromInputStream(arena, response.body());
-        return VImage.thumbnailSource(
-                arena,
-                src,
-                targetSize.width(),
-                VipsOption.Int("height", targetSize.height()),
-                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+        var thumbOptions = new VipsOption[options.length + 2];
+        System.arraycopy(options, 0, thumbOptions, 0, options.length);
+        thumbOptions[options.length + 1] = VipsOption.Int("height", targetSize.height());
+        thumbOptions[options.length + 2] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
+        return VImage.thumbnailSource(arena, src, targetSize.width(), thumbOptions);
     }
 
     /// Fetches the remote HTTP source as an input stream for the current request.
     private HttpResponse<InputStream> fetchFromHttp(URI uri, @Nullable Map<String, String> headers)
             throws IOException, InterruptedException {
-        // TODO: If the endpoint supports byte ranges, use a custom VSource implementation that
-        //       leverages partial reads via byte-range requests
         var reqBuilder = HttpRequest.newBuilder().uri(uri);
         if (headers != null) {
             reqBuilder = reqBuilder.headers(headers.entrySet().stream()
@@ -346,12 +418,55 @@ public class ImageLoader {
     }
 
     ///  Get image metadata from a loaded VImage.
-    public ImageInfo getImageInfo(VImage image) {
+    ImageInfo getImageInfo(ImageSource src, @Nullable VImage image) throws IOException, InterruptedException {
         // Check if the input image supports multiple resolution levels (e.g. TIFF, JPEG 2000)
-        var hasPageInfo = image.getFields().contains("n-pages");
+        if (image == null) {
+            image = openImage(src);
+        }
+
+        ImageSize nativeSize = new ImageSize(image.getWidth(), image.getHeight());
         List<ImageSize> sizes = new ArrayList<>();
-        sizes.add(new ImageSize(image.getWidth(), image.getHeight()));
-        if (hasPageInfo) {
+        sizes.add(nativeSize);
+
+        String loader = image.getString("vips-loader");
+        if (loader.startsWith("heif")) {
+            // HEIF Images can contain a lower-res thumbnail
+            VImage thumbImage = openImage(src, VipsOption.Boolean("thumbnail", true));
+            if (thumbImage.getWidth() < image.getWidth()) {
+                sizes.add(new ImageSize(thumbImage.getWidth(), thumbImage.getHeight()));
+            }
+        } else if (loader.startsWith("tiff")) {
+            // TIFF images can be encoded as "pyramidal TIFs", either via multiple pages or via
+            // SubIFDs, but not every TIF with multiple pages or SubIFDs is pyramidal, so we have
+            // to probe the source multiple times to verify we're dealing with a pyramidal TIF.
+            Integer numPages = image.getInt("n-pages");
+            Integer numSubIFDs = image.getInt("n-subifds");
+            if (numPages != null || numSubIFDs != null) {
+                String paramName = numPages != null ? "page" : "subifd";
+                int startIdx = numPages != null ? 1 : 0;
+                int endIdx = numPages != null ? numPages : numSubIFDs;
+                List<ImageSize> candidateSizes = new ArrayList<>();
+                for (int i = startIdx; i < endIdx; i++) {
+                    VImage reducedImage = openImage(src, VipsOption.Int(paramName, i));
+                    ImageSize size = new ImageSize(reducedImage.getWidth(), reducedImage.getHeight());
+                    ImageSize reference = i == startIdx ? sizes.getFirst() : candidateSizes.getLast();
+                    boolean isPyramidLevel = Math.abs(((double) reference.width() / 2) - size.width()) < 5
+                            && Math.abs(((double) reference.height() / 2) - size.height()) < 5;
+                    if (!isPyramidLevel) {
+                        // Not a pyramidal TIF, do not consider the other SubIFDs/Pages as lower-res versions of the
+                        // same image
+                        candidateSizes.clear();
+                        break;
+                    }
+                    candidateSizes.add(new ImageSize(reducedImage.getWidth(), reducedImage.getHeight()));
+                }
+                if (!candidateSizes.isEmpty()) {
+                    sizes.addAll(candidateSizes);
+                }
+            }
+        } else if (loader.startsWith("jp2k") || loader.startsWith("kakadu")) {
+            // For JPEG2000, lower-resolution pages in the same image are always pyramidal, so we don't need to probe
+            // the source
             int nPages = image.getInt("n-pages");
             for (int i = 1; i < nPages; i++) {
                 double factor = 1 / Math.pow(2, i);
@@ -360,8 +475,7 @@ public class ImageLoader {
         }
 
         // Check if the image supports tiled loading
-        // NOTE: Only works on libvips builds that have https://github.com/libvips/libvips/pull/4637
-        //       merged.
+        // NOTE: Only works on libvips >= 8.18.0
         List<TileSize> tileSizes;
         Integer tileWidth = image.getInt("tile-width");
         Integer tileHeight = image.getInt("tile-height");
@@ -372,15 +486,11 @@ public class ImageLoader {
                     tileWidth,
                     tileHeight,
                     sizes.stream()
-                            .map(size -> (int) Math.ceil(image.getWidth() / (double) size.width()))
+                            .map(size -> (int) Math.ceil(nativeSize.width() / (double) size.width()))
                             .toList()));
         }
 
-        return new ImageInfo(
-                vipsLoaderToFormatString(image.getString("vips-loader").toLowerCase(Locale.ROOT)),
-                new ImageSize(image.getWidth(), image.getHeight()),
-                sizes,
-                tileSizes);
+        return new ImageInfo(vipsLoaderToFormatString(loader.toLowerCase(Locale.ROOT)), nativeSize, sizes, tileSizes);
     }
 
     private static @Nullable String vipsLoaderToFormatString(String vipsLoader) {
