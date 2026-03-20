@@ -67,6 +67,10 @@ public class ImageLoader {
     /// Formats that support direct decoding of lower-resolution variants of the image
     private static final Set<String> SHRINK_ON_LOAD_FORMATS = Set.of("jp2k", "heif", "tiff");
 
+    /// Threshold for the pixel difference between to subsequent layers, below means "likely pyramidal"
+    /// Taken from libvips `resample/thumbnail.c`, L299-304 to match libvips vips_thumbnail logic
+    public static final int PYRAMID_PIXEL_THRESHOLD = 5;
+
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -471,8 +475,8 @@ public class ImageLoader {
             VImage reducedImage = openImage(src, VipsOption.Int(paramName, i));
             ImageSize size = new ImageSize(reducedImage.getWidth(), reducedImage.getHeight());
             ImageSize reference = i == startIdx ? nativeSize : candidateSizes.getLast();
-            boolean isPyramidLevel = Math.abs(((double) reference.width() / 2) - size.width()) < 5
-                                     && Math.abs(((double) reference.height() / 2) - size.height()) < 5;
+            boolean isPyramidLevel = Math.abs(((double) reference.width() / 2) - size.width()) < PYRAMID_PIXEL_THRESHOLD
+                    && Math.abs(((double) reference.height() / 2) - size.height()) < PYRAMID_PIXEL_THRESHOLD;
             if (!isPyramidLevel) {
                 // Not a pyramidal TIF, do not consider the other SubIFDs/Pages as lower-res versions of the
                 // same image
