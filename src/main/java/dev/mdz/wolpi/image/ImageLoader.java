@@ -57,6 +57,7 @@ import org.springframework.stereotype.Component;
 /// ImageLoader is responsible for resolving and loading images from various sources.
 @Component
 public class ImageLoader {
+
     /// Hardcoded identifier for official IIIF Image API Validation image
     private static final String VALIDATION_ID_PREFIX = "67352ccc-d1b0-11e1-89ae-279075081939";
 
@@ -436,34 +437,7 @@ public class ImageLoader {
                 sizes.add(new ImageSize(thumbImage.getWidth(), thumbImage.getHeight()));
             }
         } else if (loader.startsWith("tiff")) {
-            // TIFF images can be encoded as "pyramidal TIFs", either via multiple pages or via
-            // SubIFDs, but not every TIF with multiple pages or SubIFDs is pyramidal, so we have
-            // to probe the source multiple times to verify we're dealing with a pyramidal TIF.
-            Integer numPages = image.getInt("n-pages");
-            Integer numSubIFDs = image.getInt("n-subifds");
-            if (numPages != null || numSubIFDs != null) {
-                String paramName = numPages != null ? "page" : "subifd";
-                int startIdx = numPages != null ? 1 : 0;
-                int endIdx = numPages != null ? numPages : numSubIFDs;
-                List<ImageSize> candidateSizes = new ArrayList<>();
-                for (int i = startIdx; i < endIdx; i++) {
-                    VImage reducedImage = openImage(src, VipsOption.Int(paramName, i));
-                    ImageSize size = new ImageSize(reducedImage.getWidth(), reducedImage.getHeight());
-                    ImageSize reference = i == startIdx ? sizes.getFirst() : candidateSizes.getLast();
-                    boolean isPyramidLevel = Math.abs(((double) reference.width() / 2) - size.width()) < 5
-                            && Math.abs(((double) reference.height() / 2) - size.height()) < 5;
-                    if (!isPyramidLevel) {
-                        // Not a pyramidal TIF, do not consider the other SubIFDs/Pages as lower-res versions of the
-                        // same image
-                        candidateSizes.clear();
-                        break;
-                    }
-                    candidateSizes.add(new ImageSize(reducedImage.getWidth(), reducedImage.getHeight()));
-                }
-                if (!candidateSizes.isEmpty()) {
-                    sizes.addAll(candidateSizes);
-                }
-            }
+            sizes.addAll(getSupportedImageSizesTiff(image, src));
         } else if (loader.startsWith("jp2k") || loader.startsWith("kakadu")) {
             // For JPEG2000, lower-resolution pages in the same image are always pyramidal, so we don't need to probe
             // the source
@@ -474,23 +448,58 @@ public class ImageLoader {
             }
         }
 
+        var tileSizes = getSupportedTileSizes(image, sizes);
+        return new ImageInfo(vipsLoaderToFormatString(loader.toLowerCase(Locale.ROOT)), nativeSize, sizes, tileSizes);
+    }
+
+    private List<ImageSize> getSupportedImageSizesTiff(VImage image, ImageSource src)
+            throws IOException, InterruptedException {
+        // TIFF images can be encoded as "pyramidal TIFs", either via multiple pages or via
+        // SubIFDs, but not every TIFF with multiple pages or SubIFDs is pyramidal, so we have
+        // to probe the source multiple times to verify we're dealing with a pyramidal TIFF.
+        ImageSize nativeSize = new ImageSize(image.getWidth(), image.getHeight());
+        Integer numPages = image.getInt("n-pages");
+        Integer numSubIFDs = image.getInt("n-subifds");
+        if (numPages == null && numSubIFDs != null) {
+            return List.of();
+        }
+        String paramName = numPages != null ? "page" : "subifd";
+        int startIdx = numPages != null ? 1 : 0;
+        int endIdx = numPages != null ? numPages : numSubIFDs;
+        List<ImageSize> candidateSizes = new ArrayList<>();
+        for (int i = startIdx; i < endIdx; i++) {
+            VImage reducedImage = openImage(src, VipsOption.Int(paramName, i));
+            ImageSize size = new ImageSize(reducedImage.getWidth(), reducedImage.getHeight());
+            ImageSize reference = i == startIdx ? nativeSize : candidateSizes.getLast();
+            boolean isPyramidLevel = Math.abs(((double) reference.width() / 2) - size.width()) < 5
+                                     && Math.abs(((double) reference.height() / 2) - size.height()) < 5;
+            if (!isPyramidLevel) {
+                // Not a pyramidal TIF, do not consider the other SubIFDs/Pages as lower-res versions of the
+                // same image
+                candidateSizes.clear();
+                break;
+            }
+            candidateSizes.add(new ImageSize(reducedImage.getWidth(), reducedImage.getHeight()));
+        }
+        return candidateSizes;
+    }
+
+    private List<TileSize> getSupportedTileSizes(VImage image, List<ImageSize> supportedSizes) {
         // Check if the image supports tiled loading
         // NOTE: Only works on libvips >= 8.18.0
-        List<TileSize> tileSizes;
+        ImageSize nativeSize = new ImageSize(image.getWidth(), image.getHeight());
         Integer tileWidth = image.getInt("tile-width");
         Integer tileHeight = image.getInt("tile-height");
         if (tileWidth == null || tileHeight == null) {
-            tileSizes = List.of();
+            return List.of();
         } else {
-            tileSizes = List.of(new TileSize(
+            return List.of(new TileSize(
                     tileWidth,
                     tileHeight,
-                    sizes.stream()
+                    supportedSizes.stream()
                             .map(size -> (int) Math.ceil(nativeSize.width() / (double) size.width()))
                             .toList()));
         }
-
-        return new ImageInfo(vipsLoaderToFormatString(loader.toLowerCase(Locale.ROOT)), nativeSize, sizes, tileSizes);
     }
 
     private static @Nullable String vipsLoaderToFormatString(String vipsLoader) {
