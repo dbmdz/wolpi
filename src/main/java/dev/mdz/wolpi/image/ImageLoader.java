@@ -400,8 +400,8 @@ public class ImageLoader {
         var src = newFromInputStream(arena, response.body());
         var thumbOptions = new VipsOption[options.length + 2];
         System.arraycopy(options, 0, thumbOptions, 0, options.length);
-        thumbOptions[options.length + 1] = VipsOption.Int("height", targetSize.height());
-        thumbOptions[options.length + 2] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
+        thumbOptions[options.length] = VipsOption.Int("height", targetSize.height());
+        thumbOptions[options.length + 1] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
         return VImage.thumbnailSource(arena, src, targetSize.width(), thumbOptions);
     }
 
