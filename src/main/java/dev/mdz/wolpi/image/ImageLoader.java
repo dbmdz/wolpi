@@ -448,7 +448,8 @@ public class ImageLoader {
             int nPages = image.getInt("n-pages");
             for (int i = 1; i < nPages; i++) {
                 double factor = 1 / Math.pow(2, i);
-                sizes.add(new ImageSize((int) (image.getWidth() * factor), (int) (image.getHeight() * factor)));
+                sizes.add(new ImageSize(
+                        ((int) Math.round(image.getWidth() * factor)), (int) (Math.round(image.getHeight() * factor))));
             }
         }
 
@@ -501,7 +502,7 @@ public class ImageLoader {
                     tileWidth,
                     tileHeight,
                     supportedSizes.stream()
-                            .map(size -> (int) Math.ceil(nativeSize.width() / (double) size.width()))
+                            .map(size -> (int) Math.round(nativeSize.width() / (double) size.width()))
                             .toList()));
         }
     }
