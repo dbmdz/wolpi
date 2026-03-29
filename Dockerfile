@@ -1,5 +1,5 @@
 # Stage 1: Build the application with OpenJDK
-FROM docker.io/debian:13.2-slim AS builder
+FROM docker.io/debian:13.4-slim AS builder
 WORKDIR /app
 
 ENV LANG=C.UTF-8
@@ -17,7 +17,7 @@ COPY src ./src
 RUN mvn package -DskipTests -Dspotless.check.skip=true
 
 # Stage 2: Create the runtime image with GraalVM
-FROM docker.io/debian:13.2-slim
+FROM docker.io/debian:13.4-slim
 WORKDIR /app
 
 ENV LANG=C.UTF-8
