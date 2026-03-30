@@ -44,7 +44,7 @@ public class ESMFileSystem implements org.graalvm.polyglot.io.FileSystem {
         this(resolveCodeSourceLocation());
     }
 
-    // jar:nested:/local/applications/wolpi-0.1.0-SNAPSHOT.jar/!BOOT-INF/classes/!/js/fetch.mjs
+    // e.g. jar:nested:/local/applications/wolpi-${version}.jar/!BOOT-INF/classes/!/js/fetch.mjs
     ESMFileSystem(String jarLocation) {
         this.defaultFs = java.nio.file.FileSystems.getDefault();
         // Spring Boot builds a nested JAR by default, which has a special URL format that we need to handle.
