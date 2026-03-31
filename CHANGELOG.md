@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- Image size mismatches with JP2 sources by using the rounding method in
+  libvips/openjpeg (→ ceil division for odd dimensions)
+
 ## [0.1.1] - 2026-03-31
 
 ### Fixed

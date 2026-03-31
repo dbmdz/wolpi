@@ -448,8 +448,9 @@ public class ImageLoader {
             int nPages = image.getInt("n-pages");
             for (int i = 1; i < nPages; i++) {
                 double factor = 1 / Math.pow(2, i);
+                // libvips/OpenJPEG reduced pages round odd dimensions up, e.g. 1001 -> 501 -> 251.
                 sizes.add(new ImageSize(
-                        ((int) Math.round(image.getWidth() * factor)), (int) (Math.round(image.getHeight() * factor))));
+                        (int) Math.ceil(nativeSize.width() * factor), (int) Math.ceil(nativeSize.height() * factor)));
             }
         }
 
