@@ -20,7 +20,9 @@ import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.CropRectangle;
 import dev.mdz.wolpi.iiif.model.IIIFQuality;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
+import dev.mdz.wolpi.metrics.RequestType;
 import dev.mdz.wolpi.metrics.ScaleCropMode;
+import dev.mdz.wolpi.metrics.SizeBucket;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -407,12 +409,17 @@ public class ImageProcessor {
     /// This is where all the lazy vips operations are actually executed.
     public EncodedImage encodeImage(VImage image, ImageInfo info, ImageRequest request) throws IOException {
         // Determine output size and cropped area for metrics
-        var outputSize =
-                dev.mdz.wolpi.metrics.SizeBucket.fromDimension(new ImageSize(image.getWidth(), image.getHeight()));
+        var outputSize = SizeBucket.fromDimension(new ImageSize(image.getWidth(), image.getHeight()));
         var cropRectangle = parser.parseRegion(request.cropSpec(), info.nativeSize());
-        var croppedArea = dev.mdz.wolpi.metrics.SizeBucket.fromArea(cropRectangle);
-        var requestType = dev.mdz.wolpi.metrics.RequestType.classify(
-                request.cropSpec(), outputSize, cropRectangle, info.nativeSize());
+        var croppedArea = SizeBucket.fromArea(cropRectangle);
+        var requestType = RequestType.classify(request.cropSpec(), outputSize, cropRectangle, info.nativeSize());
+
+        if (request.formatSpec().equals("jpg") && (image.getWidth() >= 65535 || image.getHeight() >= 65535)) {
+            // JPEG format does not support images with dimensions larger than 65535
+            throw new IllegalArgumentException(
+                    "Requested output format JPEG does not support images with dimensions larger than 65535 pixels (requested size was %dx%d)"
+                            .formatted(image.getWidth(), image.getHeight()));
+        }
 
         var timer = metrics.startImageProcessingTimer(
                 request.formatSpec(), outputSize, croppedArea, requestType, scaleCropModeUsed.get());
