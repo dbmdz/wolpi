@@ -1,4 +1,4 @@
-# Extension Development
+# Developing Extensions
 
 Wolpi extensions are small programs that expose a set of [*hooks*][hooks] that Wolpi calls at specific points during its processing pipeline. By implementing these hooks, extensions can customize Wolpi's behavior in various ways.
 
@@ -377,7 +377,7 @@ You can register custom metrics from your extensions using the `wolpi.metrics` o
 provides methods to create counters, gauges and timers. Each method accepts a name for the metric,
 an optional description, an optional unit (except for timers, those are always measured in seconds)
 and an optional dictionary/object with labels to attach to the metric. These metrics will
-then be available in the [Wolpi Prometheus metrics endpoint](./ops#metrics) alongside the built-in metrics, and you can use them to monitor your extension's behavior and performance.
+then be available in the [Wolpi Prometheus metrics endpoint](./ops.md#metrics) alongside the built-in metrics, and you can use them to monitor your extension's behavior and performance.
 
 See the [Runtime API Reference](#runtime-api-reference) for more details on the available metrics APIs.
 

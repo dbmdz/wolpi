@@ -1,6 +1,4 @@
-# Operating
-
-## Running Wolpi
+# Running Wolpi
 
 === "Standalone JAR"
     This assumes you have an up-to-date (we recommend Java 25) Java Runtime Environment installed.

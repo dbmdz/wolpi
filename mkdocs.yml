@@ -1,4 +1,4 @@
-site_name: 'wolpi: an extensible iiif image server'
+site_name: 'Wolpi: An Extensible IIIF Image Server'
 site_url: https://dbmdz.github.io/wolpi
 watch:
   - ./docs

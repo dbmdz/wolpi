@@ -1,6 +1,6 @@
 ![wolpi](./img/wolpi_notext.png){ width=200, align=left }
 
-# Wolpi: an extensible IIIF server
+# Wolpi: An Extensible IIIF Image Server
 Wolpi is a [libvips][vips]-based IIIF Image API (2.1 and 3.0) compliant image server written in Java.
 It  is from the ground up designed to be easily extensible and customizable in order to fit into
 different use cases and workflows.

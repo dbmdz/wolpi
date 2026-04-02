@@ -18,7 +18,7 @@ You should be able to open http://localhost:8080/v3/wolpi.png/full/max/0/default
 
 ## Extensions
 
-Wolpi can be extended with custom logic written in JavaScript or Python. To learn more about how to create extensions, see the [extension documentation](./docs/extension-use.md).
+Wolpi can be extended with custom logic written in JavaScript or Python. To learn more about how to create extensions, see the [extension documentation](./docs/extension-development.md).
 
 ## Building the documentation
 
