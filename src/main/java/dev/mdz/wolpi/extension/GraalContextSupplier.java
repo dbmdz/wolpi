@@ -3,9 +3,11 @@ package dev.mdz.wolpi.extension;
 import app.photofox.vipsffm.VipsHelper;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
+import dev.mdz.wolpi.extension.mapping.EnumValueMapper;
 import dev.mdz.wolpi.extension.mapping.RecordValueMapper;
 import dev.mdz.wolpi.extension.mapping.ResolvedImageMapper;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
+import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.ExtensionInfo;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.extension.util.PolyglotHelpers;
@@ -61,6 +63,7 @@ public class GraalContextSupplier {
             ValidationSuccess.class,
             ValidationFailure.class,
             EncodedImage.class);
+    private static final List<Class<? extends Enum<?>>> MAPPED_ENUMS = List.of(ExtensionHooks.class);
     private static final Pattern URI_PATTERN = Pattern.compile("^https?://.*$");
 
     private final HostAccess hostAccess;
@@ -88,8 +91,8 @@ public class GraalContextSupplier {
     /// Configure host access for GraalVM polyglot contexts.
     ///
     /// The access mode is equivalent to [HostAccess#ALL], but with additional type mappings for
-    /// the record types passed between Wolpi and the Extensions, as well as for some common Java
-    /// types that we map from [String]s in the polyglot context.
+    /// the record and enum types passed between Wolpi and the extensions, as well as for some
+    /// common Java types that we map from [String]s in the polyglot context.
     private static HostAccess buildHostAccess() {
         var builder = HostAccess.newBuilder(HostAccess.ALL)
                 .denyAccess(MemorySegment.class) // Disallow direct FFM pointer access
@@ -99,6 +102,9 @@ public class GraalContextSupplier {
             Class<Record> recordClass = (Class<Record>) r;
             RecordValueMapper<Record> converter = new RecordValueMapper<>(recordClass);
             builder.targetTypeMapping(Value.class, recordClass, converter::accepts, converter::convert);
+        }
+        for (var e : MAPPED_ENUMS) {
+            addEnumMapping(builder, e);
         }
         builder.targetTypeMapping(
                 Value.class, ResolvedImage.class, ResolvedImageMapper::canMap, ResolvedImageMapper::map);
@@ -142,6 +148,12 @@ public class GraalContextSupplier {
                 Value::isString,
                 v -> IIIFVersion.fromString(v.asString().toLowerCase()));
         return builder.build();
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void addEnumMapping(HostAccess.Builder builder, Class<? extends Enum<?>> enumClass) {
+        EnumValueMapper converter = new EnumValueMapper((Class) enumClass);
+        builder.targetTypeMapping(Value.class, (Class) enumClass, converter::accepts, converter::convert);
     }
 
     /// Construct a new GraalJS JavaScript context for executing extension code.

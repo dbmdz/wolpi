@@ -11,6 +11,7 @@ public enum ExtensionHooks {
     SETUP("setup"),
     DESTROY("destroy"),
     CLEANUP("cleanup"),
+    SKIPPABLE_HOOKS("skippable_hooks", "skippableHooks"),
     AUTHORIZE("authorize"),
     RESOLVE("resolve"),
     INFO_JSON("augment_info_json", "augmentInfoJson"),

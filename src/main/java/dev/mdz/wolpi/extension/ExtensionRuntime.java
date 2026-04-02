@@ -21,8 +21,11 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -52,8 +55,19 @@ public interface ExtensionRuntime extends AutoCloseable {
     /// Check if there are any extensions registered for the given hook.
     boolean hasExtensionsForHook(ExtensionHooks extensionHooks);
 
-    // TODO: We need a way to tell if an extension will run custom logic for crop/scale/rotate/quality
-    //       so we can be more aggressive with optimizations
+    /// Check which extension hooks will certainly be skipped when processing the request.
+    ///
+    /// Extensions can implement this hook to increase performance for image requests that do not
+    /// cause image processing hooks to run. For each extension, the default set of skippable hooks
+    /// consists of the hooks it does not implement. Extensions can extend this set with their own
+    /// logic to mark additional implemented hooks as skippable for the incoming request.
+    /// If multiple extensions are loaded, only hooks that are skippable for every loaded extension
+    /// are returned.
+    ///
+    /// Currently only the image processing hooks ([ExtensionHooks#PREPROCESS_IMAGE],
+    /// [ExtensionHooks#CROP], [ExtensionHooks#SCALE], [ExtensionHooks#ROTATE],
+    /// [ExtensionHooks#QUALITY]) have an effect, but this might change in the future.
+    Set<ExtensionHooks> getSkippableHooks(ImageRequest request);
 
     /// Check if the request with the given identifier, headers and client IP is authorized to access
     /// the image with the given identifier.
@@ -250,6 +264,82 @@ public interface ExtensionRuntime extends AutoCloseable {
         @Override
         public boolean hasExtensionsForHook(ExtensionHooks hook) {
             return !registry.getExtensions(hook).isEmpty();
+        }
+
+        @Override
+        public Set<ExtensionHooks> getSkippableHooks(ImageRequest request) {
+            var allExtensions = registry.getExtensions();
+            Set<ExtensionHooks> allHooks = Set.of(ExtensionHooks.values());
+
+            if (allExtensions.size() == 1) {
+                LoadedExtension ext = allExtensions.getFirst();
+                String extName = ext.extensionInfo().name();
+                var timer = metrics.startExtensionTimer();
+                metrics.incrementExtensionInvocations(extName, "skippableHooks");
+                var ctx = ensureRuntimeContext(ext);
+                try (var lease = ctx.enter()) {
+                    Set<ExtensionHooks> skippableHooks =
+                            getSkippableHooksFromExtension(ext, lease.extension(), request, allHooks);
+                    metrics.recordExtensionExecution(timer, extName, "skippableHooks");
+                    return skippableHooks;
+                } catch (PolyglotException pe) {
+                    metrics.incrementExtensionErrors(extName, "skippableHooks");
+                    handleExtensionException(pe);
+                }
+            }
+
+            // Multiple extensions: We can safely skip only hooks that are skippable for every
+            // loaded extension (i.e. the intersection of all skippable hooks).
+            var futs = allExtensions.stream()
+                    .map(e -> CompletableFuture.supplyAsync(
+                            () -> {
+                                String extName = e.extensionInfo().name();
+                                var timer = metrics.startExtensionTimer();
+                                metrics.incrementExtensionInvocations(extName, "skippableHooks");
+                                RuntimeContext ctx = ensureRuntimeContext(e);
+                                try {
+                                    Set<ExtensionHooks> skippableHooks =
+                                            ctx.run(ext -> getSkippableHooksFromExtension(e, ext, request, allHooks));
+                                    metrics.recordExtensionExecution(timer, extName, "skippableHooks");
+                                    return skippableHooks;
+                                } catch (Exception ex) {
+                                    metrics.incrementExtensionErrors(extName, "skippableHooks");
+                                    throw ex;
+                                }
+                            },
+                            threadPool))
+                    .toList();
+            Set<ExtensionHooks> commonSkippableHooks = new HashSet<>(allHooks);
+            futs.stream().map(CompletableFuture::join).forEach(commonSkippableHooks::retainAll);
+            return commonSkippableHooks;
+        }
+
+        private Set<ExtensionHooks> getSkippableHooksFromExtension(
+                LoadedExtension ext, Value extValue, ImageRequest request, Set<ExtensionHooks> allHooks) {
+            Set<ExtensionHooks> skippableHooks = new HashSet<>(allHooks);
+            skippableHooks.removeAll(ext.implementedHooks());
+            if (!ext.implementedHooks().contains(ExtensionHooks.SKIPPABLE_HOOKS)) {
+                return skippableHooks;
+            }
+            Value getSkippedFn = PolyglotHelpers.getDictOrObjectMember("skippableHooks", extValue, true);
+            assert getSkippedFn != null && getSkippedFn.canExecute();
+            Value res = getSkippedFn.execute(request);
+            if (res == null || res.isNull()) {
+                return skippableHooks;
+            }
+            if (res.hasArrayElements()) {
+                for (long i = 0; i < res.getArraySize(); i++) {
+                    skippableHooks.add(res.getArrayElement(i).as(ExtensionHooks.class));
+                }
+            } else if (res.hasIterator()) {
+                var it = res.getIterator();
+                while (it.hasIteratorNextElement()) {
+                    skippableHooks.add(it.getIteratorNextElement().as(ExtensionHooks.class));
+                }
+            } else {
+                skippableHooks.add(res.as(ExtensionHooks.class));
+            }
+            return skippableHooks;
         }
 
         @Override

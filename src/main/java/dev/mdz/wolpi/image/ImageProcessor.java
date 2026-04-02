@@ -41,7 +41,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -51,12 +53,6 @@ import org.springframework.stereotype.Component;
 /// encoding via libvips in an efficient way.
 @Component
 public class ImageProcessor {
-    // Formats for which it is faster to do a thumbnail-then-crop approach for cropped downscale
-    // requests, as opposed to loading the full image and cropping in-memory. This is based on
-    // empirical testing of libvips' performance characteristics.
-    private static final Set<String> SCALE_THEN_CROP_FORMATS =
-            Set.of("jpeg", "uhdr", "png", "heif", "pdf", "svg", "webp");
-
     private final Arena vipsArena;
     private final WolpiConfig wolpiConfig;
 
@@ -67,9 +63,7 @@ public class ImageProcessor {
     private final ExtensionRuntime extensionRuntime;
     private final WolpiMetrics metrics;
 
-    /// Thread-local to track which scale/crop mode was used
-    private final ThreadLocal<ScaleCropMode> scaleCropModeUsed =
-            ThreadLocal.withInitial(() -> ScaleCropMode.CROP_THEN_SCALE);
+    private final ThreadLocal<@Nullable ProcessingRequestState> processingRequestState = new ThreadLocal<>();
 
     public ImageProcessor(
             Arena vipsArena,
@@ -178,17 +172,16 @@ public class ImageProcessor {
     /// @param request     unparsed IIIF Image API request
     public VImage processImage(ImageSource imageSource, ImageRequest request)
             throws IOException, InterruptedException, NotImplementedException {
-        // Preload the image (just the header) if necessary to determine the native dimensions or
-        // to run through pre-processing
         VImage image = null;
         ImageInfo imageInfo = imageSource.imageInfo();
         ImageSize sourceSize;
-        // We need to load the image immediately if an extension intends to preprocess it
-        boolean hasCustomPreProcessing = extensionRuntime.hasExtensionsForHook(ExtensionHooks.PREPROCESS_IMAGE);
-        boolean hasCustomCrop = extensionRuntime.hasExtensionsForHook(ExtensionHooks.CROP);
-        boolean hasCustomScale = extensionRuntime.hasExtensionsForHook(ExtensionHooks.SCALE);
-        boolean hasCustomProcessing = hasCustomPreProcessing || hasCustomScale || hasCustomCrop;
+        Set<ExtensionHooks> skippableHooks = extensionRuntime.getSkippableHooks(request);
 
+        // We need to load the image immediately if an extension intends to preprocess it or we
+        // don't already have the image information
+        boolean hasCustomProcessing = Stream.of(
+                        ExtensionHooks.PREPROCESS_IMAGE, ExtensionHooks.CROP, ExtensionHooks.SCALE)
+                .anyMatch(Predicate.not(skippableHooks::contains));
         if (hasCustomProcessing || imageInfo == null) {
             image = loader.loadImage(imageSource);
             imageInfo = loader.getImageInfo(imageSource);
@@ -198,41 +191,50 @@ public class ImageProcessor {
         }
 
         CropRectangle regionCrop = null;
-        if (!hasCustomCrop) {
+        if (skippableHooks.contains(ExtensionHooks.CROP)) {
             regionCrop = parser.parseRegion(request.cropSpec(), sourceSize);
         }
         ImageSize targetSize = null;
-        if (!hasCustomScale) {
+        if (skippableHooks.contains(ExtensionHooks.SCALE)) {
             targetSize = parser.parseSize(
                     request.version(),
                     request.sizeSpec(),
                     regionCrop == null ? sourceSize : new ImageSize(regionCrop.width(), regionCrop.height()));
         }
 
-        if (!hasCustomPreProcessing
+        ScaleCropMode scaleCropModeUsed;
+        if (skippableHooks.contains(ExtensionHooks.PREPROCESS_IMAGE)
                 && parser.isRequestForUncroppedAndDownScaledImage(request.cropSpec(), request.sizeSpec())) {
             // Fast Path: Uncropped downscaled image - we can load directly into the target size without
             // needing to load the full image first
-            scaleCropModeUsed.set(ScaleCropMode.SCALE_NO_CROP);
+            scaleCropModeUsed = ScaleCropMode.SCALE_NO_CROP;
             image = loader.loadImage(
                     imageInfo, imageSource, parser.parseSize(request.version(), request.sizeSpec(), sourceSize));
         } else if (!hasCustomProcessing && shouldUseScaleThenCrop(imageInfo, sourceSize, regionCrop, targetSize)) {
-            scaleCropModeUsed.set(ScaleCropMode.SCALE_THEN_CROP);
+            scaleCropModeUsed = ScaleCropMode.SCALE_THEN_CROP;
             image = scaleThenCrop(imageSource, imageInfo, regionCrop, targetSize);
         } else {
-            scaleCropModeUsed.set(ScaleCropMode.CROP_THEN_SCALE);
+            scaleCropModeUsed = ScaleCropMode.CROP_THEN_SCALE;
             if (image == null) {
                 image = loader.loadImage(imageSource);
             }
             image = cropAndScale(image, request, imageInfo, sourceSize);
         }
 
-        VImage rotated = extensionRuntime.preRotate(image, request.identifier(), imageInfo, request);
+        processingRequestState.set(new ProcessingRequestState(scaleCropModeUsed, skippableHooks));
+
+        VImage rotated = null;
+        if (!skippableHooks.contains(ExtensionHooks.ROTATE)) {
+            rotated = extensionRuntime.preRotate(image, request.identifier(), imageInfo, request);
+        }
         if (rotated == null) {
             rotated = rotateImage(request, image);
         }
 
-        VImage modifiedImage = extensionRuntime.preQuality(rotated, request.identifier(), imageInfo, request);
+        VImage modifiedImage = null;
+        if (!skippableHooks.contains(ExtensionHooks.QUALITY)) {
+            modifiedImage = extensionRuntime.preQuality(rotated, request.identifier(), imageInfo, request);
+        }
         if (modifiedImage == null) {
             modifiedImage = changeImageQuality(request, rotated);
         }
@@ -421,11 +423,19 @@ public class ImageProcessor {
                             .formatted(image.getWidth(), image.getHeight()));
         }
 
+        var requestState = processingRequestState.get();
+
+        // We can only arrive here after we've processed the image, so this is safe to assume
+        assert requestState != null;
+
         var timer = metrics.startImageProcessingTimer(
-                request.formatSpec(), outputSize, croppedArea, requestType, scaleCropModeUsed.get());
+                request.formatSpec(), outputSize, croppedArea, requestType, requestState.scaleCropMode());
 
         try {
-            var extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
+            EncodedImage extensionEncoded = null;
+            if (!requestState.skippableHooks.contains(ExtensionHooks.FORMAT)) {
+                extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
+            }
 
             if (extensionEncoded != null) {
                 return new EncodedImage(
@@ -464,7 +474,12 @@ public class ImageProcessor {
                     buf.asClonedByteBuffer(), mimeType != null ? mimeType : "image/%s".formatted(suffix), null);
         } finally {
             timer.stop();
-            scaleCropModeUsed.remove();
+            processingRequestState.remove();
         }
     }
+
+    /// Request-global state that needs to be kept around, must be stored as a thread-local
+    /// variable and should be cleared after we've encoded
+    private record ProcessingRequestState(ScaleCropMode scaleCropMode, Set<ExtensionHooks> skippableHooks) {}
+    ;
 }

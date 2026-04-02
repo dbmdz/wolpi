@@ -21,6 +21,7 @@ import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
+import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
@@ -713,6 +714,116 @@ public class ExtensionRuntimeTest {
     }
 
     @Test
+    @DisplayName("Should treat implemented hooks as non-skippable by default")
+    void shouldTreatImplementedHooksAsNonSkippableByDefault() throws IOException {
+        var ext = writeJsExtension("no-skippable-hooks", """
+                export function info() {
+                  return { name: "No Skippable Hooks", apiVersion: 1, description: "test" };
+                }
+
+                export function cleanup() {}
+
+                export function preScale() {
+                  return null;
+                }
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
+            assertThat(skippableHooks).doesNotContain(ExtensionHooks.SCALE);
+            assertThat(skippableHooks)
+                    .contains(
+                            ExtensionHooks.PREPROCESS_IMAGE,
+                            ExtensionHooks.CROP,
+                            ExtensionHooks.ROTATE,
+                            ExtensionHooks.QUALITY,
+                            ExtensionHooks.FORMAT);
+        }
+    }
+
+    @Test
+    @DisplayName("Should intersect default skippable hooks across extensions")
+    void shouldIntersectDefaultGetSkippableHooksAcrossExtensions() throws IOException {
+        var scaleExt = writeJsExtension("default-skippable-scale", """
+                export function info() {
+                  return { name: "Default Scale", apiVersion: 1, description: "test" };
+                }
+
+                export function cleanup() {}
+
+                export function preScale() {
+                  return null;
+                }
+                """);
+        var cropExt = writeJsExtension("default-skippable-crop", """
+                export function info() {
+                  return { name: "Default Crop", apiVersion: 1, description: "test" };
+                }
+
+                export function cleanup() {}
+
+                export function preCrop() {
+                  return null;
+                }
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(List.of(scaleExt, cropExt))) {
+            var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
+            assertThat(skippableHooks).doesNotContain(ExtensionHooks.SCALE, ExtensionHooks.CROP);
+            assertThat(skippableHooks)
+                    .contains(
+                            ExtensionHooks.PREPROCESS_IMAGE,
+                            ExtensionHooks.ROTATE,
+                            ExtensionHooks.QUALITY,
+                            ExtensionHooks.FORMAT);
+        }
+    }
+
+    @Test
+    @DisplayName("Should allow JS extensions to explicitly mark implemented hooks as skippable")
+    void shouldAllowJsExtensionsToExplicitlyMarkImplementedHooksAsSkippable() throws IOException {
+        var ext = writeJsExtension("explicit-skippable-hooks", """
+                export function info() {
+                  return { name: "Explicit Skippable", apiVersion: 1, description: "test" };
+                }
+
+                export function cleanup() {}
+
+                export function preScale() {
+                  return null;
+                }
+
+                export function skippableHooks(request) {
+                  return new ["SCALE"];
+                }
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
+            assertThat(skippableHooks).contains(ExtensionHooks.SCALE);
+        }
+    }
+
+    @Test
+    @DisplayName("Should allow Python extensions to explicitly mark implemented hooks as skippable")
+    void shouldAllowPythonExtensionsToExplicitlyMarkImplementedHooksAsSkippable() throws IOException {
+        var ext = writePyExtension("explicit-skippable-hooks", """
+                def info():
+                    return {"name": "Explicit Python Skippable", "apiVersion": 1, "description": "test"}
+
+                def cleanup():
+                    pass
+
+                def pre_scale(image, identifier, image_info, iiif_request):
+                    return None
+
+                def skippable_hooks(iiif_request):
+                    return {"SCALE"}
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
+            assertThat(skippableHooks).contains(ExtensionHooks.SCALE);
+        }
+    }
+
+    @Test
     @DisplayName("Should execute pre-scale hooks on image")
     void shouldExecutePreScaleHooks() {
         var exts = List.of(
@@ -854,6 +965,18 @@ public class ExtensionRuntimeTest {
                         buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
         var metrics = new WolpiMetrics(meterRegistry);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics);
+    }
+
+    private ExtensionConfig writeJsExtension(String name, String source) throws IOException {
+        Path path = tempDir.resolve("%s-%s.js".formatted(name, UUID.randomUUID()));
+        Files.writeString(path, source);
+        return new ExtensionConfig(path, null, null, Map.of(), false);
+    }
+
+    private ExtensionConfig writePyExtension(String name, String source) throws IOException {
+        Path path = tempDir.resolve("%s-%s.py".formatted(name, UUID.randomUUID()));
+        Files.writeString(path, source);
+        return new ExtensionConfig(path, null, null, Map.of(), false);
     }
 
     private ExtensionConfig getTestAuthExtension(
