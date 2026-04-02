@@ -12,6 +12,9 @@ extensions can extend and override a lot of the default behavior of Wolpi, such 
       image filters)
     * Implement custom output formats or customize the encoding of existing formats
 
+[auth]: https://iiif.io/api/auth/2.0/
+[extra-services]: https://iiif.io/api/presentation/3.0/#services
+
 ## Installation
 
 Extensions are configured in the `wolpi.yaml` file under the `extensions` key.
