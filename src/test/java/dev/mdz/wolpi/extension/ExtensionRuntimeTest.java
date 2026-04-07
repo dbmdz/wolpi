@@ -792,7 +792,7 @@ public class ExtensionRuntimeTest {
                 }
 
                 export function skippableHooks(request) {
-                  return new ["SCALE"];
+                  return ["SCALE"];
                 }
                 """);
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {

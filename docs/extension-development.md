@@ -296,6 +296,7 @@ The quickest way to decide which hook to implement is to start from the point in
 
 - [`setup`](#setup-and-destroy-hooks) for running initialization code when an extension instance is created
 - [`info`](#info-hook) **(required)** for declaring basic metadata about the extension
+- [`skippableHooks`](#skippablehooks-hook) for declaring hooks that can safely be skipped for a given request, used to optimize processing by avoiding unnecessary hook calls
 - [`authorize`](#authorize-hook) for allowing or denying access before any processing happens
 - [`resolve`](#resolve-hook) for mapping an identifier to an image source
 - [`augmentInfoJson`](#augmentinfojson-hook) for adding or changing fields in `info.json`
@@ -1031,6 +1032,46 @@ This hook is called whenever an extension instance is shut down.
     def setup() -> None: ...
 
     def destroy() -> None: ...
+    ```
+
+### `skippableHooks` Hook
+
+Wolpi implements several fast paths in its image processing pipeline, based on the nature of the incoming image requests, e.g. for fast thumbnail or tile requests.
+If an extension implements one of the available image processing hooks (`preProcessImage`, `preCrop`, `preScale`, `preQuality`, `preFormat`) Wolpi will not be able to determine if those fast paths can be taken (since the extension might customize the default behavior for the scaling operation) and opts for a path that allows full customization, but can be a lot slower for some operations.
+
+This is often unnecessary, since many extensions will likely only run their custom processing logic in the presence of a certain parameter, and won't run for the majority of requests. Extensions can specify when this is the case by implementing the `skippableHooks` hook, which returns the set of hooks that can be skipped when processing a given IIIF Image API request. If an image processing hook is part of this set for a request, it will not be run at all for that request. By default, every hook that is not implemented by an extension is in the skippable set, and the result of that hook will be added to the set. Currently only the presence of the image processing hooks has an impact on the image processing pipeline.
+
+=== "JavaScript"
+
+    ```typescript
+    type HookName =
+        | 'preProcessImage'
+        | 'preCrop'
+        | 'preScale'
+        | 'preQuality'
+        | 'preFormat';
+
+    function skippableHooks(
+        request: ImageRequest
+    ): HookName[] | Set<HookName>;
+    ```
+
+=== "Python"
+
+    ```python
+    from typing import Iterable, Literal
+
+    HookName = Literal[
+        'preProcessImage',
+        'preCrop',
+        'preScale',
+        'preQuality',
+        'preFormat'
+    ]
+
+    def skippable_hooks(
+        request: ImageRequest
+    ) -> Iterable[HookName]: ...
     ```
 
 ### `authorize` Hook
