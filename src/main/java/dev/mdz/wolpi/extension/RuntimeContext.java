@@ -46,7 +46,7 @@ public abstract class RuntimeContext implements AutoCloseable {
     /// @return The programming language the extension is implemented in
     public abstract Language getLang();
 
-    private boolean hasHook(ExtensionHooks hook) {
+    boolean hasHook(ExtensionHooks hook) {
         return hook.getValidNames().stream()
                 .flatMap(name ->
                         Optional.ofNullable(PolyglotHelpers.getDictOrObjectMember(name, extensionObject, true))

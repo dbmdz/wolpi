@@ -911,6 +911,22 @@ public class ExtensionRuntimeTest {
     }
 
     @Test
+    @DisplayName("Should support default-exported JavaScript class instances")
+    void shouldSupportJsClassInstances() {
+        var exts = List.of(
+                new ExtensionConfig(Path.of("src/test/resources/js-class-instance.js"), null, null, Map.of(), false));
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+            assertThat(runtime.authorize("class-instance-authorize", Map.of(), "127.0.0.1"))
+                    .isTrue();
+            var resolved = runtime.resolve("class-instance-resolve", null, null);
+            assertThat(resolved).isNotNull();
+            assertThat(resolved.resolvedImage()).isInstanceOf(FilesystemResolvedImage.class);
+            var fsResolved = (FilesystemResolvedImage) resolved.resolvedImage();
+            assertThat(fsResolved.path()).isEqualTo(Path.of("/tmp/images/class-instance.jp2"));
+        }
+    }
+
+    @Test
     @DisplayName("Should execute pre-color hooks on image")
     void shouldExecutePreQualityHooks() {
         var exts = List.of(

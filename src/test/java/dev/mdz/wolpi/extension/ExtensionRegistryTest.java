@@ -67,6 +67,17 @@ class ExtensionRegistryTest {
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test JS File Extension");
     }
 
+    @DisplayName("should load a JavaScript class instance exported as default")
+    @Test
+    void shouldLoadJsClassInstance() {
+        Path source = Path.of("src/test/resources/js-class-instance.js");
+        var registry = buildRegistryWithExtensions(new ExtensionConfig(source, null, null, Map.of(), false));
+        assertThat(registry.getExtensions()).hasSize(1);
+        var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
+        assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Class Instance JS Extension");
+        assertThat(registry.getExtensions(ExtensionHooks.RESOLVE)).hasSize(1);
+    }
+
     @DisplayName("should load a single Python file")
     @Test
     void shouldLoadSinglePyFile() {

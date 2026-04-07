@@ -13,18 +13,17 @@ import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor.AlterationEvent;
-import dev.mdz.wolpi.extension.util.PolyglotHelpers;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -264,10 +263,8 @@ public class ExtensionRegistry implements AutoCloseable {
     /// @return the set of hooks implemented by the extension
     /// @throws ExtensionLoadException if the mandatory hooks are not implemented
     private Set<ExtensionHooks> getExtensionHooks(RuntimeContext ctx) throws ExtensionLoadException {
-        Set<ExtensionHooks> providedHooks = ctx.run(ext -> PolyglotHelpers.dictOrMemberKeys(ext).stream()
-                .map(ExtensionHooks::fromName)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet()));
+        Set<ExtensionHooks> providedHooks =
+                Arrays.stream(ExtensionHooks.values()).filter(ctx::hasHook).collect(Collectors.toSet());
         if (!providedHooks.contains(ExtensionHooks.INFO)) {
             throw new ExtensionLoadException("Extension does not provide the mandatory 'info' hook, cannot load.");
         }
@@ -445,20 +442,14 @@ public class ExtensionRegistry implements AutoCloseable {
             }
             // This is a bit convoluted and could be so much easier if top-level await + dynamic
             // imports were working, but alas, they are not [1]. So instead, we do a wildcard import
-            // then re-export everything under the `hook` name.
+            // and then export either the module's default export directly or the full set of named
+            // exports as the extension object.
             //
             // [1]: See this issue: https://github.com/oracle/graaljs/issues/938
             source = Source.newBuilder("js", """
                             import * as allExports from '%s';
-                            const mergedExports = { ...allExports };
-                            if (mergedExports.default) {
-                                // If there is a default export, copy its properties to the top level
-                                Object.assign(mergedExports, mergedExports.default);
-                                delete mergedExports.default;
-                            }
-                            // Can't export already defined names in GraalJS, so we have to
-                            // create a new object and export that.
-                            export const hooks = { ...mergedExports };
+                            const { default: defaultExport, ...namedExports } = allExports;
+                            export const hooks = defaultExport ?? namedExports;
                             """.formatted(modulePath), "wolpi-extension.js")
                     .mimeType("application/javascript+module")
                     .build();

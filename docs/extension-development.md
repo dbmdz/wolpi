@@ -27,6 +27,7 @@ Every extension needs to implement the [`info`](#info-hook) and [`cleanup`](#cle
 === "JavaScript"
 
     A single-file JavaScript extension is a single `.js` or `.mjs` file that exports its hooks.
+    The default export can be a plain object or another object instance such as a class instance.
 
     ```javascript linenums="1" title="helloworld.js"
     export default {
@@ -344,7 +345,9 @@ See the [Runtime API Reference](#runtime-api-reference) for a full reference of 
 You have access to an extension-specific logger instance via the `wolpi.logger` object. This logger provides
 four logging levels: `debug`, `info`, `warn` and `error`. Each logging method accepts a message string
 and an optional dictionary/object with key-value pairs that will be logged alongside the message for
-structured logging.
+structured logging. The base logger is already scoped to your extension, i.e. it logs under
+`wolpi.extension.<extension-name>`, and `wolpi.logger.getLogger("foo")` creates a sub-logger under
+`wolpi.extension.<extension-name>.foo`.
 
 See the [Runtime API Reference](#runtime-api-reference) for more details on the available logging APIs.
 
@@ -556,7 +559,7 @@ authors.
 
 JavaScript extensions must be written as ES modules with either:
 
-- a default export with the hooks as entries in an object
+- a default export with the hooks as entries in an object, including custom object instances such as class instances
 - or named exports for each hook.
 
 !!! question "Async?"
