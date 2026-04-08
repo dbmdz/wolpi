@@ -335,8 +335,8 @@ public class ImageLoader {
                                 targetSize.width(),
                                 VipsOption.Int("height", targetSize.height()),
                                 VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-                    case HttpResolvedImage(URI uri, Map<String, String> headers, Boolean supportsByteRange) ->
-                        loadFromHttp(uri, headers, targetSize, supportsByteRange);
+                    case HttpResolvedImage(URI uri, Map<String, String> headers) ->
+                        loadFromHttp(uri, headers, targetSize);
                     case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
                         VImage.thumbnailSource(
                                 arena,
@@ -362,8 +362,7 @@ public class ImageLoader {
         return switch (source.resolvedImage()) {
             case FilesystemResolvedImage(Path path) ->
                 VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
-            case HttpResolvedImage(URI uri, Map<String, String> headers, @Nullable Boolean supportsByteRange) ->
-                loadFromHttp(uri, headers, null, supportsByteRange, options);
+            case HttpResolvedImage(URI uri, Map<String, String> headers) -> loadFromHttp(uri, headers, null, options);
             case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
                 VImage.newFromSource(arena, srcSupplier.apply(arena), options);
             case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
@@ -386,11 +385,7 @@ public class ImageLoader {
     /// Loads an HTTP source either directly or via libvips' thumbnail API, depending on whether a
     /// target size was requested.
     private VImage loadFromHttp(
-            URI uri,
-            @Nullable Map<String, String> headers,
-            @Nullable ImageSize targetSize,
-            @Nullable Boolean supportsByteRanges,
-            VipsOption... options)
+            URI uri, @Nullable Map<String, String> headers, @Nullable ImageSize targetSize, VipsOption... options)
             throws IOException, InterruptedException {
         HttpResponse<InputStream> response = fetchFromHttp(uri, headers);
         if (targetSize == null) {

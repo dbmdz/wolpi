@@ -419,11 +419,11 @@ Wolpi provides a few built-in polyfill modules that can be imported by JavaScrip
 Provides a subset of the Node.js `fs` module for synchronous file system operations
 
 ```typescript
-import fs from 'wolpi:fs';
+import { readFileSync, readDirSync } from 'wolpi:fs';
 
-const fileContents = fs.readFileSync('/path/to/file.txt', 'utf-8');
+const fileContents = readFileSync('/path/to/file.txt');
 
-for (const file of fs.readdirSync('/path/to/directory')) {
+for (const file of readDirSync('/path/to/directory')) {
     console.log(file);
 }
 ```
@@ -1037,7 +1037,7 @@ This hook is called whenever an extension instance is shut down.
 ### `skippableHooks` Hook
 
 Wolpi implements several fast paths in its image processing pipeline, based on the nature of the incoming image requests, e.g. for fast thumbnail or tile requests.
-If an extension implements one of the available image processing hooks (`preProcessImage`, `preCrop`, `preScale`, `preQuality`, `preFormat`) Wolpi will not be able to determine if those fast paths can be taken (since the extension might customize the default behavior for the scaling operation) and opts for a path that allows full customization, but can be a lot slower for some operations.
+If an extension implements one of the available image processing hooks (`preProcessImage`, `preCrop`, `preScale`, `preRotate`, `preQuality`, `preFormat`) Wolpi will not be able to determine if those fast paths can be taken (since the extension might customize the default behavior for the scaling operation) and opts for a path that allows full customization, but can be a lot slower for some operations.
 
 This is often unnecessary, since many extensions will likely only run their custom processing logic in the presence of a certain parameter, and won't run for the majority of requests. Extensions can specify when this is the case by implementing the `skippableHooks` hook, which returns the set of hooks that can be skipped when processing a given IIIF Image API request. If an image processing hook is part of this set for a request, it will not be run at all for that request. By default, every hook that is not implemented by an extension is in the skippable set, and the result of that hook will be added to the set. Currently only the presence of the image processing hooks has an impact on the image processing pipeline.
 
@@ -1048,11 +1048,12 @@ This is often unnecessary, since many extensions will likely only run their cust
         | 'preProcessImage'
         | 'preCrop'
         | 'preScale'
+        | 'preRotate'
         | 'preQuality'
         | 'preFormat';
 
     function skippableHooks(
-        request: ImageRequest
+        request: ImageApiRequest
     ): HookName[] | Set<HookName>;
     ```
 
@@ -1065,12 +1066,13 @@ This is often unnecessary, since many extensions will likely only run their cust
         'preProcessImage',
         'preCrop',
         'preScale',
+        'preRotate',
         'preQuality',
         'preFormat'
     ]
 
     def skippable_hooks(
-        request: ImageRequest
+        request: ImageApiRequest
     ) -> Iterable[HookName]: ...
     ```
 
@@ -1405,6 +1407,8 @@ the `VImage` at the current step of the processing pipeline, metadata about the 
 API request. The hook must return a new `VImage` object that represents the processed image, or a
 `null`/`None` value to indicate that no processing was done and Wolpi should continue with the
 standard implementation (see [below][java-api]) for details on how to interact with `VImage`.
+For `preProcessImage`, the returned image must preserve the input dimensions; results with a
+different width or height are logged and ignored.
 
 [java-api]: #working-with-java-classes-from-extensions
 
@@ -1580,7 +1584,7 @@ to indicate that no encoding took place.
             description?: string,
             labels?: { [key: string]: string }
         ): {
-            record(fn: () => void): void;
+            record<T>(fn: () => T): T;
             start(): { stop(): void };
         };
     }
@@ -1684,8 +1688,10 @@ to indicate that no encoding took place.
     class RunningTimer:
         def stop(self) -> None: ...
 
+    T = TypeVar("T")
+
     class TimerMetric:
-        def record(self, fn: Callable[[], None]) -> None: ...
+        def record(self, fn: Callable[[], T]) -> T: ...
         def start(self) -> RunningTimer: ...
 
     class ImageRequestParser:

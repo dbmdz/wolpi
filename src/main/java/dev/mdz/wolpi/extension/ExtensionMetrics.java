@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 
@@ -166,9 +167,9 @@ public class ExtensionMetrics {
             this.timer = timer;
         }
 
-        /// Run a callable and record the duration it took to complete.
-        public void record(Runnable runnable) {
-            timer.record(runnable);
+        /// Run a callable, record the duration it took to complete and return its result.
+        public <T> T record(Callable<T> callable) throws Exception {
+            return timer.recordCallable(callable);
         }
 
         /// Starts a timer that can be stopped later.

@@ -36,10 +36,14 @@ export default {
       const Thread = Java.type("java.lang.Thread");
       const parts = identifier.split("-");
       const milliSeconds = parseInt(parts[1], 10);
-      this.timerMetric.record(() => {
+      const recorded = this.timerMetric.record(() => {
         // Simulate some processing time
         Thread.sleep(milliSeconds);
+        return milliSeconds;
       });
+      if (recorded !== milliSeconds) {
+        throw new Error(`Expected timer.record() to return ${milliSeconds}, got ${recorded}`);
+      }
     }
     return true;
   },
