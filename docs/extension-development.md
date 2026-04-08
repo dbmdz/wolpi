@@ -89,7 +89,7 @@ Configure the extension in your `wolpi.yml`:
 
 ```yaml
 extensions:
-  - path: /extensions/hello-world.js  # or hello-world.py
+  - path: /app/extensions/hello-world.js  # or hello-world.py
     config:
       baseDirectory: /images
 ```
@@ -106,8 +106,8 @@ $ docker run \
 ```
 
 Drop an image (like [this one](https://upload.wikimedia.org/wikipedia/commons/2/28/Wolpertinger.jpg) into the `images` directory with the name `test.jpg`, and you should be able to access its `info.json` via
-- JavaScript: `http://localhost:8080/iiif/v3/js-test/info.json`
-- Python: `http://localhost:8080/iiif/v3/py-test/info.json`
+- JavaScript: `http://localhost:8080/v3/js-test/info.json`
+- Python: `http://localhost:8080/v3/py-test/info.json`
 
 Once you have one of these examples loading, use the [Hook Overview](#hook-overview) and the [Hook Reference](#hook-reference) to expand it to your liking.
 
@@ -122,8 +122,8 @@ into the container:
 $ docker run \
     -p 8080:8080 \
     -p 4711:4711 \ # (1)!
-    -v "$(pwd)/config.yml:/app/wolpi.yml" \ # (2)!
-    -v "$(pwd)/my-extensions:/app/extensions" \
+    -v "$(pwd)/wolpi.yml:/app/wolpi.yml" \ # (2)!
+    -v "$(pwd)/extensions:/app/extensions" \
     ghcr.io/dbmdz/wolpi:latest
 ```
 
@@ -131,12 +131,11 @@ $ docker run \
 2.  You can customize the configuration path inside the container by setting the `WOLPI_CONFIG`
     environment variable, by default Wolpi will check `/app/wolpi.yml` or `/app/wolpi.yaml`
 
-Your `config.yml` should specify the extension under the `wolpi` prefix:
+Your `wolpi.yml` should specify the extension under the `extensions` prefix:
 
 ```yaml
-wolpi:
-  extensions:
-    - path: /app/extensions/hello-world.js
+extensions:
+- path: /app/extensions/hello-world.js
 ```
 
 ## Core Model
