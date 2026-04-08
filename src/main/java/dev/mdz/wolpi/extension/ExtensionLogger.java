@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.logging.LogLevel;
 
-/// A logger for extension code that prefixes loggers with "wolpi.extension.<extension-name>".
+/// A logger for extension code that prefixes loggers with "dev.mdz.wolpi.extension.<extension-name>".
 ///
 /// Additional context details can be provided as key-value pairs in a map for each log level.
 ///
@@ -16,7 +16,7 @@ public class ExtensionLogger {
 
     public ExtensionLogger(String name) {
         this.name = name;
-        this.rootLogger = LoggerFactory.getLogger("wolpi.extension." + name);
+        this.rootLogger = LoggerFactory.getLogger("dev.mdz.wolpi.extension." + name);
     }
 
     /// Creates a sub-logger with the given name appended to the current logger's name.
