@@ -1224,21 +1224,22 @@ this information for `info.json` requests.
     # Size of a tile encoded in an image, with available scaling factors
     class TileSize(TypedDict):
         width: int
-        height: int
         scaleFactors: list[int]
+        height: NotRequired[int | None]
 
     # Optional set of metadata about the image that can be provided by the
     # resolver to avoid having Wolpi read the image just to extract
     # this information for `info.json` requests
     class ImageInfo(TypedDict):
+        format: NotRequired[str | None]
         nativeSize: ImageSize
-        sizes: NotRequired[list[ImageSize]]
-        tileSizes: NotRequired[list[TileSize]]
+        sizes: list[ImageSize]
+        tileSizes: list[TileSize]
 
     # Optional caching information about the image source.
     class CacheInfo(TypedDict):
         eTag: NotRequired[str]
-        lastModified: NotRequired[datetime.datetime]
+        lastModified: NotRequired[datetime.datetime | str]
 
     # An image file in a file system accessible to Wolpi
     class FilesystemImageSource(TypedDict):

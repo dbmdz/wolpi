@@ -824,6 +824,96 @@ public class ExtensionRuntimeTest {
     }
 
     @Test
+    @DisplayName("Should expose WolpiExtension helper on injected Python wolpi module")
+    void shouldExposeWolpiExtensionHelperInPython() throws IOException {
+        var ext = writePyExtension("wolpi-extension-helper", """
+                from wolpi import WolpiExtension
+
+
+                class Extension(WolpiExtension):
+                    def info(self):
+                        return {"name": "WolpiExtension Helper", "apiVersion": 1, "description": "test"}
+
+                    def cleanup(self):
+                        pass
+
+                    def authorize(self, identifier, headers, client_ip):
+                        return identifier == "allowed"
+
+
+                ext = Extension()
+
+
+                def info():
+                    return ext.info()
+
+
+                def cleanup():
+                    return ext.cleanup()
+
+
+                def authorize(identifier, headers, client_ip):
+                    return ext.authorize(identifier, headers, client_ip)
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            assertThat(runtime.authorize("allowed", Map.of(), "127.0.0.1")).isTrue();
+            assertThat(runtime.authorize("denied", Map.of(), "127.0.0.1")).isFalse();
+        }
+    }
+
+    @Test
+    @DisplayName("Should allow unified imports of Wolpi runtime values and typing helpers in Python")
+    void shouldAllowUnifiedImportsFromPythonWolpiModule() throws IOException {
+        var ext = writePyExtension("wolpi-unified-imports", """
+                from wolpi import ExtensionInfo, ImageApiRequest, ImageInfo, VImage, WolpiExtension, vipsArena
+
+
+                class Extension(WolpiExtension):
+                    def info(self) -> ExtensionInfo:
+                        assert vipsArena is not None
+                        return {"name": "Unified Imports", "apiVersion": 1, "description": "test"}
+
+                    def cleanup(self) -> None:
+                        pass
+
+                    def pre_scale(
+                        self,
+                        image: VImage,
+                        identifier: str,
+                        image_info: ImageInfo,
+                        request: ImageApiRequest,
+                    ) -> VImage | None:
+                        assert request.sizeSpec is not None
+                        assert image_info.nativeSize.width > 0
+                        return image
+
+
+                ext = Extension()
+
+
+                def info():
+                    return ext.info()
+
+
+                def cleanup():
+                    return ext.cleanup()
+
+
+                def pre_scale(image, identifier, image_info, request):
+                    return ext.pre_scale(image, identifier, image_info, request)
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 500, 500, Color.green);
+            VImage preScaled = runtime.preScale(
+                    img,
+                    "some-image",
+                    new ImageInfo(new ImageSize(500, 500), List.of(), List.of()),
+                    new ImageRequest("some-image", IIIFVersion.V3, null, "max", null, null, null));
+            assertThat(preScaled).isSameAs(img);
+        }
+    }
+
+    @Test
     @DisplayName("Should execute pre-scale hooks on image")
     void shouldExecutePreScaleHooks() {
         var exts = List.of(

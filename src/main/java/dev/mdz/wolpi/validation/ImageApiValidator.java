@@ -3,6 +3,7 @@ package dev.mdz.wolpi.validation;
 import dev.mdz.wolpi.extension.ExtensionRegistry;
 import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.PyPiInstaller;
+import dev.mdz.wolpi.extension.PythonRuntimeContext;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
@@ -10,18 +11,13 @@ import dev.mdz.wolpi.validation.model.ValidationResult;
 import dev.mdz.wolpi.validation.model.ValidationResult.ValidationFailure;
 import dev.mdz.wolpi.validation.model.ValidationResult.ValidationSuccess;
 import dev.mdz.wolpi.validation.model.ValidationTest;
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.graalvm.polyglot.Context;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -36,9 +32,6 @@ import tools.jackson.databind.json.JsonMapper;
 public class ImageApiValidator {
     private static final String VALIDATOR_VERSION = "0.1.0";
     private static final String VALIDATION_IMAGE_PNG = "67352ccc-d1b0-11e1-89ae-279075081939-png";
-    private static final List<String> PYVIPS_SHIM_LOCATIONS = List.of(
-            "/python/pyvips_shim.py", "/classes/python/pyvips_shim.py", "/BOOT-INF/classes/python/pyvips_shim.py");
-    private static final Pattern NESTED_JAR_PATTERN = Pattern.compile("^jar:nested:(?<outerJar>.+\\.jar)/!.+$");
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -174,81 +167,7 @@ public class ImageApiValidator {
     /// anyway internally, so we skip the expensive pyvips installation and just provide
     /// a shim that pretends to be pyvips and calls out to vips-ffm instead.
     private static void installPyVipsShim(Context context) {
-        String jarLocation = ImageApiValidator.class
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation()
-                .toString();
-        Path absolutePath = Path.of(jarLocation.replace("file:", "")).toAbsolutePath();
-        Path shimLocation;
-        boolean deleteShimAfter;
-        try {
-            Matcher m = NESTED_JAR_PATTERN.matcher(jarLocation);
-            if (m.matches()) {
-                absolutePath = Path.of(m.group("outerJar")).toAbsolutePath();
-            }
-            var finalPath = absolutePath;
-            if (finalPath.toString().endsWith(".jar")) {
-                try (var jarFs = FileSystems.newFileSystem(finalPath)) {
-                    // GraalPy can't import code from a JAR directly, so we write the shim to a temp
-                    // file with restricted permissions first
-                    if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-                        shimLocation = Files.createTempFile(
-                                "tmp_wolpi_pyvips_shim",
-                                ".py",
-                                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
-                    } else {
-                        shimLocation = Files.createTempFile("tmp_wolpi_pyvips_shim", ".py");
-                        var file = shimLocation.toFile();
-                        file.setReadable(true, true);
-                        file.setWritable(true, true);
-                    }
-                    Path shimJarLocation = PYVIPS_SHIM_LOCATIONS.stream()
-                            .map(jarFs::getPath)
-                            .filter(Files::exists)
-                            .findFirst()
-                            .orElseThrow(() ->
-                                    new IOException("Failed to locate pyvips_shim.py in JAR at expected locations in %s"
-                                            .formatted(finalPath)));
-                    Files.write(shimLocation, Files.readAllBytes(shimJarLocation));
-                    deleteShimAfter = true;
-                }
-            } else {
-                shimLocation = PYVIPS_SHIM_LOCATIONS.stream()
-                        .map(p -> finalPath.resolveSibling(p.substring(1)))
-                        .filter(Files::exists)
-                        .findFirst()
-                        .orElseThrow(() -> new IOException(
-                                "Failed to locate pyvips_shim.py at expected locations in %s".formatted(finalPath)));
-                deleteShimAfter = false;
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        var shimModuleName = shimLocation.getFileName().toString().replace(".py", "");
-        var code = """
-                import sys
-
-                sys.path.insert(0, '%s')
-
-                import %s
-
-                sys.modules['pyvips'] = %s
-                """.formatted(shimLocation.getParent().toAbsolutePath().toString(), shimModuleName, shimModuleName);
-        try {
-            context.eval("python", code);
-        } finally {
-            if (deleteShimAfter) {
-                // Shim can be safely deleted after importing, as it was bytecode-compiled and loaded into
-                // memory by the interpreter.
-                try {
-                    Files.delete(shimLocation);
-                } catch (IOException e) {
-                    log.warn("Failed to delete temporary pyvips shim file: {}", shimLocation, e);
-                }
-            }
-        }
+        PythonRuntimeContext.installPythonModuleFromFile(context, "pyvips", "pyvips_shim.py");
     }
 
     /// Run all tests that are applicable to the current configuration

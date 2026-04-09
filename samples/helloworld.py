@@ -7,11 +7,11 @@ is returned.
 """
 from pathlib import Path
 
-import wolpi
+from wolpi import ExtensionInfo, FilesystemImageSource, config
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.jp2', '.tif', '.webp'}
 
-def info():
+def info() -> ExtensionInfo:
     return {
         'apiVersion': 1,
         'name': 'hello-world-py',
@@ -23,12 +23,12 @@ def cleanup():
     # between hook invocations
     pass
 
-def resolve(identifier, etag=None, last_modified=None):
+def resolve(identifier: str, etag: str | None = None, last_modified: str | None = None) -> FilesystemImageSource | None:
     if not identifier.startswith('py-'):
         return
     identifier = identifier[3:]  # Remove 'py-' prefix
     # The `wolpi` module provides access to the Wolpi context, including the configuration for the extensions.
-    base_dir = Path(wolpi.config['baseDirectory'])
+    base_dir = Path(config['baseDirectory'])
     for path in base_dir.iterdir():
         if path.stem == identifier and path.suffix in IMAGE_EXTENSIONS:
             return {'path': str(path.absolute())}
