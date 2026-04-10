@@ -181,6 +181,7 @@ public class NpmInstaller {
                     baseDir,
                     processTimeout,
                     "install",
+                    "--install-links=false",
                     "--no-audit",
                     "--no-fund",
                     "--no-package-lock",
