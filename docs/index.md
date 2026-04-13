@@ -5,23 +5,7 @@ Wolpi is a [libvips][vips]-based IIIF Image API (2.1 and 3.0) compliant image se
 It  is from the ground up designed to be easily extensible and customizable in order to fit into
 different use cases and workflows.
 
-At its core, Wolpi is simply a IIIF Image API 2.1 and 3.0 server that can serve images from a
-directory on the local filesystem. However, it can be extended with custom extensions written in
-JavaScript or Python to customize its behavior at all steps of the image delivery process, from authorization
-and resolving to the individual image operations and even the output encoding.
-
 [vips]: https://www.libvips.org/
-
-## Running Wolpi
-The easiest way to run Wolpi is to use the official container image:
-
-```bash
-docker run -p 8080:8080 -v <path_to_your_images>:/app/images ghcr.io/dbmdz/wolpi:latest
-```
-
-By default, images will then be served from the `/app/images` directory inside the container, e.g. an
-image located  at `<path_to_your_images>/foo/bar/baz.jpg` on the host machine will be available at
-http://localhost:8080/v3/foo/bar/baz.jpg/info.json (for info.json) and e.g. http://localhost:8080/v3/foo/bar/baz.jpg/full/max/0/default.jpg (for an image request)
 
 ## Configuration
 Through the YAML-based configuration, you can customize various aspects of Wolpi's behavior, such as:
@@ -33,7 +17,7 @@ Through the YAML-based configuration, you can customize various aspects of Wolpi
 Refer to the [configuration documentation][config-doc] to learn more about the available configuration
 options.
 
-[config-doc]: ./configuration.md
+[config-doc]: ./reference/configuration.md
 
 ## Extending Wolpi
 Wolpi can be extended using custom extensions written in JavaScript or Python. These extensions can
@@ -58,18 +42,25 @@ existing Wolpi extensions. To learn how to write your own extensions, refer to t
 
 [auth]: https://iiif.io/api/auth/2.0/
 [extra-services]: https://iiif.io/api/image/3.0/#58-linking-properties
-[exts-usage-doc]: ./extension-use.md
+[exts-usage-doc]: ./how-to/install-extensions.md
 [exts-dev-doc]: ./extension-development.md
 
 ## Operating Wolpi
 
 Wolpi provides everything required to run it both on traditional servers and in cloud environments:
 
-- Runnable as a standalone JAR or OCI container
-- Full support for HTTP caching semantics (ETags, Last-Modified, Cache-Control, etc.) to easily
-  integrate with CDNs and proxy caches
-- Health checks and metrics endpoint for monitoring (from K8s or systemd)
-- Structured logging to the standard output (to be picked up by e.g. journald or k8s)
+- Runnable as a [standalone JAR][ops-jar] or [OCI container][ops-container]
+- Full support for [HTTP caching semantics][ops-caching] (ETags, Last-Modified, Cache-Control, etc.)
+  to easily  integrate with CDNs and proxy caches
+- [Health checks][ops-health] and [metrics endpoint for monitoring][ops-metrics]
+- [Structured logging][ops-logging] to the standard output (to be picked up by e.g. journald or k8s)
 
-Most of the above features are integrated into the extension API, so you can log, export metrics and
-provide caching information from your custom extensions as well.
+Most of the above features are [integrated into the extension API, so you can [log][ops-extdev-log],
+[export metrics][ops-extdev-metrics] and [provide caching information][ops-extdev-cching] from your
+custom extensions as well.
+
+[ops-jar]: ./how-to/deploy-using-the-jar.md
+[ops-container]: ./how-to/deploy-using-docker-podman.md
+[ops-caching]: ./how-to/optimize-the-configuration-for-better-performance.md#caching
+[ops-health]: ./how-to/monitor-wolpi.md#health-endpoints
+[ops-metrics]: ./how-to/monitor-wolpi.md#monitoring-wolpi

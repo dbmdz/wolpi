@@ -59,8 +59,22 @@ plugins:
   - search
 
 nav:
-  - index.md
-  - configuration.md
-  - extension-use.md
-  - ops.md
-  - extension-development.md
+  - Home: index.md
+  - "Getting Started":
+      - "Serving your first image": getting-started/serving-your-first-image.md
+      - "Using an extension: Resolving with Regular Expressions": getting-started/using-an-extension-pattern-resolver.md
+  - "How to...":
+      - "...deploy Wolpi using Docker/Podman": how-to/deploy-using-docker-podman.md
+      - "...deploy Wolpi using the JAR": how-to/deploy-using-the-jar.md
+      - "...deploy Wolpi on Kubernetes": how-to/deploy-on-kubernetes.md
+      - "...install extensions": how-to/install-extensions.md
+      - "...build containers with pre-installed extensions": how-to/build-containers-with-pre-installed-extensions.md
+      - "...monitor Wolpi": how-to/monitor-wolpi.md
+      - "...optimize the configuration for better performance": how-to/optimize-the-configuration-for-better-performance.md
+  - Concepts:
+      - "Request and Image Processing Pipeline": concepts/request-and-image-processing-pipeline.md
+      - "Extension Execution Model": concepts/extension-execution-model.md
+  - Reference:
+      - "Configuration": reference/configuration.md
+      - "Metrics": reference/metrics.md
+  - "Extension Development": extension-development.md
