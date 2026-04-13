@@ -346,8 +346,8 @@ You have access to an extension-specific logger instance via the `wolpi.logger` 
 four logging levels: `debug`, `info`, `warn` and `error`. Each logging method accepts a message string
 and an optional dictionary/object with key-value pairs that will be logged alongside the message for
 structured logging. The base logger is already scoped to your extension, i.e. it logs under
-`wolpi.extension.<extension-name>`, and `wolpi.logger.getLogger("foo")` creates a sub-logger under
-`wolpi.extension.<extension-name>.foo`.
+`dev.mdz.wolpi.extension.<extension-name>`, and `wolpi.logger.getLogger("foo")` creates a sub-logger under
+`dev.mdz.wolpi.extension.<extension-name>.foo`.
 
 See the [Runtime API Reference](#runtime-api-reference) for more details on the available logging APIs.
 
