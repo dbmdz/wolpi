@@ -9,6 +9,7 @@ import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
 import dev.mdz.wolpi.iiif.IIIFImageInfo;
@@ -388,6 +389,10 @@ public class ImageLoader {
             URI uri, @Nullable Map<String, String> headers, @Nullable ImageSize targetSize, VipsOption... options)
             throws IOException, InterruptedException {
         HttpResponse<InputStream> response = fetchFromHttp(uri, headers);
+        // NOTE: For all `newFrom*Stream` methods in vips-ffm, we know that the passed InputStream
+        //       is closed when the lifetime of the associated FFM Arena has ended. In our case, the
+        //       lifetime of this Arena is tied to the lifetime of the Request Scope in Spring, i.e.
+        //       we can be sure that we don't leak InputStreams across request-response cycles.
         if (targetSize == null) {
             return VImage.newFromStream(arena, response.body(), options);
         }
@@ -401,6 +406,8 @@ public class ImageLoader {
     }
 
     /// Fetches the remote HTTP source as an input stream for the current request.
+    ///
+    /// **Important:** Callers are responsible for closing the [InputStream] on the returned [HttpResponse]
     private HttpResponse<InputStream> fetchFromHttp(URI uri, @Nullable Map<String, String> headers)
             throws IOException, InterruptedException {
         var reqBuilder = HttpRequest.newBuilder().uri(uri);
@@ -412,7 +419,9 @@ public class ImageLoader {
         HttpResponse<InputStream> response =
                 httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() >= 400) {
-            throw new IOException("Failed to load image from %s: %d".formatted(uri, response.statusCode()));
+            log.warn("Failed to load image from '{}', received HTTP {}", uri, response.statusCode());
+            response.body().close();
+            throw new HttpStatusException("Failed to load image", response.statusCode(), null);
         }
         return response;
     }

@@ -1,6 +1,8 @@
 package dev.mdz.wolpi.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -9,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.HttpConfig;
+import dev.mdz.wolpi.exceptions.HttpStatusException;
+import dev.mdz.wolpi.image.ImageProcessor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -25,6 +29,9 @@ import org.springframework.test.web.servlet.MockMvc;
 public class ControllerTest {
     @MockitoSpyBean
     WolpiConfig wolpiConfig;
+
+    @MockitoSpyBean
+    ImageProcessor imageProcessor;
 
     @Autowired
     MockMvc mockMvc;
@@ -110,5 +117,16 @@ public class ControllerTest {
                                 "Location",
                                 containsString(
                                         "/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg")));
+    }
+
+    @Test
+    public void testHttpStatusExceptionIsReturnedToClient() throws Exception {
+        doThrow(new HttpStatusException("Failed to load image", 404, null))
+                .when(imageProcessor)
+                .processImage(any(), any());
+
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Failed to load image"));
     }
 }
