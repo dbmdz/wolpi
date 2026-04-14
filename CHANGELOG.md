@@ -7,9 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- `skippableHooks`, a performance hint API for extensions to declare which
+  hooks can be skipped for a request
+
 ### Fixed
 - Image size mismatches with JP2 sources by using the rounding method in
   libvips/openjpeg (→ ceil division for odd dimensions)
+- JavaScript extensions can now return class-based objects, not just plain
+  object literals
+- Installing JavaScript extensions from local directories now explicitly sets
+  `install-links=false` to avoid npm-version-dependent behavior
+- Extension logger names are now prefixed with `dev.mdz.wolpi` so configured
+  logging rules apply consistently
+- HTTP error responses from remote image sources are now passed through to
+  clients instead of being reported as HTTP 500 errors
+
+### Changed
+- Updated `org.springdoc:springdoc-openapi-starter-webmvc-api` to `3.0.3`
 
 ## [0.1.1] - 2026-03-31
 
