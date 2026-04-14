@@ -1046,7 +1046,7 @@ This is often unnecessary, since many extensions will likely only run their cust
 === "JavaScript"
 
     ```typescript
-    type HookName =
+    type ImageHookName =
         | 'preProcessImage'
         | 'preCrop'
         | 'preScale'
@@ -1056,7 +1056,7 @@ This is often unnecessary, since many extensions will likely only run their cust
 
     function skippableHooks(
         request: ImageApiRequest
-    ): HookName[] | Set<HookName>;
+    ): ImageHookName[] | Set<ImageHookName>;
     ```
 
 === "Python"
@@ -1064,7 +1064,7 @@ This is often unnecessary, since many extensions will likely only run their cust
     ```python
     from typing import Iterable, Literal
 
-    HookName = Literal[
+    ImageHookName = Literal[
         'preProcessImage',
         'preCrop',
         'preScale',
@@ -1075,7 +1075,7 @@ This is often unnecessary, since many extensions will likely only run their cust
 
     def skippable_hooks(
         request: ImageApiRequest
-    ) -> Iterable[HookName]: ...
+    ) -> Iterable[ImageHookName]: ...
     ```
 
 ### `authorize` Hook
@@ -1119,81 +1119,30 @@ this information for `info.json` requests.
 === "JavaScript"
 
     ```typescript
-    /// An image file in a file system accessible to Wolpi
-    interface FilesystemResolvedImage {
-        path: string;
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    /// A data blob containing the raw (still encoded) image data,
-    /// will be decoded by libvips
-    interface BinaryResolvedImage {
-        rawData: Uint8Array | ArrayBufferView;
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    /// An image accessible via HTTP(S), optionally with custom request
-    /// headers (e.g. for auth)
-    interface HttpResolvedImage {
-        url: string;
-        headers?: Record<string, string>;
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    /// A custom data source that libvips will read from using the
-    /// provided callbacks, can be more efficient for reading very
-    /// large images from e.g. databases or object storage systems
-    /// that do not support HTTP with byte-range requests
-    interface CustomSourceResolvedImage {
-        /// `whence` denotes the position to seek from:
-        ///  0 (beginning of file), 1 (current position)
-        ///  or 2 (end of file)
-        onSeek(offset: number, whence: number): number;
-
-        /// The returned buffer will be copied, feel free to
-        /// reuse internal buffers for subsequent calls
-        onRead(length: number): Uint8Array | ArrayBufferView;
-
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    type ResolvedImage =
-        FilesystemResolvedImage |
-        BinaryResolvedImage |
-        HttpResolvedImage |
-        CustomSourceResolvedImage;
-
-    /// Indicate that the source has not been modified since it was
-    /// last accessed by the client, determined from the caching headers
-    /// passed to the resolving hook
-    interface SourceNotModified {
-        notModified: true;
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    /// Set of metadata about the image that can be provided by the
-    /// resolver to avoid having Wolpi read the image just to extract
-    /// this information for `info.json` requests
+    /**
+     * Set of metadata about the image that can be provided by the
+     * resolver to avoid having Wolpi read the image just to extract
+     * this information for `info.json` requests
+     */
     interface ImageInfo {
         nativeSize: {
             width: number;
             height: number;
         };
 
-        /// Sizes that are directly encoded in the image, e.g. JPEG2k
-        /// or TIFF layers.
+        /**
+         * Sizes that are directly encoded in the image, e.g. JPEG2k
+         * or TIFF layers.
+         */
         sizes?: Array<{
             width: number;
             height: number;
         }>;
 
-        /// Tile sizes that are directly encoded in the image, e.g.
-        /// JPEG2k or TIFF tiles.
+        /**
+         * Tile sizes that are directly encoded in the image, e.g.
+         * JPEG2k or TIFF tiles.
+         */
         tileSizes?: Array<{
             width: number;
             height: number;
@@ -1201,16 +1150,93 @@ this information for `info.json` requests.
         }>;
     }
 
-    type ImageSource =
-        ResolvedImage |
+    /** Optional HTTP cache metadata associated with a resolved image. */
+    interface CacheInfo {
+        eTag?: string;
+
+        /** Last-modified timestamp as a JS `Date` or an ISO-8601 string. */
+        lastModified?: Date | string;
+    }
+
+    /** An image file in a file system accessible to Wolpi */
+    interface FilesystemResolvedImage {
+        path: string;
+
+        imageInfo?: ImageInfo;
+        cacheInfo?: CacheInfo;
+    }
+
+    /**
+     * A data blob containing the raw (still encoded) image data,
+     * will be decoded by libvips
+     */
+    interface BinaryResolvedImage {
+        rawData: Uint8Array | ArrayBufferView;
+
+        imageInfo?: ImageInfo;
+        cacheInfo?: CacheInfo;
+    }
+
+    /**
+     *  An image accessible via HTTP(S), optionally with custom request
+     *  headers (e.g. for auth)
+     */
+    interface HttpResolvedImage {
+        url: string;
+        headers?: Record<string, string>;
+
+        imageInfo?: ImageInfo;
+        cacheInfo?: CacheInfo;
+    }
+
+    /**
+     * A custom data source that libvips will read from using the
+     * provided callbacks, can be more efficient for reading very
+     * large images from e.g. databases or object storage systems
+     * that do not support HTTP.
+     */
+    interface CustomSourceResolvedImage {
+        /**
+         * `whence` denotes the position to seek from:
+         *  0 (beginning of file), 1 (current position)
+         * or 2 (end of file)
+         */
+        onSeek(offset: number, whence: number): number;
+
+        /**
+         * The returned buffer will be copied, feel free to
+         * reuse internal buffers for subsequent calls
+         */
+        onRead(length: number): Uint8Array | ArrayBufferView;
+
+        imageInfo?: ImageInfo;
+        cacheInfo?: CacheInfo;
+    }
+
+    /**
+     * Indicate that the source has not been modified since it was
+     * last accessed by the client, determined from the caching headers
+     */ passed to the resolving hook
+    interface SourceNotModified {
+        notModified: true;
+        imageInfo?: ImageInfo;
+        cacheInfo?: CacheInfo;
+    }
+
+    /** Union type of all supported resolving types */
+    type ResolvedImage =
+        FilesystemResolvedImage |
+        BinaryResolvedImage |
+        HttpResolvedImage |
+        CustomSourceResolvedImage |
         SourceNotModified;
 
-    /// Finally, the resolve hook itself
+    /** Finally, the resolve hook itself */
     function resolve(
         identifier: string,
         clientETag?: string,
         clientLastModified?: string
-    ): ImageSource | null | undefined;
+    ): ResolvedImage | null | undefined;
     ```
 
 === "Python"
@@ -1242,21 +1268,21 @@ this information for `info.json` requests.
         lastModified: NotRequired[datetime.datetime | str]
 
     # An image file in a file system accessible to Wolpi
-    class FilesystemImageSource(TypedDict):
+    class FilesystemResolvedImage(TypedDict):
         path: str
         imageInfo: NotRequired[ImageInfo]
         cacheInfo: NotRequired[CacheInfo]
 
     # A data blob containing the raw (still encoded) image data,
     # will be decoded by libvips
-    class BinaryImageSource(TypedDict):
+    class BinaryResolvedImage(TypedDict):
         rawData: bytes | bytearray
         imageInfo: NotRequired[ImageInfo]
         cacheInfo: NotRequired[CacheInfo]
 
     # An image accessible via HTTP(S), optionally with custom request
     # headers (e.g. for auth)
-    class HttpImageSource(TypedDict):
+    class HttpResolvedImage(TypedDict):
         url: str
         headers: NotRequired[Mapping[str, str]]
         imageInfo: NotRequired[ImageInfo]
@@ -1267,7 +1293,7 @@ this information for `info.json` requests.
     # large images from e.g. databases or object storage systems
     # that do not support HTTP with byte-range requests
     # This is best returned as an actual object, not a dict.
-    class CustomImageSource(Protocol):
+    class CustomSourceResolvedImage(Protocol):
 
         # `whence` denotes the position to seek from: 0 (beginning of file),
         # 1 (current position) or 2 (end of file)
@@ -1289,11 +1315,11 @@ this information for `info.json` requests.
         imageInfo: NotRequired[ImageInfo]
         cacheInfo: NotRequired[CacheInfo]
 
-    type ImageSource = Union[
-        FilesystemImageSource,
-        BinaryImageSource,
-        HttpImageSource,
-        CustomImageSource,
+    type ResolvedImage = Union[
+        FilesystemResolvedImage,
+        BinaryResolvedImage,
+        HttpResolvedImage,
+        CustomSourceResolvedImage,
         SourceNotModified
     ]
 
@@ -1301,7 +1327,7 @@ this information for `info.json` requests.
         identifier: str,
         client_etag: str | None,
         client_last_modified: str | None
-    ) -> ImageSource | None: ...
+    ) -> ResolvedImage | None: ...
     ```
 
 If there are multiple extensions that implement the `resolve` hook, Wolpi will call them in parallel until one of them returns a valid result. If none of them do, Wolpi falls back to resolving the identifier against the configured filesystem image base directory.
@@ -1488,7 +1514,7 @@ to indicate that no encoding took place.
 
     ```typescript
     interface EncodedImage {
-        data: Uint8Array | ArrayBufferView | JavaByteBuffer; // (1)!
+        data: Uint8Array | ArrayBufferView | ByteBuffer; // (1)!
         contentType: string;
         extraHeaders?: Record<string, string[]>;
     }
@@ -1509,13 +1535,13 @@ to indicate that no encoding took place.
     ): EncodedImage | null | undefined;
     ```
 
-    1.  `JavaByteBuffer` is the Java type [`java.nio.ByteBuffer`](https://docs.oracle.com/javase/8/docs/api/java/nio/ByteBuffer.html)
+    1.  `ByteBuffer` is the Java type [`java.nio.ByteBuffer`](https://docs.oracle.com/javase/8/docs/api/java/nio/ByteBuffer.html)
 
 === "Python"
 
     ```python
     class EncodedImage(TypedDict):
-        data: bytes | bytearray | Any
+        data: bytes | bytearray | ByteBuffer
         contentType: str
         extraHeaders: NotRequired[Mapping[str, Sequence[str]]]
 
@@ -1535,7 +1561,7 @@ to indicate that no encoding took place.
 === "JavaScript"
 
     ```typescript
-    interface WolpiContext {  // (1)!
+    interface ExtensionGuestContext {  // (1)!
         // Configuration object/dict for the extension, if present
         config: Record<string, any> | undefined;
         // Version specifier for Wolpi
@@ -1543,31 +1569,31 @@ to indicate that no encoding took place.
         // Version specifier for the extension
         extensionVersion: string;
         // Logger instance for logging messages
-        logger: WolpiLogger;
+        logger: ExtensionLogger;
         // Metrics object to register custom metrics
-        metrics: WolpiMetrics;
+        metrics: ExtensionMetrics;
         // A memory arena that can be passed to vips-ffm APIs for creating
         // new images, should be treated as an opaque handle that is only
         // forwarded to vips-ffm, __do not__ store a reference to it or try to
         // manipulate it directly
-        vipsArena: unknown;
+        vipsArena: Arena;
         // This object provides parsing methods for all parts of the IIIF
         // Image API request, use this if you want to implement custom behavior
         // based on the official syntax
         imageRequestParser: ImageRequestParser;
-        httpClient: JavaHttpClient;  // (2)!
+        httpClient: HttpClient;  // (2)!
         baseUri?: string;
     }
 
-    interface WolpiLogger {
-        getLogger(name: string): WolpiLogger;
+    interface ExtensionLogger {
+        getLogger(name: string): ExtensionLogger;
         debug(message: string, keyVals?: { [key: string]: unknown }): void;
         info(message: string, keyVals?: { [key: string]: unknown }): void;
         warn(message: string, keyVals?: { [key: string]: unknown }): void;
         error(message: string, keyVals?: { [key: string]: unknown }): void;
     }
 
-    interface WolpiMetrics {
+    interface ExtensionMetrics {
         counter(
             name: string,
             unit?: string,
@@ -1593,12 +1619,7 @@ to indicate that no encoding took place.
     }
 
     interface ImageRequestParser {
-        parseRegion(spec: string, sourceSize: ImageSize): {
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-        };
+        parseRegion(spec: string, sourceSize: ImageSize): CropRectangle;
         parseSize(version: IIIFVersion | 'v2' | 'v3', spec: string, sourceSize: ImageSize): {
             width: number;
             height: number;
@@ -1613,9 +1634,9 @@ to indicate that no encoding took place.
 
     ```
 
-    1.  In JavaScript, the `wolpi` object of type `WolpiContext` is
+    1.  In JavaScript, the `wolpi` object of type `ExtensionGuestContext` is
         available in the global scope for all extensions.
-    2.  `JavaHttpClient` is the Java type [`java.net.http.HttpClient`](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.html)
+    2.  `HttpClient` is the Java type [`java.net.http.HttpClient`](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.html)
 
 === "Python"
 
@@ -1625,10 +1646,10 @@ to indicate that no encoding took place.
     import wolpi
     ```
 
-    The module has the following structure, with the `WolpiContext` class representing the shape of the `wolpi` object imported from the module:
+    The module has the following structure, with the `ExtensionGuestContext` class representing the shape of the `wolpi` object imported from the module:
 
     ```python
-    class WolpiContext:  # (1)!
+    class ExtensionGuestContext:  # (1)!
         # Configuration object/dict for the extension, if present
         config: dict[str, Any] | None
         # Version specifier for Wolpi
@@ -1636,29 +1657,29 @@ to indicate that no encoding took place.
         # Version specifier for the extension
         extensionVersion: str
         # Logger instance for logging messages
-        logger: WolpiLogger
+        logger: ExtensionLogger
         # Metrics object to register custom metrics
-        metrics: WolpiMetrics
+        metrics: ExtensionMetrics
         # A memory arena that can be passed to vips-ffm APIs for creating
         # new images, should be treated as an opaque handle that is only
         # forwarded to vips-ffm, __do not__ store a reference to it or try to
         # manipulate it directly
-        vipsArena: object
+        vipsArena: Arena
         # This object provides parsing methods for all parts of the IIIF
         # Image API request, use this if you want to implement custom behavior
         # based on the official syntax
         imageRequestParser: ImageRequestParser
-        httpClient: JavaHttpClient
+        httpClient: HttpClient
         baseUri: str | None
 
-    class WolpiLogger:
-        def getLogger(self, name: str) -> WolpiLogger: ...
+    class ExtensionLogger:
+        def getLogger(self, name: str) -> ExtensionLogger: ...
         def debug(self, message: str, keyVals: Mapping[str, Any] | None = None) -> None: ...
         def info(self, message: str, keyVals: Mapping[str, Any] | None = None) -> None: ...
         def warn(self, message: str, keyVals: Mapping[str, Any] | None = None) -> None: ...
         def error(self, message: str, keyVals: Mapping[str, Any] | None = None) -> None: ...
 
-    class WolpiMetrics:
+    class ExtensionMetrics:
         def counter(
             self,
             name: str,
@@ -1698,13 +1719,13 @@ to indicate that no encoding took place.
         def start(self) -> RunningTimer: ...
 
     class ImageRequestParser:
-        def parseRegion(self, spec: str, source_size: ImageSize) -> CropRegion: ...
+        def parseRegion(self, spec: str, source_size: ImageSize) -> CropRectangle: ...
         def parseSize(self, version: IIIFVersion | Literal['v2', 'v3'], spec: str, source_size: ImageSize) -> ImageSize: ...
         def parseRotation(self, spec: str) -> Rotation: ...
         def parseQuality(self, spec: str) -> Literal['color', 'gray', 'bitonal']: ...
         def toCanonicalForm(self, request: ImageApiRequest, source_size: ImageSize) -> ImageApiRequest | None: ...
 
-    class CropRegion:
+    class CropRectangle:
         x: int
         y: int
         width: int
