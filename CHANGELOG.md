@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-links=false` to avoid npm-version-dependent behavior
 - Extension logger names are now prefixed with `dev.mdz.wolpi` so configured
   logging rules apply consistently
+- Filesystem-resolved images now get `cacheInfo` populated automatically
+  when extensions omit it, enabling conditional requests based on file
+  metadata
 - HTTP error responses from remote image sources are now passed through to
   clients instead of being reported as HTTP 500 errors
 

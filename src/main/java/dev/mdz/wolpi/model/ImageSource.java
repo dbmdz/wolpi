@@ -3,12 +3,11 @@ package dev.mdz.wolpi.model;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
-///
 public final class ImageSource {
 
     private final String identifier;
     private final ResolvedImage resolvedImage;
-    private final @Nullable CacheInfo cacheInfo;
+    private @Nullable CacheInfo cacheInfo;
 
     private @Nullable ImageInfo imageInfo;
 
@@ -45,6 +44,10 @@ public final class ImageSource {
 
     public @Nullable CacheInfo cacheInfo() {
         return cacheInfo;
+    }
+
+    public void setCacheInfo(CacheInfo cacheInfo) {
+        this.cacheInfo = cacheInfo;
     }
 
     @Override

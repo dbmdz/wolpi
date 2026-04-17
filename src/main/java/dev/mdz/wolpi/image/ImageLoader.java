@@ -144,6 +144,19 @@ public class ImageLoader {
         if (source == null) {
             source = this.resolveFromFilesystem(identifier);
         }
+        if (source == null) {
+            return null;
+        }
+        if (source.cacheInfo() == null && source.resolvedImage() instanceof FilesystemResolvedImage(Path path)) {
+            try {
+                source.setCacheInfo(CacheInfo.fromPath(path));
+            } catch (IOException e) {
+                log.warn(
+                        "Failed to determine cache information from file path '{}' for {}",
+                        path.toAbsolutePath(),
+                        identifier);
+            }
+        }
         return source;
     }
 
@@ -152,11 +165,12 @@ public class ImageLoader {
     private @Nullable ImageSource resolveFromFilesystem(String identifier) {
         Path imagePath = imageBaseDirectory.resolve(identifier);
         if (imagePath.toFile().exists()) {
-            CacheInfo cacheInfo = new CacheInfo(
-                    null,
-                    imagePath.toFile().lastModified() > 0
-                            ? Instant.ofEpochMilli(imagePath.toFile().lastModified())
-                            : null);
+            CacheInfo cacheInfo = null;
+            try {
+                cacheInfo = CacheInfo.fromPath(imagePath);
+            } catch (IOException e) {
+                log.warn("Failed to determine cache info from file path '{}' for {}", imagePath, identifier);
+            }
             return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null, cacheInfo);
         }
         return null;
