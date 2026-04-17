@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when extensions omit it, enabling conditional requests based on file
   metadata
 - HTTP error responses from remote image sources are now passed through to
-  clients instead of being reported as HTTP 500 errors
+  clients instead of being reported as HTTP 500 errors, and conditional
+  requests against HTTP-resolved images now forward `304 Not Modified`
+  responses and cache validators correctly
 
 ### Changed
 - Updated `org.springdoc:springdoc-openapi-starter-webmvc-api` to `3.0.3`

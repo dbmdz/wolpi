@@ -8,9 +8,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -24,18 +26,36 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /// handling for known exception types.
 @ControllerAdvice
 public class WolpiErrorHandler extends ResponseEntityExceptionHandler {
+    private static final Set<String> FORWARDED_HEADERS = Set.of(HttpHeaders.ETAG, HttpHeaders.LAST_MODIFIED);
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final boolean logDetails;
+    private final boolean corsEnabled;
 
     public WolpiErrorHandler(WolpiConfig config) {
         this.logDetails = config.logging() == null || config.logging().logRequestDetailsOnCrash();
+        this.corsEnabled = config.iiif().features().cors();
     }
 
     @ExceptionHandler(HttpStatusException.class)
-    public ResponseEntity<Map<String, Object>> handleHttpStatusError(HttpStatusException ex) {
+    public ResponseEntity<?> handleHttpStatusError(HttpStatusException ex, HttpServletRequest req) {
+        if (ex.responseHeaders() != null) {
+            // Forward some headers from the backend response to the client (ETag/Last-Modified)
+            HttpHeaders headers = new HttpHeaders();
+            FORWARDED_HEADERS.stream()
+                    .filter(h -> ex.responseHeaders().containsHeader(h))
+                    .forEach(h -> headers.set(h, ex.responseHeaders().getFirst(h)));
+            // Set CORS on the response if activated
+            if (corsEnabled) {
+                headers.setAccessControlAllowOrigin(java.util.Optional.ofNullable(req.getHeader(HttpHeaders.ORIGIN))
+                        .orElse("*"));
+            }
+            return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode()))
+                    .headers(headers)
+                    .body(null);
+        }
         Map<String, Object> body =
                 ex.details() != null ? ex.details() : Collections.singletonMap("message", ex.message());
         return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode())).body(body);

@@ -36,11 +36,15 @@ import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,11 +53,12 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.util.MultiValueMap;
 
 /// ImageLoader is responsible for resolving and loading images from various sources.
 @Component
@@ -70,7 +75,10 @@ public class ImageLoader {
 
     /// Threshold for the pixel difference between to subsequent layers, below means "likely pyramidal"
     /// Taken from libvips `resample/thumbnail.c`, L299-304 to match libvips vips_thumbnail logic
-    public static final int PYRAMID_PIXEL_THRESHOLD = 5;
+    private static final int PYRAMID_PIXEL_THRESHOLD = 5;
+
+    private static final DateTimeFormatter IF_MODIFIED_SINCE_FORMATTER =
+            DateTimeFormatter.RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC);
 
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -155,6 +163,28 @@ public class ImageLoader {
                         "Failed to determine cache information from file path '{}' for {}",
                         path.toAbsolutePath(),
                         identifier);
+            }
+        }
+        if (source.resolvedImage() instanceof HttpResolvedImage(URI url, @Nullable Map<String, String> httpHeaders)) {
+            // Add HTTP caching headers, if not already set by the extension
+            if (httpHeaders == null) {
+                httpHeaders = new HashMap<>();
+            }
+            HttpHeaders parsedHeaders = new HttpHeaders(MultiValueMap.fromSingleValue(httpHeaders));
+            Map<String, String> extraHeaders = new HashMap<>();
+            if (eTag != null && !parsedHeaders.containsHeader("If-None-Match")) {
+                extraHeaders.put("If-None-Match", eTag);
+            }
+            if (lastModified != null && !parsedHeaders.containsHeader("If-Modified-Since")) {
+                extraHeaders.put("If-Modified-Since", IF_MODIFIED_SINCE_FORMATTER.format(lastModified));
+            }
+            if (!extraHeaders.isEmpty()) {
+                extraHeaders.putAll(httpHeaders);
+                return new ImageSource(
+                        source.identifier(),
+                        new HttpResolvedImage(url, extraHeaders),
+                        source.imageInfo(),
+                        source.cacheInfo());
             }
         }
         return source;
@@ -402,7 +432,25 @@ public class ImageLoader {
     private VImage loadFromHttp(
             URI uri, @Nullable Map<String, String> headers, @Nullable ImageSize targetSize, VipsOption... options)
             throws IOException, InterruptedException {
-        HttpResponse<InputStream> response = fetchFromHttp(uri, headers);
+        var reqBuilder = HttpRequest.newBuilder().uri(uri);
+        if (headers != null) {
+            headers.forEach(reqBuilder::header);
+        }
+
+        HttpResponse<InputStream> response = httpClient.send(reqBuilder.build(), BodyHandlers.ofInputStream());
+        if (response.statusCode() == 304 || response.statusCode() >= 400) {
+            if (response.statusCode() != 304) {
+                log.warn("Failed to load image from '{}', received HTTP {}", uri, response.statusCode());
+            }
+            response.body().close();
+            HttpHeaders responseHeaders = new HttpHeaders();
+            if (response.headers() != null) {
+                responseHeaders = new HttpHeaders(
+                        MultiValueMap.fromMultiValue(response.headers().map()));
+            }
+            throw new HttpStatusException("Failed to load image", response.statusCode(), null, responseHeaders);
+        }
+
         // NOTE: For all `newFrom*Stream` methods in vips-ffm, we know that the passed InputStream
         //       is closed when the lifetime of the associated FFM Arena has ended. In our case, the
         //       lifetime of this Arena is tied to the lifetime of the Request Scope in Spring, i.e.
@@ -417,27 +465,6 @@ public class ImageLoader {
         thumbOptions[options.length] = VipsOption.Int("height", targetSize.height());
         thumbOptions[options.length + 1] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
         return VImage.thumbnailSource(arena, src, targetSize.width(), thumbOptions);
-    }
-
-    /// Fetches the remote HTTP source as an input stream for the current request.
-    ///
-    /// **Important:** Callers are responsible for closing the [InputStream] on the returned [HttpResponse]
-    private HttpResponse<InputStream> fetchFromHttp(URI uri, @Nullable Map<String, String> headers)
-            throws IOException, InterruptedException {
-        var reqBuilder = HttpRequest.newBuilder().uri(uri);
-        if (headers != null) {
-            reqBuilder = reqBuilder.headers(headers.entrySet().stream()
-                    .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                    .toArray(String[]::new));
-        }
-        HttpResponse<InputStream> response =
-                httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
-        if (response.statusCode() >= 400) {
-            log.warn("Failed to load image from '{}', received HTTP {}", uri, response.statusCode());
-            response.body().close();
-            throw new HttpStatusException("Failed to load image", response.statusCode(), null);
-        }
-        return response;
     }
 
     ///  Get image metadata from a loaded VImage.

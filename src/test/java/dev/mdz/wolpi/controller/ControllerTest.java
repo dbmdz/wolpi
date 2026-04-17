@@ -12,13 +12,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.HttpConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
+import dev.mdz.wolpi.image.ImageLoader;
 import dev.mdz.wolpi.image.ImageProcessor;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +35,9 @@ public class ControllerTest {
 
     @MockitoSpyBean
     ImageProcessor imageProcessor;
+
+    @MockitoSpyBean
+    ImageLoader imageLoader;
 
     @Autowired
     MockMvc mockMvc;
@@ -128,5 +134,29 @@ public class ControllerTest {
         mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Failed to load image"));
+    }
+
+    @Test
+    public void testImageUpstreamNotModifiedIsReturnedToClient() throws Exception {
+        HttpHeaders upstreamHeaders = new HttpHeaders();
+        upstreamHeaders.setETag("\"upstream-etag\"");
+        upstreamHeaders.setVary(List.of("Accept"));
+        doThrow(new HttpStatusException("Image not modified", 304, null, upstreamHeaders))
+                .when(imageProcessor)
+                .processImage(any(), any());
+
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg"))
+                .andExpect(status().isNotModified())
+                .andExpect(header().string("ETag", "\"upstream-etag\""));
+    }
+
+    @Test
+    public void testInfoJsonUpstreamNotFoundIsReturnedToClient() throws Exception {
+        doThrow(new HttpStatusException("Failed to load image", 404, null, new HttpHeaders()))
+                .when(imageLoader)
+                .getImageInfo(any());
+
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/info.json"))
+                .andExpect(status().isNotFound());
     }
 }
