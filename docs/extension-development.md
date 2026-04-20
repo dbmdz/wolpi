@@ -1118,7 +1118,7 @@ this information for `info.json` requests.
 
 If you return a `FileSystemResolvedImage`, Wolpi will automatically fill the `cacheInfo` with the
 modification date of the resolved file, if it is not already set by your extension. If the image has
-`cacheInfo` set (either automatically or manually), Wolpi will automatically check it against the
+`cacheInfo` set (either by Wolpi or by the extension), Wolpi will automatically check it against the
 incoming request headers (`If-Modified-Since` and `If-None-Match`) and decide if it can return a
 HTTP 304 "Not Modified" response. If you want to override this behavior, you can return a
 `SourceNotModified` to force a HTTP 304 response.
