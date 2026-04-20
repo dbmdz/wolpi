@@ -1,6 +1,6 @@
 # Extension Execution Model
 
-## Extenstion Pooling and Lifecycle
+## Extension Pooling and Lifecycle
 Extensions in Wolpi are kept in a pool after they have been loaded, so that they can be reused for
 multiple subsequent requests without having to run expensive initialization code for each request.
 Wolpi ensures that **only one request is processed by any one extension instance at a time**, so that
