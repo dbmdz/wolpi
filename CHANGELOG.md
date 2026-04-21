@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Determining available image sizes from pyramidal TIFs that use SubIFDs to
   encode their layers was broken due to a flipped predicate.
+- Encoding into bitonal PNGs and GIFs. Was broken due to a modification of an
+  immutable container. We now copy into a mutable container before appending
+  our custom option to the default options for the format.
 
 ### Security
 - Prevent path traversal attacks through the fallback image resolver

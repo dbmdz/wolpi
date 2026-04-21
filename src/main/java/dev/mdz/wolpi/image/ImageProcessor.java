@@ -453,6 +453,8 @@ public class ImageProcessor {
             // Force 1bit output for bitonal images in PNG and GIF formats
             if (image.getInt("interpretation") == VipsInterpretation.INTERPRETATION_B_W.getRawValue()) {
                 if (suffix.equals("png") || suffix.equals("gif")) {
+                    // Create a mutable copy of the options we can modify
+                    options = new ArrayList<>(options);
                     options.add(VipsOption.Int("bitdepth", 1));
                 } else {
                     // Other formats do not perform binarization themselves, so we need to threshold the
