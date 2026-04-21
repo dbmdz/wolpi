@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- Determining available image sizes from pyramidal TIFs that use SubIFDs to
+  encode their layers was broken due to a flipped predicate.
+
 ## [0.1.2] - 2026-04-21
 
 ### Added

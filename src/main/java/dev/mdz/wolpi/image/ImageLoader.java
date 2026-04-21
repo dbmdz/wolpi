@@ -511,7 +511,7 @@ public class ImageLoader {
         ImageSize nativeSize = new ImageSize(image.getWidth(), image.getHeight());
         Integer numPages = image.getInt("n-pages");
         Integer numSubIFDs = image.getInt("n-subifds");
-        if (numPages == null && numSubIFDs != null) {
+        if (numPages == null && numSubIFDs == null) {
             return List.of();
         }
         String paramName = numPages != null ? "page" : "subifd";
