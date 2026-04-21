@@ -8,7 +8,7 @@
   </parent>
   <groupId>dev.mdz</groupId>
   <artifactId>wolpi</artifactId>
-  <version>0.1.2-SNAPSHOT</version>
+  <version>0.1.2</version>
   <name>wolpi</name>
   <description>Wolpi is an extensible IIIF Image Server based on libvips</description>
   <url>https://dbmdz.github.io/wolpi</url>
