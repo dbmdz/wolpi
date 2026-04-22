@@ -19,7 +19,7 @@ in a directory structure where the first two characters of the UUID define the
 first-level subdirectory, and the next two characters define the second-level
 subdirectory, like this:
 
-- Identifier: `bf46ad54-12ee-4943-9be5-d121d03b8794
+- Identifier: `bf46ad54-12ee-4943-9be5-d121d03b8794`
 - Path: `/images/bf/46/ad54-12ee-4943-9be5-d121d03b8794`
 
 Then the regular expression pattern to match the identifier would be something like
