@@ -38,7 +38,7 @@ from a pool) that you can fine-tune with these settings:
 
 - `min-threads`: Minimum number of threads in the server thread pool, defaults to 10
 - `max-threads`: Maximum number of threads in the server thread pool, defaults to 200
-- `max-requests-accepted`: Maximum number of requests the server will accept and queue, if the queue
+- `max-requests-accepted`: Maximum number of requests the server will accept and queue. If the queue
   is full, requests will be rejected with a 503 error. Defaults to 100.
 
 ## Logging configuration
@@ -193,13 +193,13 @@ You can limit the image formats that users can request through the `iiif.feature
 [iiif-spec-exts]: https://iiif.io/api/image/3.0/#45-format
 
 
-### Extension Configuration
+## Extension Configuration
 
 For details on how extensions are configured, refer to the [extensions section in the documentation][exts-doc].
 
 [exts-doc]: ../how-to/install-extensions.md#configuration
 
-### Extension Packaging Configuration
+## Extension Packaging Configuration
 
 When installing extension packages (and extension validation dependencies), wolpi needs access to Python
 and JavaScript package managers. By default, these are discovered on the system's `PATH` (`graalpy` or `python` for Python, `npm` for JavaScript), but users can override these through the `packaging` section, as well

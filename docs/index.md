@@ -10,7 +10,7 @@ different use cases and workflows.
 ## Configuration
 Through the YAML-based configuration, you can customize various aspects of Wolpi's behavior, such as:
 
-- vips image encoding options (e.g. JPEG quality, WebP presets, etc)
+- vips image encoding options (e.g. JPEG quality, WebP presets, etc.)
 - enable/disable optional IIIF Image API features and limits, to tailor Wolpi to your use cases, the
   IIIF  Image API compliance level and `info.json` will be automatically adjusted accordingly
 
@@ -24,17 +24,17 @@ Wolpi can be extended using custom extensions written in JavaScript or Python. T
 be used to customize various aspects of Wolpi's behavior (in ways that do not violate the IIIF
 Image API specification):
 
-- Authorization (e.g. to integrate with your organization's [IIIF Authorization Flow API][auth])
-  implementation
+- Authorization (e.g. to integrate with your organization's [IIIF Authorization Flow API][auth]
+  implementation)
 - Resolving, with the option to include image metadata from an external source to avoid hitting
   the filesystem for `info.json` requests
 - Augment the `info.json` response, e.g. to include reference to [additional IIIF services][extra-services]
 - Image operations, to implement custom image transformations or filters that go beyond the IIIF
   Image API specification:
-    * Preprocess images before they are processed (e.g. for watermarking)
+    * Preprocess images (e.g. for watermarking)
     * Override/extend cropping, scaling, rotation and quality transformations (e.g. to implement
       custom smart cropping algorithms or image filters)
-    * Implement custom output formats or customize the encodinging of existing formats
+    * Implement custom output formats or customize the encoding of existing formats
 
 Refer to the [extension usage documentation][exts-usage-doc] to learn how to install and configure
 existing Wolpi extensions. To learn how to write your own extensions, refer to the

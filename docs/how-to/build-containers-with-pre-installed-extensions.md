@@ -40,7 +40,7 @@ container that is much faster to start up.
     Conditions][gftc-license], which permits use (including for commercial purposes) and free
     redistribution but restricts selling the JDK distribution. You're fine using the container in
     production (even commercially, i.e. running a SaaS service), but if you want to sell the
-    container image itself (e.g. as part of a commercial enterprise contianer
+    container image itself (e.g. as part of a commercial enterprise container
     subscription service), you need to get a commercial GraalVM license from Oracle.
 
     [gftc-license]: https://www.oracle.com/downloads/licenses/graal-free-license.html

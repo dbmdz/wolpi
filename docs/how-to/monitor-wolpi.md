@@ -74,7 +74,7 @@ also be included as separate fields in the JSON object.
     using e.g. Nginx or Traefik in front of Wolpi to provide this functionality. If you really
     need access logs from Wolpi itself, you can use the Spring Boot configuration options for
     [Tomcat Access Logging][tomcat-access-logging]. Enable it via the [`spring` section of your
-    configuration.][wolpi-spring-cfg]. Note that this will log into a separate file, detached from
+    configuration][wolpi-spring-cfg]. Note that this will log into a separate file, detached from
     the regular logging system.
 
 [tomcat-access-logging]: https://docs.spring.io/spring-boot/how-to/webserver.html#howto.webserver.configure-access-logs

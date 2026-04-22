@@ -50,12 +50,11 @@ wolpi_extensions_pool_events{event="created"} - wolpi_extensions_pool_events{eve
 
 **Tuning Tips**:
 
-- If `pool_waiting` is frequently non-zero, increase `max-total` to allow more concurrent contexts.
+- If `wolpi_extensions_pool{state="client_waiting"}` is frequently non-zero, increase `extension-pool.max-total` to allow more concurrent contexts.
   This is a trade-off, since more contexts use more memory
-- If `created` keeps increasing during normal operation, your `min-idle` is too low or
-  `eviction-timeout` is too short
-- Monitor `active` during peak load to set appropriate `min-idle` and `max-idle` values
-- High `destroyed` rate indicates aggressive eviction - consider increasing `eviction-timeout`
+- If `wolpi_extensions_pool_events{event="created"}` keeps increasing during normal operation, your `extension-pool.min-idle` is too low or `extension-pool.eviction-timeout` is too short
+- Monitor `wolpi_extensions_pool{state="active"}` during peak load to set appropriate `extension-pool.min-idle` and `extension-pool.max-idle` values
+- High `wolpi_extensions_pool_events{event="destroyed"}` rate indicates aggressive eviction - consider increasing `extension-pool.eviction-timeout`
 
 See the [extension pool configuration documentation][pool-config] for details on these parameters.
 
