@@ -38,7 +38,7 @@ class ImageRequestParserTest {
         IIIFConfig.Limits limits = new IIIFConfig.Limits(0, 0, 0L);
         IIIFConfig.Qualities qualities = new IIIFConfig.Qualities("color", List.of("color", "gray", "bitonal"));
         IIIFConfig.Formats formats = new IIIFConfig.Formats(List.of("jpg", "png"), List.of("jpg"));
-        IIIFConfig iiifConfig = new IIIFConfig(false, limits, features, qualities, formats);
+        IIIFConfig iiifConfig = new IIIFConfig(limits, features, qualities, formats);
         wolpiConfig = new WolpiConfig(null, null, null, null, iiifConfig, null, null, null, null, null, null, null);
         parser = new ImageRequestParser(wolpiConfig);
     }
@@ -57,11 +57,7 @@ class ImageRequestParserTest {
                 originalFeatures.canonicalRedirect(),
                 originalFeatures.baseUriRedirect());
         IIIFConfig newIIIFConfig = new IIIFConfig(
-                originalIIIFConfig.restrictToSizes(),
-                originalIIIFConfig.limits(),
-                newFeatures,
-                originalIIIFConfig.qualities(),
-                originalIIIFConfig.formats());
+                originalIIIFConfig.limits(), newFeatures, originalIIIFConfig.qualities(), originalIIIFConfig.formats());
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
@@ -91,11 +87,7 @@ class ImageRequestParserTest {
                 originalFeatures.canonicalRedirect(),
                 originalFeatures.baseUriRedirect());
         IIIFConfig newIIIFConfig = new IIIFConfig(
-                originalIIIFConfig.restrictToSizes(),
-                originalIIIFConfig.limits(),
-                newFeatures,
-                originalIIIFConfig.qualities(),
-                originalIIIFConfig.formats());
+                originalIIIFConfig.limits(), newFeatures, originalIIIFConfig.qualities(), originalIIIFConfig.formats());
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
@@ -125,11 +117,7 @@ class ImageRequestParserTest {
                 originalFeatures.canonicalRedirect(),
                 originalFeatures.baseUriRedirect());
         IIIFConfig newIIIFConfig = new IIIFConfig(
-                originalIIIFConfig.restrictToSizes(),
-                originalIIIFConfig.limits(),
-                newFeatures,
-                originalIIIFConfig.qualities(),
-                originalIIIFConfig.formats());
+                originalIIIFConfig.limits(), newFeatures, originalIIIFConfig.qualities(), originalIIIFConfig.formats());
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
@@ -148,11 +136,7 @@ class ImageRequestParserTest {
     private ImageRequestParser parserWithLimits(IIIFConfig.Limits limits) {
         IIIFConfig originalIIIFConfig = wolpiConfig.iiif();
         IIIFConfig newIIIFConfig = new IIIFConfig(
-                originalIIIFConfig.restrictToSizes(),
-                limits,
-                originalIIIFConfig.features(),
-                originalIIIFConfig.qualities(),
-                originalIIIFConfig.formats());
+                limits, originalIIIFConfig.features(), originalIIIFConfig.qualities(), originalIIIFConfig.formats());
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),
@@ -171,11 +155,7 @@ class ImageRequestParserTest {
     private ImageRequestParser parserWithQualities(IIIFConfig.Qualities qualities) {
         IIIFConfig originalIIIFConfig = wolpiConfig.iiif();
         IIIFConfig newIIIFConfig = new IIIFConfig(
-                originalIIIFConfig.restrictToSizes(),
-                originalIIIFConfig.limits(),
-                originalIIIFConfig.features(),
-                qualities,
-                originalIIIFConfig.formats());
+                originalIIIFConfig.limits(), originalIIIFConfig.features(), qualities, originalIIIFConfig.formats());
         return new ImageRequestParser(new WolpiConfig(
                 wolpiConfig.dataDirectory(),
                 wolpiConfig.imageBaseDir(),

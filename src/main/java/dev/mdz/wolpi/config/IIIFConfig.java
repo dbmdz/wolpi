@@ -3,8 +3,6 @@ package dev.mdz.wolpi.config;
 import java.util.List;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
-/// @param restrictToSizes Don't allow arbitrary sizes for scaling, restrict to the pre-existing
-///                        sizes available in the input image.
 /// @param limits          Limits for the image processing, such as maximum width, height, and area.
 /// @param features        Features that can be enabled or disabled, such as upscaling, CORS, and
 ///                        link headers.
@@ -12,9 +10,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 ///                        qualities.
 /// @param formats         The formats that can be requested, including allowed formats and
 ///                        preferred formats.
-public record IIIFConfig(
-        // TODO: Implement!
-        boolean restrictToSizes, Limits limits, Features features, Qualities qualities, Formats formats) {
+public record IIIFConfig(Limits limits, Features features, Qualities qualities, Formats formats) {
 
     /// @param maxWidth  Maximum width that images can be returned in
     /// @param maxHeight Maximum height that images can be returned in

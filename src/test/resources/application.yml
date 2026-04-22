@@ -36,7 +36,6 @@ wolpi:
       preset: VIPS_FOREIGN_WEBP_PRESET_TEXT
       effort: 3
   iiif:
-    restrict-to-sizes: false
     features:
       scaling:
         by-confined-width-height: true
