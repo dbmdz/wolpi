@@ -1,20 +1,5 @@
 # Using Extensions
 
-Wolpi's functionality can be extended with custom logic written in JavaScript or Python. These
-extensions can extend and override a lot of the default behavior of Wolpi, such as:
-
-- Authorization (e.g. to integrate with your organization's [IIIF Authorization Flow API][auth]) implementation
-- Resolving, with the option to include image metadata from an external source to avoid hitting the filesystem for `info.json` requests
-- Augment the `info.json` response, e.g. to include reference to [additional IIIF services][extra-services]
-- Image operations, to implement custom image transformations or filters that go beyond the IIIF Image API specification:
-    * Preprocess images before they are processed (e.g. for watermarking)
-    * Override/extend cropping, scaling, rotation and quality transformations (e.g. to implement custom smart cropping algorithms or
-      image filters)
-    * Implement custom output formats or customize the encoding of existing formats
-
-[auth]: https://iiif.io/api/auth/2.0/
-[extra-services]: https://iiif.io/api/presentation/3.0/#services
-
 ## Installation
 
 Extensions are configured in the `wolpi.yaml` file under the `extensions` key.
