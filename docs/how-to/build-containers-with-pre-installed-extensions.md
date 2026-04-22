@@ -22,7 +22,7 @@ extensions:
 ```
 
 ```docker title="Dockerfile.customized"
-FROM wolpi:0.1.0
+FROM ghcr.io/dbmdz/wolpi:0.1.2
 
 COPY ./my-extension /app/my-extension
 COPY config.yml /app/wolpi.yml
@@ -33,14 +33,5 @@ RUN java -jar /app/app.jar install-extensions
 This will then install and validate your extension during the container build, resulting in a
 container that is much faster to start up.
 
-!!! warning "Container Licensing"
-
-    The Wolpi container image uses Oracle GraalVM for performance reasons. While the application
-    code is MIT Licensed, the container image itself is subject to the [GraalVM Free Terms and
-    Conditions][gftc-license], which permits use (including for commercial purposes) and free
-    redistribution but restricts selling the JDK distribution. You're fine using the container in
-    production (even commercially, i.e. running a SaaS service), but if you want to sell the
-    container image itself (e.g. as part of a commercial enterprise container
-    subscription service), you need to get a commercial GraalVM license from Oracle.
-
-    [gftc-license]: https://www.oracle.com/downloads/licenses/graal-free-license.html
+If you intend to redistribute this modified container as part of a commercial offering, please be
+aware of the [licensing situation of the container image](./deploy-using-docker-podman.md#container-licensing).

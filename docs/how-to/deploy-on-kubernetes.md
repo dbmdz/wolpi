@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: wolpi
-          image: wolpi:0.1.0
+          image: ghcr.io/dbmdz/wolpi:0.1.2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
