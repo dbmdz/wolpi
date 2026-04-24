@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Determining available image sizes from pyramidal TIFs that use SubIFDs to
   encode their layers was broken due to a flipped predicate.
+- Reloaded Python file extensions now reparse changed source files instead of
+  reusing stale GraalPy source cache entries.
+- Reloaded extensions now remove all previous hook registrations for the same
+  configuration before registering the replacement hooks.
 
 ## [0.1.2] - 2026-04-21
 
