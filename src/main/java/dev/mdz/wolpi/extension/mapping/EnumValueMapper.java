@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.extension.mapping;
 
+import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import java.util.Arrays;
 import org.graalvm.polyglot.Value;
 
@@ -24,6 +25,15 @@ public class EnumValueMapper<T extends Enum<T>> {
         }
         if (value.isString()) {
             String enumName = value.asString();
+
+            if (cls == ExtensionHooks.class) {
+                var mapped = ExtensionHooks.fromName(enumName);
+                if (mapped == null) {
+                    throw new IllegalArgumentException("Invalid extension hook name: '%s'".formatted(enumName));
+                }
+                //noinspection unchecked
+                return (T) mapped;
+            }
             return Arrays.stream(cls.getEnumConstants())
                     .filter(c -> c.name().equalsIgnoreCase(enumName))
                     .findFirst()

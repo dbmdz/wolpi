@@ -801,10 +801,11 @@ public class ExtensionRuntimeTest {
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @CsvSource({"SCALE", "pre_scale", "preScale", "scale"})
     @DisplayName("Should allow Python extensions to explicitly mark implemented hooks as skippable")
-    void shouldAllowPythonExtensionsToExplicitlyMarkImplementedHooksAsSkippable() throws IOException {
-        var ext = writePyExtension("explicit-skippable-hooks", """
+    void shouldAllowPythonExtensionsToExplicitlyMarkImplementedHooksAsSkippable(String hookName) throws IOException {
+        var ext = writePyExtension("explicit-skippable-hooks-%s".formatted(hookName), """
                 def info():
                     return {"name": "Explicit Python Skippable", "apiVersion": 1, "description": "test"}
 
@@ -815,8 +816,8 @@ public class ExtensionRuntimeTest {
                     return None
 
                 def skippable_hooks(iiif_request):
-                    return {"SCALE"}
-                """);
+                    return {"%s"}
+                """.formatted(hookName));
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
             var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
             assertThat(skippableHooks).contains(ExtensionHooks.SCALE);

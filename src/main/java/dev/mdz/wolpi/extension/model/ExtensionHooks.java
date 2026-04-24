@@ -33,8 +33,16 @@ public enum ExtensionHooks {
     }
 
     public static @Nullable ExtensionHooks fromName(String name) {
+        String normalized = name.strip();
+        var hookFromAlias = Arrays.stream(values())
+                .filter(hook -> hook.validNames.contains(normalized))
+                .findFirst()
+                .orElse(null);
+        if (hookFromAlias != null) {
+            return hookFromAlias;
+        }
         return Arrays.stream(values())
-                .filter(hook -> hook.validNames.contains(name))
+                .filter(hook -> hook.name().equalsIgnoreCase(normalized))
                 .findFirst()
                 .orElse(null);
     }
