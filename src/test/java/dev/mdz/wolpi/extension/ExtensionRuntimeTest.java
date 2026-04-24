@@ -825,6 +825,37 @@ public class ExtensionRuntimeTest {
     }
 
     @Test
+    @DisplayName("Should treat inherited WolpiExtension default hooks as skippable by default")
+    void shouldTreatInheritedWolpiExtensionDefaultHooksAsSkippableByDefault() throws IOException {
+        var ext = writePyExtension("wolpi-extension-default-hooks", """
+                from wolpi import WolpiExtension
+
+
+                class Extension(WolpiExtension):
+                    def info(self):
+                        return {"name": "Default Hook Inheritance", "apiVersion": 1, "description": "test"}
+
+                    def cleanup(self):
+                        pass
+
+
+                def wolpi_extension():
+                    return Extension()
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
+            assertThat(skippableHooks)
+                    .contains(
+                            ExtensionHooks.PREPROCESS_IMAGE,
+                            ExtensionHooks.CROP,
+                            ExtensionHooks.SCALE,
+                            ExtensionHooks.ROTATE,
+                            ExtensionHooks.QUALITY,
+                            ExtensionHooks.FORMAT);
+        }
+    }
+
+    @Test
     @DisplayName("Should expose WolpiExtension helper on injected Python wolpi module")
     void shouldExposeWolpiExtensionHelperInPython() throws IOException {
         var ext = writePyExtension("wolpi-extension-helper", """

@@ -4,11 +4,25 @@ Python runtime code for Wolpi extensions.
 Mostly there to give access to `HttpStatusError` and to match the types from the
 `wolpi-extension-api` Python type hint package, i.e. so that the type imports
 resolve to something at runtime.
+
+Also provides a small Python-side helper to determine which hooks are actually
+implemented on a given extension object.
 """
 import abc
+import collections.abc
+import inspect
+import itertools
 import sys
 import types
 
+import java
+
+ExtensionHooks = java.type("dev.mdz.wolpi.extension.model.ExtensionHooks")
+JavaMap = java.type("java.util.Map")
+_SUPPORTED_HOOK_NAMES = frozenset(itertools.chain.from_iterable(
+    hook.getValidNames()
+    for hook in ExtensionHooks.values()
+))
 
 class HttpStatusError(Exception):
     """
@@ -46,6 +60,132 @@ def _make_placeholder_type(name: str) -> type:
         placeholder.__module__ = "wolpi"
         _placeholder_types[name] = placeholder
     return placeholder
+
+
+def _get_named_member(obj, name: str):
+    if isinstance(obj, collections.abc.Mapping):
+        return obj.get(name)
+    if isinstance(obj, JavaMap):
+        return obj.get(name)
+    try:
+        return obj[name]
+    except Exception:
+        pass
+    try:
+        return getattr(obj, name)
+    except Exception:
+        return None
+
+
+def _is_callable_member(member):
+    return callable(member) or (hasattr(member, "canExecute") and member.canExecute())
+
+
+def _get_callable_member(obj, name: str):
+    member = _get_named_member(obj, name)
+    return member if _is_callable_member(member) else None
+
+
+def _call(member):
+    if callable(member):
+        return member()
+    return member.execute()
+
+
+def _iter_members(obj):
+    if isinstance(obj, types.ModuleType):
+        return vars(obj).items()
+    if isinstance(obj, collections.abc.Mapping):
+        return obj.items()
+    if isinstance(obj, JavaMap):
+        return ((entry.getKey(), entry.getValue()) for entry in obj.entrySet())
+    return None
+
+
+def __wolpi_discover_hooks__(extension_object) -> set[str]:
+    """
+    Discover which supported Wolpi hooks are implemented by an extension object.
+
+    Top-level extensions are represented as module/binding dictionaries and
+    expose hooks as public callables. Class-based extensions are represented as
+    instances and expose hooks as methods. For class instances, inherited hooks
+    from user-defined base classes count, but inherited default methods from
+    WolpiExtension do not.
+
+    :param extension_object: Extension object to examine
+    :returns: Set of supported Wolpi hook names implemented by the object.
+    """
+    try:
+        members = _iter_members(extension_object)
+    except Exception:
+        members = None
+
+    if members is not None:
+        return {
+            name
+            for name, value in members
+            if isinstance(name, str)
+            and not name.startswith("_")
+            and name in _SUPPORTED_HOOK_NAMES
+            and _is_callable_member(value)
+        }
+
+    # Class objects are not supported
+    if inspect.isclass(extension_object):
+        return set()
+
+    # Walk up the type hierarchy and discover hooks among the members. Inherited
+    # hooks from user-defined base classes count; defaults from WolpiExtension do not.
+    mro = type(extension_object).__mro__
+    discovered = set()
+    for cls in mro:
+        if cls is object:
+            continue
+        for name, member in cls.__dict__.items():
+            if name.startswith("_") or name not in _SUPPORTED_HOOK_NAMES or name in discovered:
+                continue
+            function = member.__func__ if isinstance(member, (staticmethod, classmethod)) else member
+            if not callable(function):
+                continue
+            if cls is WolpiExtension:
+                continue
+            discovered.add(name)
+    return discovered
+
+
+def __wolpi_load_extension__(global_bindings, entry_point_name=None, factory_name="wolpi_extension"):
+    """
+    Resolve the extension object Java should execute and discover its hooks.
+
+    For package entry points, this calls the named entry point and treats its
+    return value as the extension object. For single-file extensions, top-level
+    hooks win; if none exist, the optional wolpi_extension() factory is called.
+
+    :param global_bindings: Snapshot of the evaluated Python module globals.
+    :param entry_point_name: Optional package entry point function name.
+    :param factory_name: Optional single-file factory function name.
+    :returns: (extension_object, hook_names), where extension_object is the
+              value used for hook execution and hook_names is a tuple of
+              discovered hook names. The tuple form gives Java a stable
+              array-like value to convert into ExtensionHooks.
+    """
+    if entry_point_name:
+        entry_point = _get_callable_member(global_bindings, entry_point_name)
+        if entry_point is None:
+            raise ValueError(f"Entry point function '{entry_point_name}' not found in extension.")
+        extension_object = _call(entry_point)
+        return extension_object, tuple(sorted(__wolpi_discover_hooks__(extension_object)))
+
+    top_level_hooks = __wolpi_discover_hooks__(global_bindings)
+    if top_level_hooks:
+        return global_bindings, tuple(sorted(top_level_hooks))
+
+    factory = _get_callable_member(global_bindings, factory_name)
+    if factory is not None:
+        extension_object = _call(factory)
+        return extension_object, tuple(sorted(__wolpi_discover_hooks__(extension_object)))
+
+    return global_bindings, tuple()
 
 
 class WolpiExtension(abc.ABC):
@@ -111,6 +251,8 @@ wolpi_module = types.ModuleType("wolpi")
 wolpi_module.__path__ = []
 wolpi_module.__doc__ = "Injected Wolpi runtime module for Python extensions."
 wolpi_module.WolpiExtension = WolpiExtension
+wolpi_module.__wolpi_discover_hooks__ = __wolpi_discover_hooks__
+wolpi_module.__wolpi_load_extension__ = __wolpi_load_extension__
 wolpi_module.errors = error_module
 
 # These are re-exports from the Wolpi runtime context in __wolpi_module__

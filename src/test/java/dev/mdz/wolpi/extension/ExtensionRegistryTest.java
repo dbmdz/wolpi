@@ -1,6 +1,7 @@
 package dev.mdz.wolpi.extension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -89,6 +90,100 @@ class ExtensionRegistryTest {
         assertThat(registry.getExtensions()).hasSize(1);
         var loadedExtension = registry.getExtensions(ExtensionHooks.AUTHORIZE).getFirst();
         assertThat(loadedExtension.extensionInfo().name()).isEqualTo("Test PY File Extension");
+    }
+
+    @DisplayName("should only register overridden hooks for class-based Python factory files")
+    @Test
+    void shouldOnlyRegisterOverriddenHooksForClassBasedPyFile() throws IOException {
+        var source = writePyExtension("class-based-hooks", """
+                from wolpi import WolpiExtension
+
+
+                class Extension(WolpiExtension):
+                    def info(self):
+                        return {"name": "Class Based Hooks", "apiVersion": 1, "description": "test"}
+
+                    def cleanup(self):
+                        pass
+
+                    def pre_scale(self, image, identifier, image_info, request):
+                        return None
+
+
+                def wolpi_extension():
+                    return Extension()
+                """);
+        var registry = buildRegistryWithExtensions(source);
+        assertThat(registry.getExtensions(ExtensionHooks.INFO)).hasSize(1);
+        assertThat(registry.getExtensions(ExtensionHooks.CLEANUP)).hasSize(1);
+        assertThat(registry.getExtensions(ExtensionHooks.SCALE)).hasSize(1);
+        assertThat(registry.getExtensions(ExtensionHooks.CROP)).isEmpty();
+        assertThat(registry.getExtensions(ExtensionHooks.PREPROCESS_IMAGE)).isEmpty();
+        assertThat(registry.getExtensions(ExtensionHooks.AUTHORIZE)).isEmpty();
+    }
+
+    @DisplayName("should register hooks inherited from user-defined Python base classes")
+    @Test
+    void shouldRegisterHooksInheritedFromUserDefinedPyBaseClass() throws IOException {
+        var source = writePyExtension("base-class-hooks", """
+                from wolpi import WolpiExtension
+
+
+                class BaseExtension(WolpiExtension):
+                    def pre_scale(self, image, identifier, image_info, request):
+                        return None
+
+
+                class Extension(BaseExtension):
+                    def info(self):
+                        return {"name": "Base Class Hooks", "apiVersion": 1, "description": "test"}
+
+                    def cleanup(self):
+                        pass
+
+
+                def wolpi_extension():
+                    return Extension()
+                """);
+        var registry = buildRegistryWithExtensions(source);
+        assertThat(registry.getExtensions(ExtensionHooks.SCALE)).hasSize(1);
+        assertThat(registry.getExtensions(ExtensionHooks.CROP)).isEmpty();
+    }
+
+    @DisplayName("should reject class-based Python files without cleanup hook")
+    @Test
+    void shouldRejectClassBasedPyFileWithoutCleanup() throws IOException {
+        var registry = buildRegistryWithExtensions();
+        var source = writePyExtension("missing-cleanup", """
+                class Extension:
+                    def info(self):
+                        return {"name": "Missing Cleanup", "apiVersion": 1, "description": "test"}
+
+
+                def wolpi_extension():
+                    return Extension()
+                """);
+        assertThatThrownBy(() -> registry.loadExtension(source))
+                .isInstanceOf(ExtensionLoadException.class)
+                .hasMessageContaining("mandatory 'cleanup'");
+    }
+
+    @DisplayName("should reject class-based Python files without info hook")
+    @Test
+    void shouldRejectClassBasedPyFileWithoutInfo() throws IOException {
+        var registry = buildRegistryWithExtensions();
+        var source = writePyExtension("missing-info", """
+                class Extension:
+                    def cleanup(self):
+                        pass
+
+
+                def wolpi_extension():
+                    return Extension()
+                """);
+        assertThatThrownBy(() -> registry.loadExtension(source))
+                .isInstanceOf(ExtensionLoadException.class)
+                .hasMessageContaining("mandatory 'info'");
     }
 
     @DisplayName("should load a JavaScript package")
@@ -224,5 +319,11 @@ def resolve(self, identifier, etag, last_modified):
                 mock(GenericKeyedObjectPool.class),
                 new GraalContextSupplier(wolpiConfig),
                 new GuestContextFactory(buildProperties, httpClient, Arena.ofAuto(), null, null));
+    }
+
+    private ExtensionConfig writePyExtension(String name, String source) throws IOException {
+        Path path = tempDir.resolve("%s.py".formatted(name));
+        Files.writeString(path, source);
+        return new ExtensionConfig(path, null, null, Map.of(), false);
     }
 }

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Encoding into bitonal PNGs and GIFs. Was broken due to a modification of an
   immutable container. We now copy into a mutable container before appending
   our custom option to the default options for the format.
+- Python extensions now discover hooks correctly for class-based
+  `WolpiExtension` implementations, including the documented
+  `wolpi_extension()` factory path and camelCase hook aliases in
+  `skippableHooks`.
 
 ### Security
 - Prevent path traversal attacks through the fallback image resolver

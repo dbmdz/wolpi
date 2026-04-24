@@ -3,6 +3,7 @@ package dev.mdz.wolpi.extension;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
+import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.Language;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -10,7 +11,10 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.graalvm.polyglot.Context;
@@ -33,6 +37,7 @@ public class PythonRuntimeContext extends RuntimeContext {
     private final @Nullable EntryPoint entryPoint;
     private final @Nullable Path venvPath;
     private final @Nullable ExtensionGuestContext guestContext;
+    private @Nullable Set<ExtensionHooks> implementedHooks;
 
     public PythonRuntimeContext(
             Source source,
@@ -64,24 +69,17 @@ public class PythonRuntimeContext extends RuntimeContext {
         try {
             langContext.eval(source);
             var bindings = langContext.getBindings("python");
-
-            Value hooks;
-            if (entryPoint != null) {
-                if (!bindings.hasMember(entryPoint.function())) {
-                    throw new IllegalArgumentException(
-                            "Entry point function '%s' not found in extension.".formatted(entryPoint.function()));
-                }
-                hooks = bindings.getMember(entryPoint.function()).execute();
-            } else {
-                hooks = bindings;
+            var bindingMembers = new LinkedHashMap<String, Value>();
+            for (var name : bindings.getMemberKeys()) {
+                bindingMembers.put(name, bindings.getMember(name));
             }
+            var loadExtension = bindings.getMember("__wolpi_load_extension__");
+            var loaded = loadExtension.execute(bindingMembers, entryPoint == null ? null : entryPoint.function());
+            Value hooks = loaded.getArrayElement(0);
+            this.implementedHooks = discoverImplementedHooks(loaded.getArrayElement(1));
 
-            var functions = hooks.getMemberKeys().stream()
-                    .filter(key -> !key.startsWith("_") && hooks.getMember(key).canExecute())
-                    .toList();
-
-            if (functions.isEmpty()) {
-                throw new ExtensionLoadException("Extension did not define any top-level functions.");
+            if (implementedHooks.isEmpty()) {
+                throw new ExtensionLoadException("Extension did not define any supported hooks.");
             }
             return hooks;
         } finally {
@@ -92,6 +90,20 @@ public class PythonRuntimeContext extends RuntimeContext {
     @Override
     public Language getLang() {
         return Language.PYTHON;
+    }
+
+    @Override
+    boolean hasHook(ExtensionHooks hook) {
+        return implementedHooks != null && implementedHooks.contains(hook);
+    }
+
+    /// Convert Python-provided hook names into the Java enum set.
+    private static Set<ExtensionHooks> discoverImplementedHooks(Value hookNames) {
+        var hooks = new HashSet<ExtensionHooks>();
+        for (long i = 0; i < hookNames.getArraySize(); i++) {
+            hooks.add(hookNames.getArrayElement(i).as(ExtensionHooks.class));
+        }
+        return Set.copyOf(hooks);
     }
 
     /// Install a bundled Python module file into the GraalPy context so it can be imported
@@ -162,7 +174,9 @@ public class PythonRuntimeContext extends RuntimeContext {
                 "if '__wolpi_module__' in globals():",
                 "    _loaded_module.__wolpi_module__ = __wolpi_module__",
                 "",
-                "sys.modules.setdefault('%s', _loaded_module)".formatted(moduleName));
+                "sys.modules.setdefault('%s', _loaded_module)".formatted(moduleName),
+                "if hasattr(_loaded_module, '__wolpi_load_extension__'):",
+                "    globals()['__wolpi_load_extension__'] = _loaded_module.__wolpi_load_extension__");
         try {
             context.eval("python", code);
         } finally {
