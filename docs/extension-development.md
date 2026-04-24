@@ -1065,12 +1065,12 @@ This is often unnecessary, since many extensions will likely only run their cust
     from typing import Iterable, Literal
 
     ImageHookName = Literal[
-        'preProcessImage',
-        'preCrop',
-        'preScale',
-        'preRotate',
-        'preQuality',
-        'preFormat'
+        'pre_process_image',
+        'pre_crop',
+        'pre_scale',
+        'pre_rotate',
+        'pre_quality',
+        'pre_format'
     ]
 
     def skippable_hooks(
