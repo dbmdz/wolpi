@@ -240,10 +240,7 @@ public class ExtensionRegistry implements AutoCloseable {
 
         // First, remove the extension from all hooks to avoid duplication with older versions
         for (List<LoadedExtension> exts : implementedHooks.values()) {
-            exts.stream()
-                    .filter(e -> e.config().equals(ext.config()))
-                    .findFirst()
-                    .ifPresent(exts::remove);
+            exts.removeIf(existingExt -> existingExt.config().equals(ext.config()));
         }
         // Then add it
         loadedExtensions.put(config, ext);
