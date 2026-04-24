@@ -22,6 +22,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -181,13 +183,14 @@ class ExtensionRegistryTest {
         List<LoadedExtension> resolveExtensions = registry.getExtensions(ExtensionHooks.RESOLVE);
         assertThat(resolveExtensions).isEmpty();
 
+        var reloaded = new CountDownLatch(1);
+        registry.addReloadCallback(pyExtentionConfig, _ -> reloaded.countDown());
         Files.writeString(pyExtentionConfig.path(), """
 
 def resolve(self, identifier, etag, last_modified):
   log_hook_call("resolve")
 """, StandardOpenOption.APPEND);
-        // wait for reload
-        Thread.sleep(1000);
+        assertThat(reloaded.await(10, TimeUnit.SECONDS)).isTrue();
         authorizeExtensions = registry.getExtensions(ExtensionHooks.AUTHORIZE);
         assertThat(authorizeExtensions)
                 .hasSize(2)

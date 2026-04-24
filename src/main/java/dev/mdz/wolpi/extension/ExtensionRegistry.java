@@ -360,7 +360,14 @@ public class ExtensionRegistry implements AutoCloseable {
                 // Simple python files can be loaded directly.
                 venvPath = null;
                 assert config.path() != null;
-                source = Source.newBuilder("python", config.path().toFile()).build();
+                var sourceBuilder = Source.newBuilder("python", config.path().toFile());
+                if (lastModified != null) {
+                    // GraalPy may reuse a cached Source for the same file URI. During live reloads
+                    // the path is stable but the contents changed, so force the new file contents
+                    // to be parsed instead of reusing the previous top-level hook bindings.
+                    sourceBuilder.cached(false);
+                }
+                source = sourceBuilder.build();
             }
         } catch (IOException e) {
             throw new ExtensionLoadException("Failed to load Python extension source", e);
