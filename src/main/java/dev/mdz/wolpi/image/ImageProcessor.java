@@ -410,10 +410,18 @@ public class ImageProcessor {
     ///
     /// This is where all the lazy vips operations are actually executed.
     public EncodedImage encodeImage(VImage image, ImageInfo info, ImageRequest request) throws IOException {
-        // Determine output size and cropped area for metrics
+        // Determine output size and cropped area for metrics, if possible
         var outputSize = SizeBucket.fromDimension(new ImageSize(image.getWidth(), image.getHeight()));
-        var cropRectangle = parser.parseRegion(request.cropSpec(), info.nativeSize());
-        var croppedArea = SizeBucket.fromArea(cropRectangle);
+        CropRectangle cropRectangle;
+        SizeBucket croppedArea;
+        try {
+            cropRectangle = parser.parseRegion(request.cropSpec(), info.nativeSize());
+            croppedArea = SizeBucket.fromArea(cropRectangle);
+        } catch (IllegalArgumentException e) {
+            cropRectangle = null;
+            croppedArea = SizeBucket.UNKNOWN;
+            // NOP, just ignore
+        }
         var requestType = RequestType.classify(request.cropSpec(), outputSize, cropRectangle, info.nativeSize());
 
         if (request.formatSpec().equals("jpg") && (image.getWidth() >= 65535 || image.getHeight() >= 65535)) {

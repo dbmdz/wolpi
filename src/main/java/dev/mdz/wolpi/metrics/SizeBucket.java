@@ -2,6 +2,7 @@ package dev.mdz.wolpi.metrics;
 
 import dev.mdz.wolpi.iiif.model.CropRectangle;
 import dev.mdz.wolpi.model.ImageSize;
+import org.jspecify.annotations.Nullable;
 
 /// T-shirt size buckets for image dimensions and areas, used for metrics.
 public enum SizeBucket {
@@ -10,10 +11,15 @@ public enum SizeBucket {
     MEDIUM,
     LARGE,
     XLARGE,
-    HUGE;
+    HUGE,
+    UNKNOWN;
 
     /// Bucket an image size by its largest dimension
-    public static SizeBucket fromDimension(ImageSize size) {
+    public static SizeBucket fromDimension(@Nullable ImageSize size) {
+        if (size == null) {
+            return UNKNOWN;
+        }
+
         int maxDim = Math.max(size.width(), size.height());
         if (maxDim <= 256) return TINY;
         if (maxDim <= 512) return SMALL;
@@ -24,7 +30,11 @@ public enum SizeBucket {
     }
 
     /// Bucket a crop rectangle by its area
-    public static SizeBucket fromArea(CropRectangle crop) {
+    public static SizeBucket fromArea(@Nullable CropRectangle crop) {
+        if (crop == null) {
+            return UNKNOWN;
+        }
+
         int area = crop.width() * crop.height();
         if (area <= 65536) return TINY; // 256x256
         if (area <= 262144) return SMALL; // 512x512
