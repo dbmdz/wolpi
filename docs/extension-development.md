@@ -54,7 +54,7 @@ Every extension needs to implement the [`info`](#info-hook) and [`cleanup`](#cle
 
 === "Python"
 
-    A single-file Python extension is a single `.py` file that defines its hooks as top-level functions.
+    A single-file Python extension can be as simple as a single `.py` file that defines its hooks as top-level functions.
 
     ```python linenums="1" title="helloworld.py"
     from pathlib import Path
@@ -84,6 +84,20 @@ Every extension needs to implement the [`info`](#info-hook) and [`cleanup`](#cle
         for path in base_dir.iterdir():
             if path.stem == identifier and path.suffix in IMAGE_EXTENSIONS:
                 return {'path': str(path.absolute())}
+    ```
+
+    If you prefer to use a class for your extension, you can provide a `wolpi_extension` factory method
+    that is called without arguments and should produce an instance of your extension:
+
+    ```python linenums="1" title="helloworld-cls.py"
+    import wolpi
+
+    class MyExtension:
+        # same hooks as above as instance methods
+        ...
+
+    def wolpi_extension():
+        return MyExtension()
     ```
 
 Configure the extension in your `wolpi.yml`:
