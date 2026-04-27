@@ -12,6 +12,8 @@ import app.photofox.vipsffm.Vips;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.metrics.WolpiMetrics;
+import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageSource;
 import java.io.IOException;
@@ -22,11 +24,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
@@ -209,5 +214,84 @@ class ImageLoaderTest {
         verify(httpClient).send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
         assertThat(requestCaptor.getValue().headers().firstValue("If-None-Match"))
                 .contains("client-etag");
+    }
+
+    @Test
+    void shouldResolveFilesystemIdentifierInsideBaseDirectory(@TempDir Path tempDir) throws IOException {
+        Path baseDir = tempDir.resolve("images");
+        Files.createDirectories(baseDir);
+        Path imagePath = baseDir.resolve("image.jp2");
+        Files.writeString(imagePath, "test image placeholder");
+
+        ImageSource source = filesystemFallbackLoader(baseDir).resolve("image.jp2", null, null);
+
+        assertThat(source).isNotNull();
+        assertThat(source.resolvedImage()).isInstanceOf(FilesystemResolvedImage.class);
+        assertThat(((FilesystemResolvedImage) source.resolvedImage()).path()).isEqualTo(imagePath.toRealPath());
+    }
+
+    @Test
+    void shouldRejectFilesystemTraversalOutsideBaseDirectory(@TempDir Path tempDir) throws IOException {
+        Path baseDir = tempDir.resolve("images");
+        Files.createDirectories(baseDir);
+        Files.writeString(tempDir.resolve("secret.jp2"), "secret");
+
+        ImageSource source = filesystemFallbackLoader(baseDir).resolve("../secret.jp2", null, null);
+
+        assertThat(source).isNull();
+    }
+
+    @Test
+    void shouldRejectAbsoluteFilesystemPathOutsideBaseDirectory(@TempDir Path tempDir) throws IOException {
+        Path baseDir = tempDir.resolve("images");
+        Files.createDirectories(baseDir);
+        Path secret = tempDir.resolve("secret.jp2");
+        Files.writeString(secret, "secret");
+
+        ImageSource source = filesystemFallbackLoader(baseDir).resolve(secret.toString(), null, null);
+
+        assertThat(source).isNull();
+    }
+
+    @Test
+    void shouldRejectFilesystemSymlinkOutsideBaseDirectory(@TempDir Path tempDir) throws IOException {
+        Path baseDir = tempDir.resolve("images");
+        Files.createDirectories(baseDir);
+        Path secret = tempDir.resolve("secret.jp2");
+        Files.writeString(secret, "secret");
+        Path link = baseDir.resolve("linked.jp2");
+        try {
+            Files.createSymbolicLink(link, secret);
+        } catch (UnsupportedOperationException | IOException e) {
+            Assumptions.abort("Symbolic links are not available in this environment");
+        }
+
+        ImageSource source = filesystemFallbackLoader(baseDir).resolve("linked.jp2", null, null);
+
+        assertThat(source).isNull();
+    }
+
+    private ImageLoader filesystemFallbackLoader(Path baseDir) {
+        ExtensionRuntime runtime = mock(ExtensionRuntime.class);
+        when(runtime.resolve(any(), any(), any())).thenReturn(null);
+        return new ImageLoader(
+                new WolpiConfig(
+                        Path.of("/tmp/wolpi-test-tmp"),
+                        baseDir,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of()),
+                arena,
+                null,
+                runtime,
+                null,
+                mock(WolpiMetrics.class));
     }
 }

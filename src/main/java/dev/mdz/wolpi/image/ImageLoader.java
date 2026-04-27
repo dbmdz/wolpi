@@ -193,17 +193,25 @@ public class ImageLoader {
     /// Fallback implementation for resolving that resolves against the image base directory from
     /// the configuration.
     private @Nullable ImageSource resolveFromFilesystem(String identifier) {
-        Path imagePath = imageBaseDirectory.resolve(identifier);
-        if (imagePath.toFile().exists()) {
-            CacheInfo cacheInfo = null;
-            try {
-                cacheInfo = CacheInfo.fromPath(imagePath);
-            } catch (IOException e) {
-                log.warn("Failed to determine cache info from file path '{}' for {}", imagePath, identifier);
+        Path imagePath;
+        try {
+            Path realBasePath = imageBaseDirectory.toRealPath();
+            Path realImagePath = realBasePath.resolve(identifier).toRealPath();
+            if (!realImagePath.startsWith(realBasePath) || !Files.exists(realImagePath)) {
+                return null;
             }
-            return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null, cacheInfo);
+            imagePath = realImagePath;
+        } catch (IOException e) {
+            return null;
         }
-        return null;
+
+        CacheInfo cacheInfo = null;
+        try {
+            cacheInfo = CacheInfo.fromPath(imagePath);
+        } catch (IOException e) {
+            log.warn("Failed to determine cache info from file path '{}' for {}", imagePath, identifier);
+        }
+        return new ImageSource(identifier, new FilesystemResolvedImage(imagePath), null, cacheInfo);
     }
 
     /// Load the official IIIF Image API Validation image from the classpath, either in PNG or JP2

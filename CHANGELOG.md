@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reusing stale GraalPy source cache entries.
 - Reloaded extensions now remove all previous hook registrations for the same
   configuration before registering the replacement hooks.
+- Encoding into bitonal PNGs and GIFs. Was broken due to a modification of an
+  immutable container. We now copy into a mutable container before appending
+  our custom option to the default options for the format.
+
+### Security
+- Prevent path traversal attacks through the fallback image resolver
+  by making sure the final resolved path is actually inside the configured base
+  directory
 
 ## [0.1.2] - 2026-04-21
 
