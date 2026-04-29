@@ -226,7 +226,7 @@
           <argLine>${surefireArgLine}
 						--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED
 						-Dpolyglot.engine.WarnInterpreterOnly=false
-						--enable-native-access=ALL-UNNAMED
+						--enable-native-access=ALL-UNNAMED,org.graalvm.truffle,app.photofox.vipsffm
 						-XX:+EnableDynamicAgentLoading</argLine>
         </configuration>
       </plugin>

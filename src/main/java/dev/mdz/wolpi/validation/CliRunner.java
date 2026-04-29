@@ -62,7 +62,18 @@ public class CliRunner implements CommandLineRunner, Runnable {
                             && !arg.startsWith("--wolpi.")
                             && !arg.startsWith("--config"))
                     .toArray(String[]::new);
-            int exitCode = new CommandLine(this, picoCliFactory).execute(filteredArgs);
+            CommandLine cli = new CommandLine(this, picoCliFactory);
+            // Keep CLI failures concise for both users and tests: picocli still returns a
+            // non-zero exit code, but we print only the message here instead of a full stack trace.
+            cli.setExecutionExceptionHandler((ex, commandLine, parseResult) -> {
+                String message = ex.getMessage();
+                if (message == null || message.isBlank()) {
+                    message = ex.getClass().getSimpleName();
+                }
+                commandLine.getErr().println(message);
+                return 1;
+            });
+            int exitCode = cli.execute(filteredArgs);
             exitHandler.accept(exitCode);
         }
         // Otherwise, just run the Spring boot default startup sequence
@@ -100,6 +111,12 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
         private int serverPort = -1;
         Consumer<Integer> exitHandler = System::exit;
+        // Test hook so watch-mode tests can distinguish reload exceptions from ordinary
+        // validation failures without scraping log output.
+        Consumer<Throwable> validationErrorHandler = e -> log.error("Error during extension validation", e);
+        // Test hook so watch-mode tests can observe a completed validation result directly even
+        // when INFO logs are suppressed in the test logging configuration.
+        Consumer<Boolean> validationResultHandler = result -> {};
 
         public ValidationCommand(
                 ExtensionRegistry extensionRegistry,
@@ -187,13 +204,17 @@ public class CliRunner implements CommandLineRunner, Runnable {
                         "File change detected in {}, re-validating extension...",
                         updatedExtension.extensionInfo().name());
                 try {
-                    if (!validate(updatedExtension)) {
+                    boolean isValid = validate(updatedExtension);
+                    // Report the outcome before logging so tests can synchronize on an explicit
+                    // signal instead of brittle console output.
+                    validationResultHandler.accept(isValid);
+                    if (!isValid) {
                         log.warn("Extension validation failed.");
                     } else {
                         log.info("Extension validation successful.");
                     }
                 } catch (Exception e) {
-                    log.error("Error during extension validation", e);
+                    validationErrorHandler.accept(e);
                 }
             });
             log.info("Watching {} for changes, press Ctrl-C to exit.", location.getAbsolutePath());

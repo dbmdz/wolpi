@@ -1,9 +1,14 @@
 spring:
   application:
     name: "wolpi"
+  main:
+    banner-mode: "off"
 logging:
     level:
         org.springframework.web.servlet: ERROR
+springdoc:
+  api-docs:
+    enabled: false
 server:
   forward-headers-strategy: framework
 

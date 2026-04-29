@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <conversionRule conversionWord="ex" class="ch.qos.logback.classic.pattern.NopThrowableInformationConverter" />
+  <conversionRule conversionWord="xEx" class="ch.qos.logback.classic.pattern.NopThrowableInformationConverter" />
+  <conversionRule conversionWord="rEx" class="ch.qos.logback.classic.pattern.NopThrowableInformationConverter" />
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} : %msg%n%nopex</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="dev.mdz.wolpi.extension.ExtensionRegistry" level="ERROR" />
+  <logger name="dev.mdz.wolpi.extension.ExtensionRuntime$ExtensionRuntimeImpl" level="ERROR" />
+  <logger name="io.micrometer.core.instrument.MeterRegistry" level="ERROR" />
+  <logger name="org.springdoc" level="ERROR" />
+  <logger name="org.springframework.test.context.support.AnnotationConfigContextLoaderUtils" level="WARN" />
+  <logger name="org.springframework.boot.test.context.SpringBootTestContextBootstrapper" level="WARN" />
+  <logger name="com.tngtech.archunit.core.PluginLoader" level="WARN" />
+
+  <root level="WARN">
+    <appender-ref ref="CONSOLE" />
+  </root>
+</configuration>

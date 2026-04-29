@@ -64,13 +64,14 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,6 +82,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.info.BuildProperties;
 
 @DisplayName("ExtensionRuntime")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(MockitoExtension.class)
 public class ExtensionRuntimeTest {
 
@@ -101,21 +103,10 @@ public class ExtensionRuntimeTest {
     private PyPiInstaller pyPiInstaller;
 
     private MeterRegistry meterRegistry;
+    private GraalContextSupplier graalContextSupplier;
+    private KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool;
 
-    private KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool = new GenericKeyedObjectPool<>(
-            new RuntimeContextPooledObjectFactory(new GraalContextSupplier(null)),
-            new GenericKeyedObjectPoolConfig<>() {
-                {
-                    setMinIdlePerKey(0);
-                    setMaxIdlePerKey(2);
-                    setMaxTotalPerKey(4);
-                    setTimeBetweenEvictionRuns(Duration.ofMillis(10));
-                    setMinEvictableIdleDuration(Duration.ofMillis(500));
-                    setJmxEnabled(false);
-                }
-            });
-
-    private ThreadPoolExecutor threadPool =
+    private final ThreadPoolExecutor threadPool =
             new ThreadPoolExecutor(4, 8, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new ThreadFactory() {
                 @Override
                 public Thread newThread(Runnable runnable) {
@@ -177,6 +168,20 @@ public class ExtensionRuntimeTest {
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 mock(PackagingConfig.class),
                 Map.of());
+        if (graalContextSupplier == null) {
+            graalContextSupplier = new GraalContextSupplier(config);
+        }
+        contextPool = new GenericKeyedObjectPool<>(
+                new RuntimeContextPooledObjectFactory(graalContextSupplier), new GenericKeyedObjectPoolConfig<>() {
+                    {
+                        setMinIdlePerKey(0);
+                        setMaxIdlePerKey(2);
+                        setMaxTotalPerKey(4);
+                        setTimeBetweenEvictionRuns(Duration.ofMillis(10));
+                        setMinEvictableIdleDuration(Duration.ofMillis(500));
+                        setJmxEnabled(false);
+                    }
+                });
 
         Path pyExtPath = Path.of("src/test/resources/py-extension");
         Path pySitePkgPath = tempDir.resolve("venv/lib/python3.11/site-packages");
@@ -194,11 +199,18 @@ public class ExtensionRuntimeTest {
         if (testArena != null) {
             testArena.close();
         }
-        // Clear the context pool to ensure no state leaks between tests
         try {
-            contextPool.clear();
+            contextPool.close();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to clear context pool", e);
+            throw new RuntimeException("Failed to close context pool", e);
+        }
+    }
+
+    @AfterAll
+    void afterAll() throws Exception {
+        threadPool.shutdownNow();
+        if (graalContextSupplier != null) {
+            graalContextSupplier.resetEngine();
         }
     }
 
@@ -486,8 +498,6 @@ public class ExtensionRuntimeTest {
                 new ExtensionConfig(Path.of("src/test/resources/js-extension/index.js"), null, null, Map.of(), false));
 
         @Test
-        // TODO: Investigate!
-        @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "Flaky on CI")
         @DisplayName("Should borrow contexts from pool for extensions")
         void shouldBorrowContextsFromPool() {
             assertThat(contextPool.getNumActive()).isZero();
@@ -524,8 +534,6 @@ public class ExtensionRuntimeTest {
         }
 
         @Test
-        // TODO: Investigate!
-        @DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "Flaky on CI")
         @DisplayName("Should run setup, cleanup and destroy hooks appropriately")
         void shouldRunSetupCleanupAndDestroyHooks() {
             List<Thread> threads = new ArrayList<>();
@@ -551,7 +559,7 @@ public class ExtensionRuntimeTest {
                     pyPiInstaller,
                     npmInstaller,
                     null,
-                    new GraalContextSupplier(config),
+                    graalContextSupplier,
                     new GuestContextFactory(
                             buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
             var metrics = new WolpiMetrics(meterRegistry);
@@ -1098,11 +1106,23 @@ public class ExtensionRuntimeTest {
                 pyPiInstaller,
                 npmInstaller,
                 null,
-                new GraalContextSupplier(config),
+                graalContextSupplier,
                 new GuestContextFactory(
                         buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
         var metrics = new WolpiMetrics(meterRegistry);
-        return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics);
+        return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics) {
+            @Override
+            public void close() {
+                super.close();
+                try {
+                    // Each helper call creates a dedicated registry with its own file monitor, so
+                    // tests must close it alongside the runtime to avoid leaking watcher threads.
+                    registry.close();
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to close test extension registry", e);
+                }
+            }
+        };
     }
 
     private ExtensionConfig writeJsExtension(String name, String source) throws IOException {
