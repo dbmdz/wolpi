@@ -6,7 +6,10 @@ The easiest way to run Wolpi is to use the official container image:
 docker run -p 8080:8080 -v <path_to_your_images>:/app/images ghcr.io/dbmdz/wolpi:latest
 ```
 
-By default, the container serves images from the `/app/images` directory and resolves them according to their path inside of it,, e.g. an image located  at `<path_to_your_images>/foo/bar/baz.jpg` on the host machine will be available at http://localhost:8080/v3/foo/bar/baz.jpg/info.json (for info.json) and e.g. http://localhost:8080/v3/foo/bar/baz.jpg/full/max/0/default.jpg (for an image request)
+By default, the container serves images from the `/app/images` directory and resolves them according
+to their path inside of it,, e.g. an image located at `<path_to_your_images>/foo/bar/baz.jpg` on the
+host machine will be available at http://localhost:8080/v3/foo/bar/baz.jpg/info.json (for info.json)
+and e.g. http://localhost:8080/v3/foo/bar/baz.jpg/full/max/0/default.jpg (for an image request)
 
 Here is an example with the logo image from this documentation, assuming you've checked out the repository to `/home/user/src/wolpi`:
 
@@ -55,4 +58,10 @@ docker run -p 8080:8080 -v /home/user/src/wolpi/docs/img:/app/images ghcr.io/dbm
 }
 ```
 
-Navigate to http://localhost:8080/v3/wolpi.png/full/max/0/default.webp in your browser to see the image. You can also try out different parameters, e.g. http://localhost:8080/v3/wolpi.png/full/!200,200/0/default.jpg for a thumbnail.
+Navigate to http://localhost:8080/v3/wolpi.png/full/max/0/default.webp in your browser to see the
+image. You can also try out different parameters,
+e.g. http://localhost:8080/v3/wolpi.png/full/!200,200/0/default.jpg for a thumbnail.
+
+**That's it!** This is the zero-config mode for Wolpi, which might just be enough for your use case.
+If your identifiers do not directly correspond a path, you should probably continue with
+[Using an Extension: Pattern Resolver](./using-an-extension-pattern-resolver.md).
