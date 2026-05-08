@@ -35,6 +35,7 @@ import tools.jackson.databind.json.JsonMapper;
 /// programmatically.
 @Component
 public class NpmInstaller {
+    private static final URI DEFAULT_NPM_REGISTRY = URI.create("https://registry.npmjs.org/");
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -91,7 +92,11 @@ public class NpmInstaller {
             // Package not installed, continue with installation
         }
 
-        log.debug("Installing package '{}' version {} from npm registry", packageName, version);
+        log.info(
+                "Installing JavaScript extension '{}:{}' from {}",
+                packageName,
+                version,
+                customRegistry == null ? "npmjs.com" : customRegistry);
         String npmScope;
         if (packageName.startsWith("@")) {
             npmScope = packageName.split("/")[0];
@@ -109,34 +114,37 @@ public class NpmInstaller {
                 baseDir.toString(),
                 "%s@%s".formatted(packageName, version));
         Path customTempConfig = null;
-        if (customRegistry != null) {
+        if (customRegistry != null || registryAuth != null) {
             try {
                 customTempConfig = Files.createTempFile("wolpi-npmrc-", ".tmp");
-                if (npmScope == null) {
-                    Files.writeString(customTempConfig, "registry=%s\n".formatted(customRegistry));
-                } else {
-                    StringBuilder npmrcContent = new StringBuilder();
-                    npmrcContent.append("%s:registry=%s\n".formatted(npmScope, customRegistry));
-                    if (registryAuth != null) {
-                        // Host with `//` prefixed, e.g. `//registry.example.com/`
-                        String registryHost = customRegistry
-                                .toString()
-                                .substring(customRegistry.toString().indexOf("://") + 1);
-
-                        if (registryAuth.token() != null) {
-                            npmrcContent.append("%s:_authToken=%s\n".formatted(registryHost, registryAuth.token()));
-                        } else if (registryAuth.username() != null && registryAuth.password() != null) {
-                            String auth = Base64.getEncoder()
-                                    .encodeToString("%s:%s"
-                                            .formatted(registryAuth.username(), registryAuth.password())
-                                            .getBytes());
-                            npmrcContent.append("%s:_auth=%s\n".formatted(registryHost, auth));
-                        }
+                StringBuilder npmrcContent = new StringBuilder();
+                if (customRegistry != null) {
+                    if (npmScope == null) {
+                        npmrcContent.append("registry=%s\n".formatted(customRegistry));
+                    } else {
+                        npmrcContent.append("%s:registry=%s\n".formatted(npmScope, customRegistry));
                     }
-                    Files.writeString(customTempConfig, npmrcContent.toString());
                 }
+                if (registryAuth != null) {
+                    URI effectiveRegistry = customRegistry != null ? customRegistry : DEFAULT_NPM_REGISTRY;
+                    // Host with `//` prefixed, e.g. `//registry.example.com/`
+                    String registryHost = effectiveRegistry
+                            .toString()
+                            .substring(effectiveRegistry.toString().indexOf("://") + 1);
+
+                    if (registryAuth.token() != null) {
+                        npmrcContent.append("%s:_authToken=%s\n".formatted(registryHost, registryAuth.token()));
+                    } else if (registryAuth.username() != null && registryAuth.password() != null) {
+                        String auth = Base64.getEncoder()
+                                .encodeToString("%s:%s"
+                                        .formatted(registryAuth.username(), registryAuth.password())
+                                        .getBytes());
+                        npmrcContent.append("%s:_auth=%s\n".formatted(registryHost, auth));
+                    }
+                }
+                Files.writeString(customTempConfig, npmrcContent.toString());
             } catch (IOException e) {
-                throw new PackageInstallException("Failed to create temporary npm config file for custom registry", e);
+                throw new PackageInstallException("Failed to create temporary npm config file for registry access", e);
             }
             args = new ArrayList<>(args);
             args.add(1, "--userconfig");
@@ -170,6 +178,8 @@ public class NpmInstaller {
             throw new PackageInstallException(
                     "npm executable not found or configured, cannot install package in " + localPackageDir);
         }
+
+        log.info("Installing Python extension from {}", localPackageDir.toAbsolutePath());
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("package.json"))) {
             throw new PackageInstallException(
                     "localPackageDir must exist and contain a package.json: " + localPackageDir);

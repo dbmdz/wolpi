@@ -143,6 +143,11 @@ public class PyPiInstaller {
     public void installExtension(
             String packageName, String version, @Nullable URI customIndex, @Nullable IndexAuth indexAuth)
             throws PackageInstallException, ExtensionLoadException {
+        log.info(
+                "Installing Python extension '{}:{}' from {}",
+                packageName,
+                version,
+                customIndex == null ? "PyPI" : customIndex);
         this.install(packageName, version, customIndex, indexAuth, false);
         verifyInstalledExtension(packageName);
     }
@@ -153,6 +158,7 @@ public class PyPiInstaller {
     /// @param skipDependencies if true, do not install dependencies of the package
     public void installFromLocalDirectory(Path localPackageDir, boolean skipDependencies)
             throws PackageInstallException {
+        log.info("Installing Python extension from {}", localPackageDir.toAbsolutePath());
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("pyproject.toml"))) {
             throw new IllegalArgumentException(
                     "localPackageDir must exist and contain a pyproject.toml: " + localPackageDir);

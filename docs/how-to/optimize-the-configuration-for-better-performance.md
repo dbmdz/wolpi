@@ -43,13 +43,53 @@ and rely on the pool's ability to grow dynamically up to `max-total`.
 
 For more information about the extension pool and lifecycle, refer to the [section in the extension documentation](../extension-development.md#extension-lifecycle).
 
+## Memory Usage
+
+- **Leave memory headroom for libvips:** Do not assign the majority of memory to the JVM, leave
+  headroom so libvips can perform its allocations. Much of Wolpi's image processing memory is
+  managed by libvips off-heap rather than inside the JVM heap. A good starting point is to cap
+  the JVM at about half of the available memory:
+
+  ```yaml
+  env:
+    - name: JAVA_TOOL_OPTIONS
+      value: -XX:MaxRAMPercentage=50.0 -XX:InitialRAMPercentage=12.5
+  ```
+
+- **Treat heap sizing and extension-pool sizing as one problem:** A larger
+  [`extension-pool`](#extension-pool-configuration) keeps more execution contexts warm and can
+  reduce latency, but it also raises steady-state memory usage. If you increase `min-idle`,
+  `max-idle`, or `max-total`, revisit your JVM heap settings as well.
+
+- **Tune against your actual workload:** Memory requirements vary with the amount of concurrent
+  requests and the size and formats of requested images. [Keep an eye on the exported metrics][metrics]
+  and adjust based on actual usage.
+
+[metrics]: ../reference/metrics.md
+
+## Concurrency
+- **Avoid CPU oversubscription in libvips:** If Wolpi handles multiple requests concurrently,
+  it's best to disable libvips' own multithreaded image processing by setting `VIPS_CONCURRENCY=1`
+  so each request does not fan out into several CPU-bound libvips threads
+
+- **Tune concurrency together with the extension pool:** More warm extension contexts improve
+  latency, but they also allow more work to run in parallel. If CPU time is already the bottleneck,
+  increasing [`extension-pool`](#extension-pool-configuration) limits can reduce overall throughput
+  instead of improving it.
+
+- **Benchmark the combination, not individual knobs in isolation:** `VIPS_CONCURRENCY`, the
+  extension-pool size, and available CPU all influence each other. Use your real image formats,
+  extension mix, and request patterns when tuning them.
+
 ## Caching
 
 Wolpi fully supports HTTP caching semantics to make it easy to run it behind CDNs and reverse
 proxies. It automatically generates and handles `ETag`/`If-None-Match`, `Last-Modified`/
-`If-Modified-Since` headers and Cache-Control directives for all image responses, based on the
+`If-Modified-Since` headers and `Cache-Control` directives for all image responses, based on the
 underlying image file's metadata or the data provided by custom resolvers.
 
 If you want local caching for source images (e.g. if your images come from a remote endpoint, and
 you want a disk-based cache), you can implement this in a custom extension that handles the caching
-logic in the `resolve` hook (e.g. by returning the path to the cache file instead of a HTTP URL).
+logic in the [`resolve` hook][resolve-hook] (e.g. by returning the path to the cache file instead of a HTTP URL).
+
+[resolve-hook]: ../extension-development.md#resolve-hook

@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -407,6 +408,43 @@ class NpmInstallerTest {
             installer.installExtension("test-package", "1.2.3", null, null);
             // Second installation should be skipped
             installer.installExtension("test-package", "1.2.3", null, null);
+        }
+    }
+
+    @Test
+    @DisplayName("should install scoped package with token auth on default npm registry")
+    void shouldInstallScopedPackageWithTokenAuthOnDefaultRegistry() throws Exception {
+        Path packageDir = nodeModulesDir.resolve("@scope").resolve("test-package");
+        Files.createDirectories(packageDir);
+        Files.writeString(packageDir.resolve("package.json"), """
+        {
+          "name": "@scope/test-package",
+          "version": "1.0.0",
+          "exports": "index.js"
+        }
+        """);
+
+        var builder = ProcessBuilderMocks.builder()
+                .matchCommandTokenContains("npm")
+                .verify((_, context) -> {
+                    @SuppressWarnings("unchecked")
+                    List<String> command = (List<String>) context.arguments().getFirst();
+                    int userConfigIndex = command.indexOf("--userconfig");
+                    assertThat(userConfigIndex).isPositive();
+                    Path npmrcPath = Path.of(command.get(userConfigIndex + 1));
+                    try {
+                        assertThat(Files.readString(npmrcPath))
+                                .contains("//registry.npmjs.org/:_authToken=my-token-123")
+                                .doesNotContain("registry=https://registry.npmjs.org/")
+                                .doesNotContain("@scope:registry=https://registry.npmjs.org/");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .success();
+        try (var _ = builder.build()) {
+            var auth = new IndexAuth(null, null, "my-token-123");
+            installer.installExtension("@scope/test-package", "1.0.0", null, auth);
         }
     }
 }
