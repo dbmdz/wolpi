@@ -8,7 +8,6 @@ import dev.mdz.wolpi.extension.PyPiInstaller;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.validation.CliRunner.InstallExtensionsCommand;
-import dev.mdz.wolpi.validation.CliRunner.InstallValidatorCommand;
 import dev.mdz.wolpi.validation.CliRunner.ValidationCommand;
 import java.io.File;
 import java.lang.invoke.MethodHandles;
@@ -29,15 +28,14 @@ import picocli.CommandLine.IFactory;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-/// Runner that provides a "validate" CLI command to validate a Wolpi extension
-/// using the IIIF Image API validation suite and a "install-validator" command
-/// to pre-install the validation suite (e.g. for building a container image).
+/// Runner that provides a small operational CLI surface for validating local
+/// extensions or pre-installing extensions from the active configuration.
 ///
 /// The actual subcommands are implemented in the inner classes.
 @Component
 @Command(
         mixinStandardHelpOptions = true,
-        subcommands = {ValidationCommand.class, InstallValidatorCommand.class, InstallExtensionsCommand.class})
+        subcommands = {ValidationCommand.class, InstallExtensionsCommand.class})
 public class CliRunner implements CommandLineRunner, Runnable {
 
     private static final Logger log =
@@ -53,9 +51,9 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
     @Override
     public void run(String... args) throws Exception {
-        // Pass over to picocli if "validate" command is given
-        if (Arrays.stream(args).anyMatch(arg -> List.of("validate", "install-validator", "install-extensions")
-                .contains(arg))) {
+        // Pass over to picocli if an operational subcommand is given
+        if (Arrays.stream(args)
+                .anyMatch(arg -> List.of("validate", "install-extensions").contains(arg))) {
             var filteredArgs = Arrays.stream(args)
                     .filter(arg -> !arg.startsWith("--spring.")
                             && !arg.startsWith("-D")
@@ -229,25 +227,6 @@ public class CliRunner implements CommandLineRunner, Runnable {
             try (var _ = extensionRegistry.temporarilyIsolateExtension(ext)) {
                 return imageApiValidator.validateExtension(ext, this.serverPort);
             }
-        }
-    }
-
-    @Component
-    @Command(name = "install-validator", description = "Install the IIIF Image API validation suite")
-    public static class InstallValidatorCommand implements Runnable {
-
-        private final ImageApiValidator imageApiValidator;
-
-        Consumer<Integer> exitHandler = System::exit;
-
-        public InstallValidatorCommand(ImageApiValidator imageApiValidator) {
-            this.imageApiValidator = imageApiValidator;
-        }
-
-        @Override
-        public void run() {
-            imageApiValidator.installValidator();
-            exitHandler.accept(0);
         }
     }
 
