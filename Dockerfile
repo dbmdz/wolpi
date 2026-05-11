@@ -56,21 +56,28 @@ ENV PATH="/opt/graalvm/bin:${PATH}"
 
 COPY --from=builder /app/target/wolpi-*.jar /app.jar
 
+# Create launcher script
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'exec java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -jar /app/app.jar "$@"' \
+    > /usr/local/bin/wolpi && \
+    chmod +x /usr/local/bin/wolpi
+
+# Unpack the fat jar
 RUN java -Djarmode=tools -jar /app.jar extract && \
     rm -rf /app.jar && \
     mv /app/app/* /app && \
     rm -rf /app/app
 
-RUN java --enable-native-access=ALL-UNNAMED \
-         --sun-misc-unsafe-memory-access=allow \
-         -jar /app/app.jar \
-         install-validator && \
-    cp -al /app/data /app/.data_preinstalled
+# Install the IIIF Image API validator
+RUN wolpi install-validator && \
+    mv /app/data /app/.data_preinstalled && \
+    mkdir -p /app/data
 
 EXPOSE 8080
 
-# Copy the preinstalled validator venv to the /app/data directory, which might
-# have been bind-mounted from outside
+# After the container has launched, copy the preinstalled validator venv to the /app/data directory,
+# which might have been bind-mounted from outside
 ENTRYPOINT ["/bin/sh", "-c", "cp -r -n /app/.data_preinstalled/. /app/data && exec \"$@\"", "--"]
 
-CMD ["java", "-jar", "--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow", "/app/app.jar"]
+CMD ["wolpi"]
