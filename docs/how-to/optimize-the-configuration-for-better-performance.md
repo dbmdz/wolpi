@@ -65,7 +65,7 @@ For more information about the extension pool and lifecycle, refer to the [secti
   requests and the size and formats of requested images. [Keep an eye on the exported metrics][metrics]
   and adjust based on actual usage.
 
-[metrics]: ../reference/metrics.md
+[metrics]: ../reference/observability.md#built-in-wolpi-metrics
 
 ## Concurrency
 - **Avoid CPU oversubscription in libvips:** If Wolpi handles multiple requests concurrently,

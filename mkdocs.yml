@@ -75,7 +75,8 @@ nav:
       - "Request and Image Processing Pipeline": concepts/request-and-image-processing-pipeline.md
       - "Extension Execution Model": concepts/extension-execution-model.md
   - Reference:
-      - "Monitoring and Logging": reference/monitoring.md
       - "Configuration": reference/configuration.md
-      - "Metrics": reference/metrics.md
+      - "CLI": reference/cli.md
+      - "HTTP Integration": reference/http.md
+      - "Observability": reference/observability.md
   - "Extension Development": extension-development.md

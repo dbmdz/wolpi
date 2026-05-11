@@ -394,7 +394,8 @@ You can register custom metrics from your extensions using the `wolpi.metrics` o
 provides methods to create counters, gauges and timers. Each method accepts a name for the metric,
 an optional description, an optional unit (except for timers, those are always measured in seconds)
 and an optional dictionary/object with labels to attach to the metric. These metrics will
-then be available in the [Wolpi Prometheus metrics endpoint](./ops.md#metrics) alongside the built-in metrics, and you can use them to monitor your extension's behavior and performance.
+then be available in the [Wolpi observability reference](./reference/observability.md#built-in-wolpi-metrics) alongside the built-in
+metrics, and you can use them to monitor your extension's behavior and performance.
 
 See the [Runtime API Reference](#runtime-api-reference) for more details on the available metrics APIs.
 
@@ -813,9 +814,10 @@ raise a special exception from your extension hooks:
     ```
 
     ```python
+    from wolpi import ResolvedImage
     from wolpi.errors import HttpStatusError
 
-    def resolve(identifier: str) -> ImageSource:
+    def resolve(identifier: str) -> ResolvedImage:
         if identifier == 'broken-identifier':
             raise HttpStatusError(
                 message='Got a broken identifier',

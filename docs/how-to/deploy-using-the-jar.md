@@ -36,9 +36,9 @@ the tile sizes for the `info.json` responses, so if you use an older version, th
 field will be missing, even if the input image supports tiled access.
 
 **We highly recommend** not using the default memory allocator on glibc-based systems (most common
-Linux distributions use glibc), since it is prone to memory fragmentation for the types of workloads
-Wolpi executes. A good choice is [jemalloc2][jemalloc], which is available on most distributions.
-This guide will assumes you have jemalloc2 available on the system.
+Linux distributions use glibc), since it is prone to [memory fragmentation][memory-fragmentation]
+for the types of workloads Wolpi executes. A good choice is [jemalloc2][jemalloc], which is
+available on most distributions. This guide will assumes you have jemalloc2 available on the system.
 
 **If you use JavaScript extensions**, install a [recent Node.js and npm release][node-npm].
 Use at least `npm` 10; a current Node.js LTS release is a good default.
@@ -102,8 +102,8 @@ packaging:
 
 If you want to install extensions, add them under `extensions:` as described
 in [Using Extensions](./install-extensions.md). You might also want to check
-out the [optimization guide](./optimize-the-configuration-for-better-performance.md)
-for the available knobs.
+out the [configuration reference](../reference/configuration.md) and the
+[optimization guide](./optimize-the-configuration-for-better-performance.md).
 
 ## Install extensions before first start (optional)
 
@@ -117,6 +117,8 @@ $ sudo -u wolpi /path/to/your/java/bin/java -jar /opt/wolpi/wolpi.jar \
 
 If you installed GraalPy, make sure `packaging.python-executable` points to `graalpy`, not to
 CPython.
+
+For the behavior and scope of `install-extensions`, see the [CLI reference](../reference/cli.md).
 
 ## Create the systemd service
 To manage the service, we're going to add a systemd service, which will allow
@@ -198,5 +200,7 @@ $ curl -s http://127.0.0.1:8080/v3/67352ccc-d1b0-11e1-89ae-279075081939/info.jso
 - If you want to publish Wolpi behind a public web server, ingress, or TLS terminator, see
   [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md).
 - For extension configuration examples, see [Using Extensions](./install-extensions.md).
+- For HTTP-facing behavior such as redirects, caching, and CORS, see
+  [HTTP Integration](../reference/http.md).
 - For container-based deployments, see [Deploying Wolpi Using Docker/Podman](./deploy-using-docker-podman.md).
 - For runtime tuning, see [Optimizing Wolpi Configuration](./optimize-the-configuration-for-better-performance.md).

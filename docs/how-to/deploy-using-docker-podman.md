@@ -62,6 +62,9 @@ $ curl -s http://localhost:8080/monitoring/health/liveness
 $ curl -s http://localhost:8080/monitoring/prometheus | head
 ```
 
+For the exact endpoint surface and log behavior, see the
+[observability reference](../reference/observability.md).
+
 ## Keep extension state persistent (if needed)
 
 If you [install extensions](./install-extensions.md) from package registries at runtime, persist
@@ -83,6 +86,8 @@ custom image with pre-installed extensions as described in
 - If you want to publish Wolpi under a public hostname, TLS terminator, or path prefix, see
   [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md).
 - For extension configuration examples, see [Using Extensions](./install-extensions.md).
+- For redirects, cache headers, conditional requests, and CORS behavior, see
+  [HTTP Integration](../reference/http.md).
 - For runtime tuning, see
   [Optimizing Wolpi Configuration](./optimize-the-configuration-for-better-performance.md).
 

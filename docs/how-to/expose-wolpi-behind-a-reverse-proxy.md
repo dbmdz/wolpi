@@ -93,5 +93,6 @@ URL visibility.
 ## Related reference
 
 See the [configuration reference](../reference/configuration.md#http-configuration) for
-`http.base-uri`, and the [monitoring reference](../reference/monitoring.md) for health, metrics,
-and application logging.
+`http.base-uri`, the [HTTP integration reference](../reference/http.md) for redirects, caching, and
+response semantics, and the [observability reference](../reference/observability.md) for health,
+metrics, and application logging.

@@ -10,6 +10,9 @@ Extensions are configured in the `wolpi.yml` file under the `extensions` key, wi
 as a separate list entry, containing a description of its source (`path`, `npm`, or `pypi`) and
 optionally a set of configuration options.
 
+For the exact configuration keys around extensions, packaging, runtime pooling, and debugging, see
+the [configuration reference](../reference/configuration.md).
+
 !!! warning
     If you run Wolpi outside the [official container](./deploy-using-docker-podman.md), please take note
     of  the [requirements](./deploy-using-the-jar.md) for installing extension packages.
@@ -151,6 +154,9 @@ If you want to pre-install and pre-verify your extension setup, you can launch t
 the `install-extensions` subcommand, which will perform the above steps and then simply exit. If
 you use a container-based deployment, check out the how-to
 on [building containers with pre-installed extensions](./build-containers-with-pre-installed-extensions.md).
+
+For `install-extensions` and `validate`, see the
+[CLI reference](../reference/cli.md).
 
 [test-suite]: https://pypi.org/project/iiif-validator-ng/
 

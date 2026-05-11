@@ -55,12 +55,15 @@ Wolpi provides everything required to run it both on traditional servers and in 
 - [Health checks][ops-health] and [metrics endpoint for monitoring][ops-metrics]
 - [Structured logging][ops-logging] to the standard output (to be picked up by e.g. journald or k8s)
 
-Most of the above features are [integrated into the extension API, so you can [log][ops-extdev-log],
-[export metrics][ops-extdev-metrics] and [provide caching information][ops-extdev-cching] from your
-custom extensions as well.
+Most of the above features are integrated into the extension API, so custom extensions can
+[log][ops-extdev-log], [export metrics][ops-extdev-metrics], and provide cache metadata for
+resolved images as well.
 
 [ops-jar]: ./how-to/deploy-using-the-jar.md
 [ops-container]: ./how-to/deploy-using-docker-podman.md
-[ops-caching]: ./how-to/optimize-the-configuration-for-better-performance.md#caching
-[ops-health]: ./how-to/monitor-wolpi.md#health-endpoints
-[ops-metrics]: ./how-to/monitor-wolpi.md#monitoring-wolpi
+[ops-caching]: ./reference/http.md#caching-and-conditional-requests
+[ops-health]: ./reference/observability.md#health-endpoints
+[ops-metrics]: ./reference/observability.md#built-in-wolpi-metrics
+[ops-logging]: ./reference/observability.md#structured-logging
+[ops-extdev-log]: ./extension-development.md#logging-from-extensions
+[ops-extdev-metrics]: ./extension-development.md#custom-metrics-from-extensions

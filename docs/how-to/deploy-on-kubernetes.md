@@ -140,7 +140,8 @@ spec:
     make sure it forwards the `Host` and `X-Forwarded-*` headers correctly. If that is not
     possible, set `http.base-uri` in `wolpi.yml` to the public base URL so generated `id` values
     and canonical links use the public URL. See also
-    [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md).
+    [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md) and the
+    [HTTP integration reference](../reference/http.md).
 
 ## Add metrics scraping (optional)
 
@@ -222,6 +223,8 @@ wolpi_extensions_loaded
 
 - If you expose the service publicly through an ingress or gateway, see
   [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md).
+- For redirects, caching, and response behavior at the IIIF endpoints, see
+  [HTTP Integration](../reference/http.md).
 - For runtime tuning, see
   [Optimizing Wolpi Configuration](./optimize-the-configuration-for-better-performance.md).
 - For extension configuration examples, see [Using Extensions](./install-extensions.md).

@@ -21,6 +21,9 @@ extensions).
 2. If you use local extensions: Copy those to the configured path inside the container
 3. Run Wolpi with the `install-extensions` subcommand during the container build
 
+For the exact behavior of `install-extensions` and the related CLI commands, see the
+[CLI reference](../reference/cli.md).
+
 Here is an example that builds an image with the [Pattern Resolver extension][pattern-resolver]
 that is being installed remotely from [npmjs.com][npmjs]:
 
