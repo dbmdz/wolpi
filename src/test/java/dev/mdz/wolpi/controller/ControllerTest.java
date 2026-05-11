@@ -115,6 +115,17 @@ public class ControllerTest {
     }
 
     @Test
+    public void testBaseUriRedirectUsesCustomBaseUri() throws Exception {
+        when(wolpiConfig.http())
+                .thenReturn(new HttpConfig("localhost", 31337, 8, 200, 200, "https://example.com/iiif"));
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939"))
+                .andExpect(status().isSeeOther())
+                .andExpect(header().string(
+                                "Location",
+                                "https://example.com/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/info.json"));
+    }
+
+    @Test
     public void testImageCanonicalRedirectIncludesContextPath() throws Exception {
         mockMvc.perform(get("/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/color.jpg")
                         .contextPath("/iiif"))
@@ -123,6 +134,18 @@ public class ControllerTest {
                                 "Location",
                                 containsString(
                                         "/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg")));
+    }
+
+    @Test
+    public void testImageCanonicalRedirectUsesCustomBaseUri() throws Exception {
+        when(wolpiConfig.http())
+                .thenReturn(new HttpConfig("localhost", 31337, 8, 200, 200, "https://example.com/iiif"));
+        mockMvc.perform(get("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/color.jpg"))
+                .andExpect(status().isMovedPermanently())
+                .andExpect(
+                        header().string(
+                                        "Location",
+                                        "https://example.com/iiif/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.jpg"));
     }
 
     @Test

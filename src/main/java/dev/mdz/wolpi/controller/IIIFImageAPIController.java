@@ -82,9 +82,7 @@ public class IIIFImageAPIController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         HttpHeaders headers = new HttpHeaders();
-        String redirectUrl =
-                ServletUriComponentsBuilder.fromCurrentRequest().build().toUriString() + "/info.json";
-        headers.add("Location", redirectUrl);
+        headers.add("Location", getPublicUrl("/v%d/%s/info.json".formatted(version.value(), identifier)));
         return ResponseEntity.status(HttpStatus.SEE_OTHER).headers(headers).build();
     }
 
@@ -148,13 +146,11 @@ public class IIIFImageAPIController {
                     .body(Map.of("error", "Could not read image information"));
         }
 
-        String baseUrl;
-        if (hasConfiguredBaseUri()) {
-            baseUrl = "%s/v%d/%s".formatted(config.http().baseUri(), version.value(), identifier);
-        } else {
-            baseUrl = request.getRequestURL().toString().replace("/info.json", "");
-        }
-        Map<String, Object> infoJson = loader.getImageInfoJson(identifier, imageInfo, version, baseUrl);
+        Map<String, Object> infoJson = loader.getImageInfoJson(
+                identifier,
+                imageInfo,
+                version,
+                getPublicUrl("/v%d/%s/info.json".formatted(version.value(), identifier)));
 
         if (config.iiif().features().jsonLdMediaType()) {
             outHeaders.setContentType(
@@ -259,12 +255,7 @@ public class IIIFImageAPIController {
         if (canonicalRequest != null
                 && !request.equals(canonicalRequest)
                 && config.iiif().features().canonicalRedirect()) {
-            // Prepend servlet context or X-Forwarded-Prefix to the canonical URL if we have it, to
-            // make sure the client ends up at the correct URL even if we're running behind a reverse
-            // proxy with a prefix or in a servlet context
-            String canonicalUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path(canonicalRequest.toRequestPath())
-                    .toUriString();
+            String canonicalUrl = getPublicUrl(canonicalRequest.toRequestPath());
             outHeaders.add("Location", canonicalUrl);
             return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
                     .headers(outHeaders)
@@ -298,16 +289,7 @@ public class IIIFImageAPIController {
 
         List<String> linkHeaderUrls = new ArrayList<>();
         if (canonicalRequest != null && config.iiif().features().canonicalLinkHeader()) {
-            String canonicalUrl;
-            if (hasConfiguredBaseUri()) {
-                canonicalUrl = "%s%s".formatted(config.http().baseUri(), canonicalRequest.toRequestPath());
-            } else {
-                canonicalUrl = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .build()
-                        .toUriString()
-                        .replace(request.toRequestPath(), canonicalRequest.toRequestPath());
-            }
-            linkHeaderUrls.add("<%s>; rel=\"canonical\"".formatted(canonicalUrl));
+            linkHeaderUrls.add("<%s>; rel=\"canonical\"".formatted(getPublicUrl(canonicalRequest.toRequestPath())));
         }
 
         // Cache Headers only on proper image responses
@@ -344,13 +326,13 @@ public class IIIFImageAPIController {
         }
     }
 
-    /// Set `ETag` and/or `Last-Modified` headers on the given HttpHeaders object based on the
+    /// Set `ETag` and/or `Last-Modified` headers on the given [HttpHeaders] object based on the
     /// cache information in the [ImageSource].
     ///
     /// Will only set the headers if they are not already present in the existing header set.
     ///
-    /// @param headers           The [HttpHeaders] object to set the headers on.
-    /// @param source            The [ImageSource] containing cache information.
+    /// @param headers The [HttpHeaders] object to set the headers on.
+    /// @param source  The [ImageSource] containing cache information.
     private void setCacheHeaders(HttpHeaders headers, ImageSource source) {
         if (source.cacheInfo() == null) {
             return;
@@ -384,9 +366,20 @@ public class IIIFImageAPIController {
         return ResponseEntity.ok().headers(outHeaders).build();
     }
 
-    private boolean hasConfiguredBaseUri() {
-        return config.http() != null
+    /// Given a request path, calculate its public URL.
+    ///
+    /// Prepend custom base URI (if configured), servlet context or X-Forwarded-Prefix to the URL
+    /// if we have it. This ensures that the client ends up at the correct URL, even if we're
+    /// running behind a reverse proxy with a prefix or in a custom servlet context.
+    private String getPublicUrl(String requestPath) {
+        if (config.http() != null
                 && config.http().baseUri() != null
-                && !config.http().baseUri().isBlank();
+                && !config.http().baseUri().isBlank()) {
+            return "%s%s".formatted(config.http().baseUri(), requestPath);
+        } else {
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path(requestPath)
+                    .toUriString();
+        }
     }
 }
