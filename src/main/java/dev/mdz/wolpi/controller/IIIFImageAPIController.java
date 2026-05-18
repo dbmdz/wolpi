@@ -147,10 +147,7 @@ public class IIIFImageAPIController {
         }
 
         Map<String, Object> infoJson = loader.getImageInfoJson(
-                identifier,
-                imageInfo,
-                version,
-                getPublicUrl("/v%d/%s/info.json".formatted(version.value(), identifier)));
+                identifier, imageInfo, version, getPublicUrl("/v%d/%s".formatted(version.value(), identifier)));
 
         if (config.iiif().features().jsonLdMediaType()) {
             outHeaders.setContentType(
