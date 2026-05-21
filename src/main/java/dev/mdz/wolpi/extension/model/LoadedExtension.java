@@ -30,6 +30,6 @@ public sealed interface LoadedExtension permits JSLoadedExtension, PythonLoadedE
     /// detect staleness of loaded extensions.
     @Nullable Instant lastModified();
 
-    /// The programming langauge the extension is implemented in
+    /// The programming language the extension is implemented in
     Language language();
 }
