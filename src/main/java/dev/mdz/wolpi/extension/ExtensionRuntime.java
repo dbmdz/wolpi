@@ -323,7 +323,7 @@ public interface ExtensionRuntime extends AutoCloseable {
             }
             Value getSkippedFn = PolyglotHelpers.getDictOrObjectMember("skippableHooks", extValue, true);
             assert getSkippedFn != null && getSkippedFn.canExecute();
-            Value res = getSkippedFn.execute(request);
+            Value res = getSkippedFn.execute(PolyglotHelpers.toGuest(request, ext.language()));
             if (res == null || res.isNull()) {
                 return skippableHooks;
             }

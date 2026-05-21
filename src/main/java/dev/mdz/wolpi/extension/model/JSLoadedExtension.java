@@ -17,4 +17,9 @@ public record JSLoadedExtension(
         Set<ExtensionHooks> implementedHooks,
         @Nullable ExtensionGuestContext guestContext,
         @Nullable Instant lastModified)
-        implements LoadedExtension {}
+        implements LoadedExtension {
+    @Override
+    public Language language() {
+        return Language.JAVASCRIPT;
+    }
+}

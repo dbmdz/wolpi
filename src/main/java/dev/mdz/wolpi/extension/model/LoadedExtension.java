@@ -29,4 +29,7 @@ public sealed interface LoadedExtension permits JSLoadedExtension, PythonLoadedE
     /// The last modified time of the extension source, if available, used for live reloading to
     /// detect staleness of loaded extensions.
     @Nullable Instant lastModified();
+
+    /// The programming langauge the extension is implemented in
+    Language language();
 }

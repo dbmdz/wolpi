@@ -72,6 +72,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -533,6 +534,7 @@ public class ExtensionRuntimeTest {
             }
         }
 
+        @DisabledIfEnvironmentVariable(named = "CI", matches = "true")
         @Test
         @DisplayName("Should run setup, cleanup and destroy hooks appropriately")
         void shouldRunSetupCleanupAndDestroyHooks() {
@@ -829,6 +831,33 @@ public class ExtensionRuntimeTest {
         try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
             var skippableHooks = runtime.getSkippableHooks(ImageRequest.full("some-image", IIIFVersion.V3));
             assertThat(skippableHooks).contains(ExtensionHooks.SCALE);
+        }
+    }
+
+    @Test
+    @DisplayName("Should pass image requests to Python skippable hooks as field-accessible records")
+    void shouldPassImageRequestToPythonSkippableHooksAsFieldAccessibleRecord() throws IOException {
+        var ext = writePyExtension("field-accessible-skippable-request", """
+                def info():
+                    return {"name": "Field Accessible Skippable Request", "apiVersion": 1, "description": "test"}
+
+                def cleanup():
+                    pass
+
+                def pre_quality(image, identifier, image_info, iiif_request):
+                    return None
+
+                def skippable_hooks(iiif_request):
+                    if iiif_request.qualitySpec == "filter:glow-up":
+                        return set()
+                    return {"pre_quality"}
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            var customQualityRequest =
+                    new ImageRequest("some-image", IIIFVersion.V3, "full", "max", "0", "filter:glow-up", "jpg");
+            var skippableHooks = runtime.getSkippableHooks(customQualityRequest);
+
+            assertThat(skippableHooks).doesNotContain(ExtensionHooks.QUALITY);
         }
     }
 

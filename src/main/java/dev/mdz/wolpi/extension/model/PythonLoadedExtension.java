@@ -25,4 +25,9 @@ public record PythonLoadedExtension(
         @Nullable Path virtualEnvironment,
         @Nullable ExtensionGuestContext guestContext,
         @Nullable Instant lastModified)
-        implements LoadedExtension {}
+        implements LoadedExtension {
+    @Override
+    public Language language() {
+        return Language.PYTHON;
+    }
+}
