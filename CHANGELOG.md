@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- Container images now include a `wolpi` launcher script that wraps the
+  required JVM options.
+- Documentation for reverse proxy deployment, HTTP integration, CLI usage,
+  observability, and Wolpi's request/image processing pipeline.
+- Mise configuration for the local Java, Node.js, and GraalPy development
+  toolchain.
+
+### Changed
+- Public documentation and project metadata now point to `https://wolpi.mdz.dev`.
+- The documentation set has been reorganized into tutorials, how-to guides,
+  concepts, and reference material.
+- Docker images now use the `wolpi` launcher for startup and validator
+  installation.
+- CLI validation errors are now reported without full stack traces.
+- Updated `app.photofox.vips-ffm:vips-ffm-core` to `1.9.8`.
+- Updated `com.diffplug.spotless:spotless-maven-plugin` to `3.5.1`.
+
 ### Fixed
 - Determining available image sizes from pyramidal TIFs that use SubIFDs to
   encode their layers was broken due to a flipped predicate.
@@ -22,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Class-based Python extensions now discover implemented hooks in Python,
   including the documented `wolpi_extension()` factory path and hooks inherited
   from user-defined base classes.
+- Redirects and canonical links now consistently use the configured
+  `http.base-uri`.
+- `info.json` responses now use the image base URL, rather than the
+  `info.json` URL itself, as their identifier.
+- JavaScript `skippableHooks` implementations can now access request records
+  through the same proxy conversion used by other extension hook calls.
+- JavaScript extension registry authentication now works with the default npm
+  registry when no custom registry URL is configured.
 
 ### Security
 - Prevent path traversal attacks through the fallback image resolver
