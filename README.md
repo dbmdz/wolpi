@@ -49,7 +49,7 @@ You should be able to open http://localhost:8080/v3/wolpi.png/full/max/0/default
 
 For a container-based first run, see ["Serving your first image"][first-image] in the documentation.
 
-[first-image]: ./docs/getting-started/serving-your-first-image.md
+[first-image]: https://wolpi.mdz.dev/getting-started/serving-your-first-image
 
 ## Extensions
 
@@ -60,8 +60,8 @@ processing, custom output formats, logging, metrics and cache metadata.
 To use existing extensions, see [Using Extensions][using-extensions]. To learn how to create your own
 extensions, see the [extension development documentation][extension-development].
 
-[using-extensions]: ./docs/how-to/install-extensions.md
-[extension-development]: ./docs/extension-development.md
+[using-extensions]: https://wolpi.mdz.dev/how-to/install-extensions
+[extension-development]: https://wolpi.mdz.dev/extension-development
 
 ## Developing Wolpi
 
@@ -96,8 +96,7 @@ Useful local endpoints:
 
 ## Building the Documentation
 
-Use [Zensical][zensical] to build or serve the documentation. It can read the existing
-`mkdocs.yml`, so we keep that file for now:
+Use [Zensical][zensical] to build or serve the documentation.
 
 ```bash
 # install uv if you don't have it already
