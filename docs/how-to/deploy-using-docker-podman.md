@@ -95,12 +95,7 @@ custom image with pre-installed extensions as described in
 
 The Wolpi container image uses Oracle GraalVM for performance reasons. While the
 application code is MIT licensed, the container image itself is subject to the
-[GraalVM Free Terms and Conditions][gftc-license], which permits use (including
-for commercial purposes) and free redistribution but restricts selling the JDK
-distribution. You're fine using the container in production (including
-commercial SaaS use), but **if you want to sell the container image itself, you
-need to get a commercial GraalVM license from Oracle.**
-
-**tl;dr for 99.99% of all users**: You're fine.
+[GraalVM Free Terms and Conditions][gftc-license], which puts certain limits on
+(commercial) redistribution.
 
 [gftc-license]: https://www.oracle.com/downloads/licenses/graal-free-license.html

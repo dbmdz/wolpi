@@ -1,0 +1,5 @@
+[tools]
+java = "oracle-graalvm-25"
+node = "25"
+python = "graalpy-25"
+maven = "3.9"

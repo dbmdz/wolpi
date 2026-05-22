@@ -1,5 +1,6 @@
 site_name: 'Wolpi: An Extensible IIIF Image Server'
-site_url: https://dbmdz.github.io/wolpi
+site_url: https://wolpi.mdz.dev
+site_dir: public
 watch:
   - ./docs
 copyright: Made with 🐇❤️ in Munich, Germany at the Bavarian State Library
@@ -76,7 +77,7 @@ nav:
       - "Extension Execution Model": concepts/extension-execution-model.md
   - Reference:
       - "Configuration": reference/configuration.md
-      - "CLI": reference/cli.md
       - "HTTP Integration": reference/http.md
       - "Observability": reference/observability.md
+      - "CLI": reference/cli.md
   - "Extension Development": extension-development.md

@@ -520,11 +520,10 @@ more about the available APIs for image processing. Some of the methods on the `
     ```
 
     1.  Here we create a new `VImage` object with some text to use as a watermark.
-        We need to pass the `wolpi.vipsArena` memory arena to the [`VImage.text`][text]
+        We need to pass the `wolpi.vipsArena` memory arena to the
+        [`VImage.text`](https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html#text%28java.lang.foreign.Arena,java.lang.String,app.photofox.vipsffm.VipsOption...%29)
         method to create the image, since the vips bindings we use need to do an allocation
         for that.
-
-    [text]: https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html#text(java.lang.foreign.Arena,java.lang.String,app.photofox.vipsffm.VipsOption...)
 
 === "Python"
 
@@ -553,7 +552,8 @@ more about the available APIs for image processing. Some of the methods on the `
     ```
 
     1.  Here we create a new `VImage` object with some text to use as a watermark.
-        We need to pass the `wolpi.vipsArena` memory arena to the [`VImage.text`][text]
+        We need to pass the `wolpi.vipsArena` memory arena to the
+        [`VImage.text`](https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html#text%28java.lang.foreign.Arena,java.lang.String,app.photofox.vipsffm.VipsOption...%29)
         method to create the image, since the vips bindings we use need to do an allocation
         for that.
 
@@ -654,9 +654,9 @@ Wolpi extensions can be kept as single files, as shown in the [Quickstart](#quic
     package registry (defaults to PyPI, but custom indices can be configured). The package must define
     a `wolpi` entry point in its `pyproject.toml`. This entry point must point to a callable that
     returns a dictionary of hooks, or an object that has the hooks as methods. The directory layout
-    of the package can either be ["src"-style or "flat"][dir-layout] (i.e. `src/<pkg>` or just `<pkg>`).
-
-    [dir-layout]: https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/
+    of the package can either be
+    ["src"-style or "flat"](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/)
+    (i.e. `src/<pkg>` or just `<pkg>`).
 
     ```toml linenums="1" title="./pyproject.toml"
     [project]
@@ -1405,8 +1405,6 @@ the image and the Image API request. It must return a new `VImage` object that r
 or a `null`/`None` value to indicate that no processing was done (see [below][java-api]) for details on how
 to interact with `VImage`). The returned image must have the same dimensions as the input image;
 if it does not, Wolpi logs a warning and ignores the result.
-
-[java-api]: #working-with-java-classes-from-extensions
 
 === "JavaScript"
 

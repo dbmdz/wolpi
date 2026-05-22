@@ -7,6 +7,7 @@ the [IIIF Image API Validation test suite][iiif-validation].
 
 [info-hook]: ../extension-development.md#info-hook
 [iiif-validation]: https://github.com/dbmdz/image-validator-ng
+[cleanup-hook]: ../extension-development.md#cleanup-hook
 
 ## Extension Pooling and Lifecycle
 
@@ -41,9 +42,9 @@ stateDiagram-v2
     Pooled --> destroyHook: Evicted/Shutdown
     destroyHook --> [*]
 
-    click setupHook href "../extension-development.md#setup-and-destroy-hooks"
-    click cleanupHook href "../extension-development.md#cleanup-hook"
-    click destroyHook href "../extension-development.md#setup-and-destroy-hooks"
+    click setupHook href "../../../extension-development/#setup-and-destroy-hooks"
+    click cleanupHook href "../../../extension-development/#cleanup-hook"
+    click destroyHook href "../../../extension-development/#setup-and-destroy-hooks"
 ```
 
 ## Extension Request Processing
@@ -80,16 +81,16 @@ graph TB
   C --> SA;
   C --> SB;
 
-  click A href "../extension-development.md#authorize-hook"
-  click B href "../extension-development.md#resolve-hook"
-  click D href "../extension-development.md#preprocessimage-hook"
-  click E href "../extension-development.md#image-processing-hooks"
-  click F href "../extension-development.md#image-processing-hooks"
-  click G href "../extension-development.md#image-processing-hooks"
-  click H href "../extension-development.md#image-processing-hooks"
-  click I href "../extension-development.md#preformat-hook"
-  click J href "../extension-development.md#cleanup-hook"
-  click K href "../extension-development.md#augmentinfojson-hook"
+  click A href "../../extension-development/#authorize-hook"
+  click B href "../../extension-development/#resolve-hook"
+  click D href "../../extension-development/#preprocessimage-hook"
+  click E href "../../extension-development/#image-processing-hooks"
+  click F href "../../extension-development/#image-processing-hooks"
+  click G href "../../extension-development/#image-processing-hooks"
+  click H href "../../extension-development/#image-processing-hooks"
+  click I href "../../extension-development/#preformat-hook"
+  click J href "../../extension-development/#cleanup-hook"
+  click K href "../../extension-development/#augmentinfojson-hook"
 ```
 
 An extension can read state set from an earlier hook, since all hooks on a request are executed on

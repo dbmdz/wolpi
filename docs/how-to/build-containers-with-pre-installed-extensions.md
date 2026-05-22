@@ -27,6 +27,9 @@ For the exact behavior of `install-extensions` and the related CLI commands, see
 Here is an example that builds an image with the [Pattern Resolver extension][pattern-resolver]
 that is being installed remotely from [npmjs.com][npmjs]:
 
+[pattern-resolver]: https://github.com/dbmdz/wolpi-pattern-resolver
+[npmjs]: https://www.npmjs.com/
+
 ```yaml title="build-config.yml"
 extensions:
   - npm:
