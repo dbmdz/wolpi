@@ -1,15 +1,35 @@
 # Extension Execution Model
 
+When a user defines an extension in their configuration, Wolpi will first install it to its data
+directory, if necessary (i.e. for everything but local single-file extensions). It will then load
+it, load its metadata from the [`info` hook][info-hook] and verify it using
+the [IIIF Image API Validation test suite][iiif-validation].
+
+[info-hook]: ../extension-development.md#info-hook
+[iiif-validation]: https://github.com/dbmdz/image-validator-ng
+
 ## Extension Pooling and Lifecycle
-Extensions in Wolpi are kept in a pool after they have been loaded, so that they can be reused for
-multiple subsequent requests without having to run expensive initialization code for each request.
-Wolpi ensures that **only one request is processed by any one extension instance at a time**, so that
-extensions do not need to worry about concurrency issues and can keep state in memory between
-hook invocations and requests without having to secure it with locks or other synchronization
-mechanisms. Each pooled extension instance runs [`setup`](../extension-development.md#setup-and-destroy-hooks) once when the
-instance is created, [`cleanup`](../extension-development.md#cleanup-hook) after each request it participated in, and
-[`destroy`](../extension-development.md#setup-and-destroy-hooks) when that instance is evicted from the pool or otherwise shut
-down.
+
+While running, Wolpi keeps loaded extension instances in a pool, so the expensive extension setup
+and language runtime initialization is not run on every request, and instead reused across many
+requests.
+
+When Wolpi receives a request, it will **borrow** an instance of the extension from this shared
+pool, execute the hook and then **return** it back to the pool, after which it can be re-used
+by other requests.
+
+A borrowed instance handles **one request at a time**. An extension can keep request-scoped state in
+memory between hook calls without adding synchronization around that state. The extension must clear
+state in [`cleanup`][cleanup-hook] if the next request is not supposed to see it.
+
+Each pooled extension instance runs:
+
+- [`setup`](../extension-development.md#setup-and-destroy-hooks) once, when Wolpi creates the
+  instance.
+- [`cleanup`](../extension-development.md#cleanup-hook) after each request in which the instance
+  participated.
+- [`destroy`](../extension-development.md#setup-and-destroy-hooks) when Wolpi evicts the instance
+  from the pool or shuts down.
 
 ```mermaid
 stateDiagram-v2
@@ -27,16 +47,14 @@ stateDiagram-v2
 ```
 
 ## Extension Request Processing
-Wolpi extensions work by implementing one or more "hooks". A hook is a function that is called by
-Wolpi at a specific point in its request processing pipeline. Most of the hooks are called when
-processing client requests, where they can implement custom [authorization](../extension-development.md#authorize-hook),
-[resolving](../extension-development.md#resolve-hook) or [override steps in the image processing](../extension-development.md#image-processing-hooks).
-There's also a [hook for implementing customizations to the `info.json` response](../extension-development.md#info-hook).
-If multiple extensions implement the same hook, the behavior depends on the hook
-and is described [in the extension development documentation](../extension-development.md#multiple-extensions-and-hook-behavior).
+Extensions participate in request handling through hooks:
 
-During request handling, developers can safely assume that the request hooks are called in a
-specific order:
+- [authorization](../extension-development.md#authorize-hook)
+- [identifier resolution](../extension-development.md#resolve-hook)
+- [image processing](../extension-development.md#image-processing-hooks)
+- [`info.json` customization](../extension-development.md#info-hook)
+
+For one request, the hook order is:
 
 ```mermaid
 graph TB
@@ -53,7 +71,7 @@ graph TB
 
   subgraph SB[info.json Request]
     direction TB
-    K[augmentInfoJson];
+    K[augmentInfoJson, if present];
   end
 
   I --> J[cleanup];
@@ -74,47 +92,49 @@ graph TB
   click K href "../extension-development.md#augmentinfojson-hook"
 ```
 
-This means that you can maintain state between hook invocations and be sure that the state
-will always refer to the same request, as long as you clean it up in the end:
-Wolpi **requires** that every extension implements a [cleanup](../extension-development.md#cleanup-hook) hook. It is called after request
-processing for an extension instance that participated in handling the request. Use this hook to
-clear up any state that should not persist between requests. It's perfectly fine to have the hook do
-nothing if your extension does not accumulate any request-scoped state, but we mandate it anyway to
-avoid accidental state leaks (which are really difficult to debug).
+An extension can read state set from an earlier hook, since all hooks on a request are executed on
+the same borrowed instance. For example, it can resolve metadata once and reuse it during image
+processing or `info.json` augmentation.
+
+`cleanup` is the request boundary. Wolpi **requires** every extension to implement a
+[cleanup](../extension-development.md#cleanup-hook) hook. A stateless extension can leave it empty.
+An extension with request-scoped state should clear that state there.
 
 ## Multiple Extensions and Hook Behavior
 
-When configuring multiple extensions, it can happen that more than one extension implements
-the same hook. What happens in this case depends on the hook:
+When multiple extensions implement the same hook, Wolpi uses hook-specific rules:
 
 - **`authorize`**
-    Called **in parallel** until one returns `false`, in which case the request is
-    considered unauthorized and all other pending hook calls are canceled. If all return `true`,
-    the request is authorized. If any of the extensions throws an error, the request fails with a
-    error response.
+    Wolpi calls these hooks **in parallel** until one returns `false`. Wolpi then treats the request
+    as unauthorized and cancels all pending hook calls. If all return `true`, Wolpi authorizes the
+    request. If any extension throws an error, the request fails with an error response.
 - **`resolve`**
-    Called **in parallel** until one resolves to a valid image source, in which case all other
-    pending hook calls are canceled. If none of the extensions resolve the identifier, Wolpi falls back
-    to resolving it against the configured filesystem image base directory. If that also fails, the
-    request fails with a `404 Not Found` error. If any of the extensions throws an error and none of the
-    others can resolve the identifier, the request fails with an error response, otherwise the error is
-    logged and the first successful resolution is used.
+    Wolpi calls these hooks **in parallel** until one resolves to a valid image source. Wolpi then
+    cancels all pending hook calls. If no extension resolves the identifier, Wolpi falls back to the
+    configured filesystem image base directory. If that also fails, the request fails with a
+    `404 Not Found` error. If an extension throws an error and no other extension resolves the
+    identifier, the request fails with an error response. If another extension resolves the
+    identifier, Wolpi logs the error and uses the first successful resolution.
 
-!!! warning "Order is not guaranteed!"
+!!! warning "Parallel hooks have no order"
 
-    Since the `authorize` and `resolve` hooks are called in parallel, there is no guarantee
-    about the order in which the extensions are called. If you have multiple extensions that
-    implement these hooks, ensure that they do not depend on being called in a specific order and
-    ideally that there is no overlap in the identifiers they can handle.
+    Wolpi calls the `authorize` and `resolve` hooks in parallel, so extension order is undefined. If
+    you have multiple extensions that implement these hooks, ensure that they do not depend on a
+    specific order and avoid overlap in the identifiers they can handle.
     If you need ordered behavior, e.g. to implement a custom "fallback resolver", consider combining
     the logic into a single extension by declaring the other extensions as dependencies in your own
     extension package, assuming they share a programming language.
 
 - **`augmentInfoJson`** and **`preProcessImage`**
-    Called in sequence, passing the result of each hook as the input to the next one. If any of them
-    throw an error, the request fails with an error response.
+    Wolpi calls these hooks in sequence. Each extension receives the previous extension's result. If
+    any of them throw an error, the request fails with an error response.
 
 - **`preCrop`**, **`preScale`**, **`preRotate`**, **`preQuality`**, **`preFormat`**
-    Called in sequence until one returns a non-null result. If none returns a non-null result,
-    the standard implementation for that operation is used. If any of them throw an error,
-    the request fails with an error response.
+    Wolpi calls these hooks in sequence until one returns a non-null result. The returned value
+    handles the stage, and Wolpi does not call later extensions for the same stage. If none returns a
+    non-null result, Wolpi uses the standard implementation. If any of them throw an error, the
+    request fails with an error response.
+
+Image-processing hooks also constrain request planning. Wolpi uses reduced-size load and crop/scale
+fast paths only when it knows that extensions do not need to intercept those stages. See
+[Request and Image Processing Pipeline](./request-and-image-processing-pipeline.md).

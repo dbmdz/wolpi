@@ -41,7 +41,9 @@ extension-pool:
 to ensure contexts are always warm and ready. For memory-constrained environments, use a lower `min-idle` value
 and rely on the pool's ability to grow dynamically up to `max-total`.
 
-For more information about the extension pool and lifecycle, refer to the [section in the extension documentation](../extension-development.md#extension-lifecycle).
+For more information about the extension pool and lifecycle, refer to the
+[Extension Execution Model](../concepts/extension-execution-model.md) and the
+[section in the extension documentation](../extension-development.md#extension-lifecycle).
 
 ## Memory Usage
 

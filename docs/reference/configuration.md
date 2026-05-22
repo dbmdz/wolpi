@@ -77,6 +77,9 @@ Wolpi's resolving system will set HTTP caching headers (`ETag`, `Last-Modified`)
 on the information available from the file system or resolving extensions. Use the
 `cache-control-headers` section to configure the `Cache-Control` header values Wolpi sends.
 
+For the request-flow background on where this validation happens, see
+[Request and Image Processing Pipeline](../concepts/request-and-image-processing-pipeline.md).
+
 - `info-json`: Cache-Control header value for `info.json` responses, defaults to
   `public, max-age=604800, must-revalidate`
 - `images`: Cache-Control header value for image responses, defaults to
@@ -96,6 +99,10 @@ Encoding options for image processing, such as JPEG quality and PNG compression 
 set under the `encoding-options` section. These options will be passed directly to the VIPS `save`
 functions; see their respective documentation in the [VIPS API][vips-api] (e.g., for
 [JPEG][vips-jpg], [PNG][vips-png] or [WebP][vips-webp]).
+
+For the conceptual background on how Wolpi plans requests while libvips performs loading,
+processing, and encoding, see
+[Request and Image Processing Pipeline](../concepts/request-and-image-processing-pipeline.md).
 
 The section is keyed by the lowercase IIIF name for the image format (see
 [table 4.5 "Format" in the spec][iiif-formats]). For primitive values, make sure the YAML value
