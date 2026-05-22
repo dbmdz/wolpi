@@ -68,11 +68,11 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -534,7 +534,7 @@ public class ExtensionRuntimeTest {
             }
         }
 
-        @DisabledIfEnvironmentVariable(named = "CI", matches = "true")
+        @Disabled
         @Test
         @DisplayName("Should run setup, cleanup and destroy hooks appropriately")
         void shouldRunSetupCleanupAndDestroyHooks() {
