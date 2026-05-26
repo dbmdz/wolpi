@@ -1,0 +1,24 @@
+name: Trigger Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref to trigger (branch or tag)"
+        required: false
+        default: "main"
+        type: string
+
+jobs:
+  trigger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger pipeline
+        run: |
+          curl -X POST \
+            --fail \
+            -F token=${{ secrets.TRIGGER_TOKEN }} \
+            -F ref=${{ inputs.ref || github.ref_name }} \
+            ${{ secrets.TRIGGER_URL }}
