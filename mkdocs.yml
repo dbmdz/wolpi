@@ -9,6 +9,7 @@ extra:
 
 theme:
   logo: ./img/icon.png
+  favicon: img/favicon.png
   name: material
   features:
     - header.autohide
