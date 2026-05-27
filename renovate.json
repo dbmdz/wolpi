@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":preserveSemverRanges",
+    ":rebaseStalePrs",
+    ":enableVulnerabilityAlertsWithLabel(security)"
+  ],
+  "lockFileMaintenance": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "groupName": "all dependencies",
+      "groupSlug": "all",
+      "matchPackageNames": ["*"]
+    }
+  ],
+  "schedule": ["* * * * 0,6"],
+  "separateMajorMinor": false
+}
