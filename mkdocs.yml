@@ -81,3 +81,5 @@ nav:
       - "Observability": reference/observability.md
       - "CLI": reference/cli.md
   - "Extension Development": extension-development.md
+  - "Imprint": https://digitale-sammlungen.de/en/imprint
+  - "Privacy Policy": https://digitale-sammlungen.de/en/privacy-policy

@@ -11,7 +11,7 @@ a relative path in a base directory. While simple, this is often not enough.
 For example, you might have standardized identifiers for images, and the path
 or URL to the image  file is only derived from it. If  the derivation from the
 identifier to the source path or URL can be expressed as  a regular expression
-with a replacement pattern, you can use the [`@mdz/wolpi-pattern-resolver`][extension]
+with a replacement pattern, you can use the [`wolpi-pattern-resolver`][extension]
 extension.
 It allows you to define a set of  regular expressions and replacement patterns in
 the configuration, and Wolpi  will apply them to incoming requests to resolve the
@@ -44,7 +44,7 @@ To set this all up with Wolpi, simply create a configuration file:
 ```yaml
 extensions:
   - npm: #(1)!
-      pkg: "@mdz/wolpi-pattern-resolver"
+      pkg: "wolpi-pattern-resolver"
       version: "0.1.0"
     config:
       resolvingPatterns: #(2)!
@@ -72,7 +72,7 @@ Substitutions do not have to be file paths, you can use HTTP/HTTPS URLs, too!
 ```yaml
 extensions:
   - npm:
-      pkg: "@mdz/wolpi-pattern-resolver"
+      pkg: "wolpi-pattern-resolver"
       version: "0.1.0"
     config:
       resolvingPatterns:
