@@ -16,9 +16,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Trigger pipeline
+        env:
+          TRIGGER_TOKEN: ${{ secrets.TRIGGER_TOKEN }}
+          TRIGGER_URL: ${{ secrets.TRIGGER_URL }}
         run: |
           curl -X POST \
             --fail \
-            -F token=${{ secrets.TRIGGER_TOKEN }} \
+            -F token="$TRIGGER_TOKEN" \
             -F ref=${{ inputs.ref || github.ref_name }} \
-            ${{ secrets.TRIGGER_URL }}
+            "$TRIGGER_URL"
