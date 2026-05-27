@@ -1,11 +1,13 @@
 site_name: 'Wolpi: An Extensible IIIF Image Server'
 site_url: https://wolpi.mdz.dev
+repo_url: https://github.com/dbmdz/wolpi
 site_dir: public
 watch:
   - ./docs
 copyright: Made with 🐇❤️ in Munich, Germany at the Bavarian State Library
 extra:
   generator: false
+
 
 theme:
   logo: ./img/icon.png
