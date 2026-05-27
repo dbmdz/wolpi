@@ -21,7 +21,7 @@ jobs:
           TRIGGER_URL: ${{ secrets.TRIGGER_URL }}
         run: |
           curl -X POST \
-            --fail \
+            --fail --silent --show-error \
             -F token="$TRIGGER_TOKEN" \
             -F ref=${{ inputs.ref || github.ref_name }} \
             "$TRIGGER_URL"
