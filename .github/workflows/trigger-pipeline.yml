@@ -4,12 +4,6 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Ref to trigger (branch or tag)"
-        required: false
-        default: "main"
-        type: string
 
 jobs:
   trigger:
@@ -23,5 +17,5 @@ jobs:
           curl -X POST \
             --fail --silent --show-error \
             -F token="$TRIGGER_TOKEN" \
-            -F ref=${{ inputs.ref || github.ref_name }} \
+            -F ref="main" \
             "$TRIGGER_URL"
