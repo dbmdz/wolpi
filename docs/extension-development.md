@@ -153,6 +153,22 @@ extensions:
 - path: /app/extensions/hello-world.js
 ```
 
+## Type Hints
+
+Type hints provide IDE autocompletion and static type checking for extension code. We provide type hint packages for both JavaScript and Python.
+
+=== "JavaScript"
+
+    The [`wolpi-types`](https://github.com/dbmdz/wolpi-types-js) npm package ships TypeScript
+    declaration files (`.d.ts`) covering all hook signatures, return types, the global `wolpi`
+    object, and the built-in `wolpi:fs` and `wolpi:fetch` modules, usable from both TypeScript
+    and plain JavaScript (via `// @ts-check`).
+
+=== "Python"
+
+    The [`wolpi-extension-api`](https://github.com/dbmdz/wolpi-types-py) package ships `.pyi`
+    stub files for the `wolpi`, `wolpi.errors`, and `java` modules.
+
 ## Core Model
 
 ### Hooks
