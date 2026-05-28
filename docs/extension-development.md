@@ -515,7 +515,7 @@ that they can call APIs on to perform image processing. This class comes from th
 [`vips-ffm`][vips-ffm] Java bindings for libvips, refer to the [JavaDoc][vips-ffm-javadoc] to learn
 more about the available APIs for image processing. Some of the methods on the `VImage` class require a memory arena to be passed in, which is available as `wolpi.vipsArena` in the [extension context](#the-wolpi-object) and should be used in these instances.
 
-[graal-polyglot-py]: https://www.graalvm.org/python/docs/#interoperability
+[graal-polyglot-py]: https://graalpy.org/jvm-developers/docs/#interoperability
 [graal-polyglot-js]: https://www.graalvm.org/latest/reference-manual/js/JavaInteroperability/#access-java-from-javascript
 [vimage-javadoc]: https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html
 [vips-ffm]: https://github.com/lopcode/vips-ffm
@@ -636,8 +636,8 @@ compatibility is the registry of compatible packages [available from the GraalPy
 Note that many packages that are noted as passing less than 100% of their test suite might still work
 fine for your use case; it's usually worth the time to evaluate a dependency using a GraalPy standalone REPL.
 
-[graalpy]: https://www.graalvm.org/python
-[graalpy-compat]: https://www.graalvm.org/python/compatibility/
+[graalpy]: https://graalpy.org/
+[graalpy-compat]: https://graalpy.org/jvm-developers/compatibility/
 
 !!! warning "Native Extensions"
 
