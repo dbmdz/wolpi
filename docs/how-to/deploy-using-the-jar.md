@@ -49,7 +49,7 @@ major version matches the GraalVM version used by Wolpi. At the time of writing,
 
 [graal-ee]: https://www.graalvm.org/downloads/
 [node-npm]: https://nodejs.org/en/download
-[graalpy]: https://www.graalvm.org/python/python-developers/
+[graalpy]: https://graalpy.org/
 [graalpy-25]: https://github.com/oracle/graalpython/releases/
 [libvips]: https://www.libvips.org/
 [memory-fragmentation]: https://www.libvips.org/API/8.18/developer-checklist.html#linux-memory-allocator
