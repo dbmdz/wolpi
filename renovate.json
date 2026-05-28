@@ -6,9 +6,6 @@
     ":rebaseStalePrs",
     ":enableVulnerabilityAlertsWithLabel(security)"
   ],
-  "lockFileMaintenance": {
-    "enabled": false
-  },
   "packageRules": [
     {
       "groupName": "all dependencies",
