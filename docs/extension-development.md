@@ -160,14 +160,23 @@ Type hints provide IDE autocompletion and static type checking for extension cod
 === "JavaScript"
 
     The [`wolpi-types`](https://github.com/dbmdz/wolpi-types-js) npm package ships TypeScript
-    declaration files (`.d.ts`) covering all hook signatures, return types, the global `wolpi`
-    object, and the built-in `wolpi:fs` and `wolpi:fetch` modules, usable from both TypeScript
-    and plain JavaScript (via `// @ts-check`).
+    declaration files providing:
+    - Wolpi hook signatures and data model types
+    - declarations for the global `wolpi` object and GraalJS `Java` interop
+    - typings for `wolpi:fs` and `wolpi:fetch`
+    - opaque host object types used by the core API (`VImage`, `ByteBuffer`, `HttpClient`, `Arena`, etc.)
+
+    The exported type names match the Java types used in Wolpi itself.
 
 === "Python"
 
     The [`wolpi-extension-api`](https://github.com/dbmdz/wolpi-types-py) package ships `.pyi`
-    stub files for the `wolpi`, `wolpi.errors`, and `java` modules.
+    stub files covering all the values accessible via the `wolpi`, `wolpi.errors`, and
+    `java` modules, as well as all types passed into or returned from the extension
+    hooks.
+
+    Inside Wolpi/GraalPy, the real `wolpi` and `java` modules are injected by the
+    runtime; this package is for local type checking and editor support.
 
 ## Core Model
 
