@@ -161,6 +161,7 @@ Type hints provide IDE autocompletion and static type checking for extension cod
 
     The [`wolpi-types`](https://github.com/dbmdz/wolpi-types-js) npm package ships TypeScript
     declaration files providing:
+
     - Wolpi hook signatures and data model types
     - declarations for the global `wolpi` object and GraalJS `Java` interop
     - typings for `wolpi:fs` and `wolpi:fetch`
