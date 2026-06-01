@@ -185,7 +185,7 @@ public class ImageProcessor {
         if (hasCustomProcessing || imageInfo == null) {
             image = loader.loadImage(imageSource);
             imageInfo = loader.getImageInfo(imageSource);
-            sourceSize = new ImageSize(image.getWidth(), image.getHeight());
+            sourceSize = imageInfo.nativeSize();
         } else {
             sourceSize = imageInfo.nativeSize();
         }

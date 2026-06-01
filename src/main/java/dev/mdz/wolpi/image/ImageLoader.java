@@ -4,7 +4,6 @@ import static app.photofox.vipsffm.VSource.newFromInputStream;
 
 import app.photofox.vipsffm.VBlob;
 import app.photofox.vipsffm.VImage;
-import app.photofox.vipsffm.VSource;
 import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.IIIFConfig;
@@ -18,7 +17,6 @@ import dev.mdz.wolpi.metrics.LoadType;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
-import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
@@ -50,7 +48,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -253,12 +250,17 @@ public class ImageLoader {
             }
         }
 
-        return new ImageSource(
-                VALIDATION_ID_PREFIX,
-                new CustomSourceResolvedImage((arena) -> VSource.newFromInputStream(
-                        arena, Objects.requireNonNull(getClass().getResourceAsStream(resourceName)))),
-                null,
-                cacheInfo);
+        try {
+            return new ImageSource(
+                    VALIDATION_ID_PREFIX,
+                    new BinaryResolvedImage(Objects.requireNonNull(getClass().getResourceAsStream(resourceName))
+                            .readAllBytes()),
+                    null,
+                    cacheInfo);
+        } catch (IOException e) {
+            log.warn("Failed to load validation image from classpath resource {}", resourceName, e);
+            return null;
+        }
     }
 
     /// Get the image information for the given source.
@@ -390,13 +392,6 @@ public class ImageLoader {
                                 VipsOption.Enum("size", VipsSize.SIZE_FORCE));
                     case HttpResolvedImage(URI uri, Map<String, String> headers) ->
                         loadFromHttp(uri, headers, targetSize);
-                    case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
-                        VImage.thumbnailSource(
-                                arena,
-                                srcSupplier.apply(arena),
-                                targetSize.width(),
-                                VipsOption.Int("height", targetSize.height()),
-                                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
                     case BinaryResolvedImage(byte[] data) ->
                         VImage.thumbnailBuffer(
                                 arena,
@@ -416,8 +411,6 @@ public class ImageLoader {
             case FilesystemResolvedImage(Path path) ->
                 VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
             case HttpResolvedImage(URI uri, Map<String, String> headers) -> loadFromHttp(uri, headers, null, options);
-            case CustomSourceResolvedImage(Function<Arena, VSource> srcSupplier) ->
-                VImage.newFromSource(arena, srcSupplier.apply(arena), options);
             case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
             default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
         };
@@ -428,7 +421,6 @@ public class ImageLoader {
         return switch (source.resolvedImage()) {
             case FilesystemResolvedImage ignored -> "filesystem";
             case HttpResolvedImage ignored -> "http";
-            case CustomSourceResolvedImage ignored -> "custom";
             case BinaryResolvedImage ignored -> "binary";
             case SourceNotModified ignored ->
                 throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");

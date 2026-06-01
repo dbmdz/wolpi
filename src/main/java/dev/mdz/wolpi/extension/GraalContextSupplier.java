@@ -28,7 +28,6 @@ import dev.mdz.wolpi.validation.model.ValidationResult.ValidationSuccess;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -76,7 +75,8 @@ public class GraalContextSupplier {
                 || config.extensionRuntime() == null
                 || config.extensionRuntime().enablePythonNativeModules();
         this.hostAccess = buildHostAccess();
-        var engineBuilder = Engine.newBuilder("python", "js").allowExperimentalOptions(true);
+        var engineBuilder =
+                Engine.newBuilder("python", "js").allowExperimentalOptions(true).option("js.text-encoding", "true");
         if (config != null) {
             ExtensionDebugConfig debugCfg = config.extensionDebug();
             if (debugCfg != null && debugCfg.enabled()) {
@@ -111,11 +111,18 @@ public class GraalContextSupplier {
         builder.targetTypeMapping(
                 Value.class,
                 URI.class,
-                v -> v.isString() && URI_PATTERN.matcher(v.asString()).matches(),
                 v -> {
                     try {
-                        return new URI(v.asString());
-                    } catch (URISyntaxException e) {
+                        String s = v.as(String.class);
+                        return s != null && URI_PATTERN.matcher(s).matches();
+                    } catch (Exception ignored) {
+                        return false;
+                    }
+                },
+                v -> {
+                    try {
+                        return new URI(v.as(String.class));
+                    } catch (Exception e) {
                         return null;
                     }
                 });

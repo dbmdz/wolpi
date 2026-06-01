@@ -153,6 +153,32 @@ extensions:
 - path: /app/extensions/hello-world.js
 ```
 
+## Type Hints
+
+Type hints provide IDE autocompletion and static type checking for extension code. We provide type hint packages for both JavaScript and Python.
+
+=== "JavaScript"
+
+    The [`wolpi-types`](https://github.com/dbmdz/wolpi-types-js) npm package ships TypeScript
+    declaration files providing:
+
+    - Wolpi hook signatures and data model types
+    - declarations for the global `wolpi` object and GraalJS `Java` interop
+    - typings for `wolpi:fs` and `wolpi:fetch`
+    - opaque host object types used by the core API (`VImage`, `ByteBuffer`, `HttpClient`, `Arena`, etc.)
+
+    The exported type names match the Java types used in Wolpi itself.
+
+=== "Python"
+
+    The [`wolpi-extension-api`](https://github.com/dbmdz/wolpi-types-py) package ships `.pyi`
+    stub files covering all the values accessible via the `wolpi`, `wolpi.errors`, and
+    `java` modules, as well as all types passed into or returned from the extension
+    hooks.
+
+    Inside Wolpi/GraalPy, the real `wolpi` and `java` modules are injected by the
+    runtime; this package is for local type checking and editor support.
+
 ## Core Model
 
 ### Hooks
@@ -489,7 +515,7 @@ that they can call APIs on to perform image processing. This class comes from th
 [`vips-ffm`][vips-ffm] Java bindings for libvips, refer to the [JavaDoc][vips-ffm-javadoc] to learn
 more about the available APIs for image processing. Some of the methods on the `VImage` class require a memory arena to be passed in, which is available as `wolpi.vipsArena` in the [extension context](#the-wolpi-object) and should be used in these instances.
 
-[graal-polyglot-py]: https://www.graalvm.org/python/docs/#interoperability
+[graal-polyglot-py]: https://graalpy.org/jvm-developers/docs/#interoperability
 [graal-polyglot-js]: https://www.graalvm.org/latest/reference-manual/js/JavaInteroperability/#access-java-from-javascript
 [vimage-javadoc]: https://vipsffm.photofox.app/app.photofox.vipsffm/app/photofox/vipsffm/VImage.html
 [vips-ffm]: https://github.com/lopcode/vips-ffm
@@ -559,10 +585,10 @@ more about the available APIs for image processing. Some of the methods on the `
 
 ## Choosing a Language
 
-### Fastest: JavaScript Extensions
+### JavaScript Extensions
 
 Wolpi uses [GraalVM's JavaScript runtime][graaljs] to run JavaScript extensions. This runtime
-is fully compliant with the ECMAScript 2024 specification and supports most modern JavaScript
+is fully compliant with the ECMAScript 2025 specification and supports most modern JavaScript
 features (including `async`/`await`, though see the note below about asynchronous hooks). For more
 details, refer to the [GraalJS documentation][graaljs-docs].
 
@@ -587,10 +613,7 @@ JavaScript extensions must be written as ES modules with either:
     have been aware of, please open an issue on the Wolpi GitHub repository and we may consider it
     for a future iteration of the extension API.
 
-JavaScript extensions are generally **much more performant than Python extensions**, due to the simpler
-runtime and the lack of a standard library. If latency is a concern for your use case, we recommend implementing your extension in JavaScript if possible. This is not to say that Python's worse
-performance is prohibitive for all use cases, but it's something to keep in mind when choosing a
-language for your extension. If you have a use case that requires Python's rich ecosystem of libraries and are okay with potentially higher latency, Python extensions are a great choice and Wolpi's GraalPy runtime provides excellent compatibility with the Python ecosystem, including packages with native code.
+If you have a use case that requires Python's rich ecosystem of libraries, Python extensions are a great choice and Wolpi's GraalPy runtime provides excellent compatibility with the Python ecosystem, including experimental support for packages with native code.
 
 
 [graaljs]: https://www.graalvm.org/latest/reference-manual/js/
@@ -610,8 +633,8 @@ compatibility is the registry of compatible packages [available from the GraalPy
 Note that many packages that are noted as passing less than 100% of their test suite might still work
 fine for your use case; it's usually worth the time to evaluate a dependency using a GraalPy standalone REPL.
 
-[graalpy]: https://www.graalvm.org/python
-[graalpy-compat]: https://www.graalvm.org/python/compatibility/
+[graalpy]: https://graalpy.org/
+[graalpy-compat]: https://graalpy.org/jvm-developers/compatibility/
 
 !!! warning "Native Extensions"
 
@@ -1213,30 +1236,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
     }
 
     /**
-     * A custom data source that libvips will read from using the
-     * provided callbacks, can be more efficient for reading very
-     * large images from e.g. databases or object storage systems
-     * that do not support HTTP.
-     */
-    interface CustomSourceResolvedImage {
-        /**
-         * `whence` denotes the position to seek from:
-         *  0 (beginning of file), 1 (current position)
-         * or 2 (end of file)
-         */
-        onSeek(offset: number, whence: number): number;
-
-        /**
-         * The returned buffer will be copied, feel free to
-         * reuse internal buffers for subsequent calls
-         */
-        onRead(length: number): Uint8Array | ArrayBufferView;
-
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    /**
      * Indicate that the source has not been modified since it was
      * last accessed by the client, determined from the caching headers
      */ passed to the resolving hook
@@ -1251,7 +1250,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
         FilesystemResolvedImage |
         BinaryResolvedImage |
         HttpResolvedImage |
-        CustomSourceResolvedImage |
         SourceNotModified;
 
     /** Finally, the resolve hook itself */
@@ -1311,25 +1309,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
         imageInfo: NotRequired[ImageInfo]
         cacheInfo: NotRequired[CacheInfo]
 
-    # A custom data source that libvips will read from using the
-    # provided callbacks, can be more efficient for reading very
-    # large images from e.g. databases or object storage systems
-    # that do not support HTTP with byte-range requests
-    # This is best returned as an actual object, not a dict.
-    class CustomSourceResolvedImage(Protocol):
-
-        # `whence` denotes the position to seek from: 0 (beginning of file),
-        # 1 (current position) or 2 (end of file)
-        def onSeek(self, offset: int, whence: int) -> int:
-            ...
-
-        # The returned buffer will be copied, feel free to reuse internal
-        # buffers for subsequent calls
-        def onRead(self, length: int) -> bytes | bytearray:
-            ...
-
-        def __getattr__(self, name: str) -> Any: ...
-
     # Indicate that the source has not been modified since it was
     # last accessed by the client, determined from the caching headers
     # passed to the resolving hook
@@ -1342,7 +1321,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
         FilesystemResolvedImage,
         BinaryResolvedImage,
         HttpResolvedImage,
-        CustomSourceResolvedImage,
         SourceNotModified
     ]
 
