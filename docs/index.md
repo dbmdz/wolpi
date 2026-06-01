@@ -19,12 +19,10 @@ monitoring.
 To get your feet wet with Wolpi, we recommend you start with our tutorials:
 
 - [Serve your first image](./getting-started/serving-your-first-image.md).
-- Use an extension to [resolve images regular expressions](./getting-started/using-an-extension-pattern-resolver.md).
+- Use an extension to [resolve images with regular expressions](./getting-started/using-an-extension-pattern-resolver.md).
 - Deploy Wolpi on a server, via [Docker/Podman](./how-to/deploy-using-docker-podman.md),
   bare-metal using [the published JAR](./how-to/deploy-using-the-jar.md), or in your
   [Kubernetes cluster](./how-to/deploy-on-kubernetes.md).
-- Configuring Wolpi: use the [configuration reference](./reference/configuration.md).
-- Writing extensions: read [Developing Extensions](./extension-development.md).
 
 ## Configuration
 
