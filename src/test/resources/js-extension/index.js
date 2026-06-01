@@ -115,33 +115,6 @@ export default {
       return { path: `/tmp/images/${resolved}.jp2`, cacheInfo, imageInfo };
     } else if (resolvingType === "BINARY") {
       return { rawData: TEST_JPG, cacheInfo, imageInfo };
-    } else if (resolvingType === "CUSTOM") {
-      return {
-        cacheInfo,
-        imageInfo,
-        _position: 0,
-        onRead(length) {
-          return TEST_JPG.slice(
-              this._position,
-              Math.min(TEST_JPG.length, this._position + length)
-          );
-        },
-        onSeek(offset, whence) {
-          if (whence === 0) { // SEEK_SET
-            this._position = offset;
-          } else if (whence === 1) { // SEEK_CUR
-            this._position += offset;
-          } else if (whence === 2) { // SEEK_END
-            this._position = TEST_JPG.length + offset;
-          }
-          if (this._position < 0) {
-            this._position = 0;
-          } else if (this._position > TEST_JPG.length) {
-            this._position = TEST_JPG.length;
-          }
-          return this._position;
-        }
-      }
     }
   },
 
