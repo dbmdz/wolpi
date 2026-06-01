@@ -93,3 +93,7 @@ resolved images as well.
 [ops-logging]: ./reference/observability.md#structured-logging
 [ops-extdev-log]: ./extension-development.md#logging-from-extensions
 [ops-extdev-metrics]: ./extension-development.md#custom-metrics-from-extensions
+
+---
+
+[![](./img/bsb_logo.svg#only-light){ width="250" }![](./img/bsb_logo_dark.svg#only-dark){ width="250" }](https://www.bsb-muenchen.de) [![](./img/mdz_logo.png#only-light){ width="250" } ![](./img/mdz_logo_dark.png#only-dark){ width="250" }](https://www.digitale-sammlungen.de){ id="mdz-logo" }
