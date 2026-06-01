@@ -28,7 +28,6 @@ import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
 import dev.mdz.wolpi.model.BinaryResolvedImage;
-import dev.mdz.wolpi.model.CustomSourceResolvedImage;
 import dev.mdz.wolpi.model.EncodedImage;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
@@ -372,23 +371,6 @@ public class ExtensionRuntimeTest {
                 var binResolved = (BinaryResolvedImage) result.resolvedImage();
                 assertThat(binResolved.rawData()).isNotNull().isNotEmpty();
                 var img = VImage.newFromBytes(testArena, binResolved.rawData());
-                assertThat(img.getWidth()).isEqualTo(1);
-                assertThat(img.getHeight()).isEqualTo(1);
-                assertThat(img.getpoint(0, 0)).containsExactly(190.0);
-            }
-        }
-
-        @Test
-        @DisplayName("Should resolve custom source image")
-        void shouldResolveCustomSourceImage() {
-            var exts = List.of(getTestResolverExtension("", TestResolvingType.CUSTOM));
-            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-                var result = runtime.resolve("custom-source-test", null, null);
-                assertThat(result).isNotNull();
-                assertThat(result.resolvedImage()).isInstanceOf(CustomSourceResolvedImage.class);
-                var customResolved = (CustomSourceResolvedImage) result.resolvedImage();
-                var img = VImage.newFromSource(
-                        testArena, customResolved.sourceSupplier().apply(testArena));
                 assertThat(img.getWidth()).isEqualTo(1);
                 assertThat(img.getHeight()).isEqualTo(1);
                 assertThat(img.getpoint(0, 0)).containsExactly(190.0);
@@ -1201,7 +1183,7 @@ public class ExtensionRuntimeTest {
     private ExtensionConfig getTestResolverExtension(String prefix, TestResolvingType resolvingType) {
         Path path = Path.of(
                 switch (resolvingType) {
-                    case FILESYSTEM, BINARY, CUSTOM -> "src/test/resources/js-extension/index.js";
+                    case FILESYSTEM, BINARY -> "src/test/resources/js-extension/index.js";
                     case HTTP -> "src/test/resources/py-extension/single.py";
                 });
         return new ExtensionConfig(
@@ -1211,8 +1193,7 @@ public class ExtensionRuntimeTest {
     private enum TestResolvingType {
         FILESYSTEM,
         HTTP,
-        BINARY,
-        CUSTOM
+        BINARY
     }
 
     private enum TestExtensionType {

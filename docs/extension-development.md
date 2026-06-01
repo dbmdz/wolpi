@@ -1239,30 +1239,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
     }
 
     /**
-     * A custom data source that libvips will read from using the
-     * provided callbacks, can be more efficient for reading very
-     * large images from e.g. databases or object storage systems
-     * that do not support HTTP.
-     */
-    interface CustomSourceResolvedImage {
-        /**
-         * `whence` denotes the position to seek from:
-         *  0 (beginning of file), 1 (current position)
-         * or 2 (end of file)
-         */
-        onSeek(offset: number, whence: number): number;
-
-        /**
-         * The returned buffer will be copied, feel free to
-         * reuse internal buffers for subsequent calls
-         */
-        onRead(length: number): Uint8Array | ArrayBufferView;
-
-        imageInfo?: ImageInfo;
-        cacheInfo?: CacheInfo;
-    }
-
-    /**
      * Indicate that the source has not been modified since it was
      * last accessed by the client, determined from the caching headers
      */ passed to the resolving hook
@@ -1277,7 +1253,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
         FilesystemResolvedImage |
         BinaryResolvedImage |
         HttpResolvedImage |
-        CustomSourceResolvedImage |
         SourceNotModified;
 
     /** Finally, the resolve hook itself */
@@ -1337,25 +1312,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
         imageInfo: NotRequired[ImageInfo]
         cacheInfo: NotRequired[CacheInfo]
 
-    # A custom data source that libvips will read from using the
-    # provided callbacks, can be more efficient for reading very
-    # large images from e.g. databases or object storage systems
-    # that do not support HTTP with byte-range requests
-    # This is best returned as an actual object, not a dict.
-    class CustomSourceResolvedImage(Protocol):
-
-        # `whence` denotes the position to seek from: 0 (beginning of file),
-        # 1 (current position) or 2 (end of file)
-        def onSeek(self, offset: int, whence: int) -> int:
-            ...
-
-        # The returned buffer will be copied, feel free to reuse internal
-        # buffers for subsequent calls
-        def onRead(self, length: int) -> bytes | bytearray:
-            ...
-
-        def __getattr__(self, name: str) -> Any: ...
-
     # Indicate that the source has not been modified since it was
     # last accessed by the client, determined from the caching headers
     # passed to the resolving hook
@@ -1368,7 +1324,6 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
         FilesystemResolvedImage,
         BinaryResolvedImage,
         HttpResolvedImage,
-        CustomSourceResolvedImage,
         SourceNotModified
     ]
 
