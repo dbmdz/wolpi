@@ -4,7 +4,12 @@ repo_url: https://github.com/dbmdz/wolpi
 site_dir: public
 watch:
   - ./docs
-copyright: Made with 🐇❤️ in Munich, Germany at the Bavarian State Library
+copyright: >
+  Made with 🐇❤️ in Munich, Germany at the <a href="https://www.bsb-muenchen.de" target="_blank">Bavarian State Library</a>
+  .·.·.·. <a href="https://digitale-sammlungen.de/en/imprint">Imprint</a>
+  · <a href="https://digitale-sammlungen.de/en/privacy-policy">Privacy Policy</a>
+  · <a href="https://digitale-sammlungen.de/en/barrierefreiheit">Accessibility</a>
+
 extra:
   generator: false
 
@@ -86,5 +91,3 @@ nav:
       - "Observability": reference/observability.md
       - "CLI": reference/cli.md
   - "Extension Development": extension-development.md
-  - "Imprint": https://digitale-sammlungen.de/en/imprint
-  - "Privacy Policy": https://digitale-sammlungen.de/en/privacy-policy

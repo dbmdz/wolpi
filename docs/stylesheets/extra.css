@@ -4,3 +4,8 @@
   --md-primary-fg-color--light: rgba(195, 54, 40, 1);
   --md-primary-fg-color--dark: rgba(195, 54, 40, 1);
 }
+
+#mdz-logo {
+  baseline-shift: top;
+  margin-left: 2rem;
+}
