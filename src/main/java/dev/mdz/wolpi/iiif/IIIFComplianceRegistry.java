@@ -68,19 +68,19 @@ public class IIIFComplianceRegistry {
     private static boolean isLevel2Compliant(IIIFConfig config, IIIFVersion version) {
         var regionFeats = config.features().region();
         var sizeFeats = config.features().scaling();
-        var supportedQualities = config.qualities().allowed();
+        var supportedQualities = config.qualities();
         var supportedFormats = config.formats().allowed();
         return isLevel1Compliant(config, version)
                 && regionFeats.byPercent()
                 && sizeFeats.byConfinedWidthHeight()
                 && config.features().rotation().by90DegreeRotation()
-                && supportedQualities.contains("color")
-                && supportedQualities.contains("gray")
+                && supportedQualities.allows("color")
+                && supportedQualities.allows("gray")
                 && supportedFormats.contains("jpg")
                 && supportedFormats.contains("png")
                 && (version == IIIFVersion.V3
                         ? sizeFeats.byPercent()
-                        : (sizeFeats.byArbitraryDimensions() && supportedQualities.contains("bitonal")));
+                        : (sizeFeats.byArbitraryDimensions() && supportedQualities.allows("bitonal")));
     }
 
     private static boolean isLevel1Compliant(IIIFConfig config, IIIFVersion version) {
@@ -116,6 +116,7 @@ public class IIIFComplianceRegistry {
 
     private static List<String> getV3ExtraQualities(IIIFConfig config, IIIFComplianceLevel level) {
         return config.qualities().allowed().stream()
+                .filter(q -> !IIIFConfig.Qualities.isWildcard(q))
                 .filter(q -> level != IIIFComplianceLevel.LEVEL_2 || q.equals("bitonal"))
                 .toList();
     }
@@ -131,7 +132,7 @@ public class IIIFComplianceRegistry {
         if (config.features().rotation().arbitrary()) {
             extraFeatures.add("rotationArbitrary");
         }
-        if (config.qualities().allowed().contains("bitonal")) {
+        if (config.qualities().allows("bitonal")) {
             extraFeatures.add("bitonal");
         }
         if (config.features().profileLinkHeader()) {
@@ -255,6 +256,7 @@ public class IIIFComplianceRegistry {
                     extraFormats.add("png");
                 }
                 config.qualities().allowed().stream()
+                        .filter(q -> !IIIFConfig.Qualities.isWildcard(q))
                         .filter(q -> !q.equals("color"))
                         .forEach(extraQualities::add);
                 break;

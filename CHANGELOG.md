@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI validation errors are now reported without full stack traces.
 - Updated `app.photofox.vips-ffm:vips-ffm-core` to `1.9.8`.
 - Updated `com.diffplug.spotless:spotless-maven-plugin` to `3.5.1`.
+- Quality configuration now supports wildcard patterns (e.g. `*` or
+  `ai:*`) in the `iiif.qualities.allowed` list, matched via the new
+  `Qualities.allows()` and `Qualities.isWildcard()` helpers.
 
 ### Fixed
 - Determining available image sizes from pyramidal TIFs that use SubIFDs to

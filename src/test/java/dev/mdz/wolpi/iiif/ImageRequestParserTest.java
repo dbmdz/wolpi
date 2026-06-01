@@ -743,6 +743,25 @@ class ImageRequestParserTest {
         void shouldThrowForInvalidQualitySpec() {
             assertThatExceptionOfType(IllegalArgumentException.class).isThrownBy(() -> parser.parseQuality("invalid"));
         }
+
+        @Test
+        @DisplayName("should match wildcard quality configuration")
+        void shouldMatchWildcardQualityConfiguration() {
+            IIIFConfig.Qualities qualities = new IIIFConfig.Qualities("color", List.of("color", "gray", "ai:*"));
+
+            assertThat(qualities.allows("color")).isTrue();
+            assertThat(qualities.allows("ai:make-it-pop")).isTrue();
+            assertThat(qualities.allows("bitonal")).isFalse();
+        }
+
+        @Test
+        @DisplayName("should match global quality wildcard")
+        void shouldMatchGlobalQualityWildcard() {
+            IIIFConfig.Qualities qualities = new IIIFConfig.Qualities("color", List.of("*"));
+
+            assertThat(qualities.allows("anything")).isTrue();
+            assertThat(qualities.allows("ai:make-it-pop")).isTrue();
+        }
     }
 
     @Nested
