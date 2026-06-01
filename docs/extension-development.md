@@ -585,10 +585,10 @@ more about the available APIs for image processing. Some of the methods on the `
 
 ## Choosing a Language
 
-### Fastest: JavaScript Extensions
+### JavaScript Extensions
 
 Wolpi uses [GraalVM's JavaScript runtime][graaljs] to run JavaScript extensions. This runtime
-is fully compliant with the ECMAScript 2024 specification and supports most modern JavaScript
+is fully compliant with the ECMAScript 2025 specification and supports most modern JavaScript
 features (including `async`/`await`, though see the note below about asynchronous hooks). For more
 details, refer to the [GraalJS documentation][graaljs-docs].
 
@@ -613,10 +613,7 @@ JavaScript extensions must be written as ES modules with either:
     have been aware of, please open an issue on the Wolpi GitHub repository and we may consider it
     for a future iteration of the extension API.
 
-JavaScript extensions are generally **much more performant than Python extensions**, due to the simpler
-runtime and the lack of a standard library. If latency is a concern for your use case, we recommend implementing your extension in JavaScript if possible. This is not to say that Python's worse
-performance is prohibitive for all use cases, but it's something to keep in mind when choosing a
-language for your extension. If you have a use case that requires Python's rich ecosystem of libraries and are okay with potentially higher latency, Python extensions are a great choice and Wolpi's GraalPy runtime provides excellent compatibility with the Python ecosystem, including packages with native code.
+If you have a use case that requires Python's rich ecosystem of libraries, Python extensions are a great choice and Wolpi's GraalPy runtime provides excellent compatibility with the Python ecosystem, including experimental support for packages with native code.
 
 
 [graaljs]: https://www.graalvm.org/latest/reference-manual/js/
