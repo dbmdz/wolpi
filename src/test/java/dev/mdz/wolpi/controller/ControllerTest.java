@@ -2,6 +2,8 @@ package dev.mdz.wolpi.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,7 +16,14 @@ import dev.mdz.wolpi.config.WolpiConfig.HttpConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.image.ImageLoader;
 import dev.mdz.wolpi.image.ImageProcessor;
+import dev.mdz.wolpi.model.BinaryResolvedImage;
+import dev.mdz.wolpi.model.CacheInfo;
+import dev.mdz.wolpi.model.ImageInfo;
+import dev.mdz.wolpi.model.ImageSize;
+import dev.mdz.wolpi.model.ImageSource;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -25,6 +34,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -59,6 +69,45 @@ public class ControllerTest {
             expectedValue = "public, max-age=604800, must-revalidate";
         }
         mockMvc.perform(get(url)).andExpect(status().isOk()).andExpect(header().string("Cache-Control", expectedValue));
+    }
+
+    @Test
+    public void testInfoJsonETagIsWeak() throws Exception {
+        stubSourceWithCacheInfo();
+
+        mockMvc.perform(get("/v3/cache-test/info.json"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "W/\"cache-etag\""));
+    }
+
+    @Test
+    public void testWeakETagCanRevalidateInfoJson() throws Exception {
+        stubSourceWithCacheInfo();
+
+        MvcResult result = mockMvc.perform(get("/v3/cache-test/info.json"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        mockMvc.perform(get("/v3/cache-test/info.json")
+                        .header("If-None-Match", result.getResponse().getHeader("ETag")))
+                .andExpect(status().isNotModified())
+                .andExpect(header().string("ETag", result.getResponse().getHeader("ETag")));
+    }
+
+    private void stubSourceWithCacheInfo() {
+        var source = new ImageSource(
+                "cache-test",
+                new BinaryResolvedImage(new byte[] {0}),
+                null,
+                new CacheInfo("cache-etag", Instant.parse("2026-01-01T00:00:00Z")));
+        var info = new ImageInfo(new ImageSize(1, 1), List.of(), List.of());
+
+        doReturn(true).when(imageLoader).authorize(eq("cache-test"), any(), any());
+        doReturn(source).when(imageLoader).resolve(eq("cache-test"), any(), any());
+        doReturn(info).when(imageLoader).getImageInfo(source);
+        doReturn(Map.of("id", "cache-test", "type", "ImageService3"))
+                .when(imageLoader)
+                .getImageInfoJson(eq("cache-test"), eq(info), any(), any());
     }
 
     @Test

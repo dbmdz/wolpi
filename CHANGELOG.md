@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI validation errors are now reported without full stack traces.
 - Updated `app.photofox.vips-ffm:vips-ffm-core` to `1.9.8`.
 - Updated `com.diffplug.spotless:spotless-maven-plugin` to `3.5.1`.
+- ETag headers in image info and image responses now use the weak
+  validator prefix (`W/`), enabling conditional revalidation behind
+  cache layers that require weak validators.
 
 ### Fixed
 - Determining available image sizes from pyramidal TIFs that use SubIFDs to
