@@ -1,6 +1,7 @@
 package dev.mdz.wolpi.config;
 
 import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 /// @param limits          Limits for the image processing, such as maximum width, height, and area.
@@ -80,8 +81,28 @@ public record IIIFConfig(Limits limits, Features features, Qualities qualities, 
     /// since we want to allow custom qualities to be defined by extensions.
     ///
     /// @param defaultQuality The quality to use if `default` is requested.
-    /// @param allowed        List of allowed qualities that can be requested.
-    public record Qualities(String defaultQuality, List<String> allowed) {}
+    /// @param allowed        List of allowed qualities that can be requested. Entries may contain
+    ///                       `*` as a wildcard, for example `*` or `ai:*`.
+    public record Qualities(String defaultQuality, List<String> allowed) {
+        public boolean allows(String quality) {
+            String resolvedQuality = quality.equalsIgnoreCase("default") ? defaultQuality : quality;
+            return allowed.stream().anyMatch(pattern -> matches(pattern, resolvedQuality));
+        }
+
+        public static boolean isWildcard(String quality) {
+            return quality.contains("*");
+        }
+
+        private static boolean matches(String pattern, String quality) {
+            if (!isWildcard(pattern)) {
+                return pattern.equalsIgnoreCase(quality);
+            }
+            String regex = Pattern.quote(pattern).replace("*", "\\E.*\\Q");
+            return Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
+                    .matcher(quality)
+                    .matches();
+        }
+    }
 
     /// Allowed and preferred formats for images.
     ///

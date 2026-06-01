@@ -312,6 +312,9 @@ public class ImageProcessor {
         if (qualitySpec.equalsIgnoreCase("default")) {
             qualitySpec = wolpiConfig.iiif().qualities().defaultQuality();
         }
+        if (!wolpiConfig.iiif().qualities().allows(qualitySpec)) {
+            throw new IllegalArgumentException("Unsupported quality: " + request.qualitySpec());
+        }
         IIIFQuality quality = parser.parseQuality(qualitySpec);
 
         // Embedded color profiles are converted to sRGB in LAB connection space with perceptual intent
