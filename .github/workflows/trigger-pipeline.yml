@@ -1,0 +1,21 @@
+name: Trigger Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger pipeline
+        env:
+          TRIGGER_TOKEN: ${{ secrets.TRIGGER_TOKEN }}
+          TRIGGER_URL: ${{ secrets.TRIGGER_URL }}
+        run: |
+          curl -X POST \
+            --fail --silent --show-error \
+            -F token="$TRIGGER_TOKEN" \
+            -F ref="main" \
+            "$TRIGGER_URL"

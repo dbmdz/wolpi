@@ -1,5 +1,6 @@
 site_name: 'Wolpi: An Extensible IIIF Image Server'
 site_url: https://wolpi.mdz.dev
+repo_url: https://github.com/dbmdz/wolpi
 site_dir: public
 watch:
   - ./docs
@@ -7,8 +8,10 @@ copyright: Made with 🐇❤️ in Munich, Germany at the Bavarian State Library
 extra:
   generator: false
 
+
 theme:
   logo: ./img/icon.png
+  favicon: img/favicon.png
   name: material
   features:
     - header.autohide
@@ -55,6 +58,8 @@ markdown_extensions:
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
+  - toc:
+      permalink: true
 
 plugins:
   - search
@@ -81,3 +86,5 @@ nav:
       - "Observability": reference/observability.md
       - "CLI": reference/cli.md
   - "Extension Development": extension-development.md
+  - "Imprint": https://digitale-sammlungen.de/en/imprint
+  - "Privacy Policy": https://digitale-sammlungen.de/en/privacy-policy

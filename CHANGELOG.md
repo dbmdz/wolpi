@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quality configuration now supports wildcard patterns (e.g. `*` or
   `ai:*`) in the `iiif.qualities.allowed` list, matched via the new
   `Qualities.allows()` and `Qualities.isWildcard()` helpers.
+- Enabled GraalVM `js.text-encoding=true` option to make `TextEncoder`
+  and `TextDecoder` APIs available to JavaScript-based extensions.
+
+### Removed
+- `CustomSourceResolvedImage` for resolved images with callback-based
+  methods for providing data. Upon further testing this proved infeasible
+  due to the thread affinity of Graal Polyglot Contexts, which can only
+  be used from a single thread. In Wolpi, Contexts are owned by the thread
+  handling the request. However, vips executes its image loading on a
+  separate thread, and it is from this thread that it also calls the callback
+  methods in the context, which Graal prevents. We thus were left
+  with no choice but to remove this.
 
 ### Fixed
 - Determining available image sizes from pyramidal TIFs that use SubIFDs to

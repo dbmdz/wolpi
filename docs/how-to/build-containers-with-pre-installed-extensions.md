@@ -33,7 +33,7 @@ that is being installed remotely from [npmjs.com][npmjs]:
 ```yaml title="build-config.yml"
 extensions:
   - npm:
-      pkg: "@mdz/wolpi-pattern-resolver"
+      pkg: "wolpi-pattern-resolver"
       version: "0.1.0"
 ```
 
@@ -82,7 +82,7 @@ version that the container was built with and include your configuration with it
 ```yaml title="config.yml"
 extensions:
   - npm:
-      pkg: "@mdz/wolpi-pattern-resolver"
+      pkg: "wolpi-pattern-resolver"
       version: "0.1.0"
     config:
       resolvingPatterns:

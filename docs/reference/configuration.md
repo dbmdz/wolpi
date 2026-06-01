@@ -208,9 +208,10 @@ are all set as entries under the `rotation` subsection in the `iiif.features` se
 The `iiif.qualities` section controls the supported quality values for image requests.
 
 - `allowed`: List of quality values that are supported, defaults to all qualities from the IIIF
-  Image API specification (`color`, `gray`, `bitonal`).
+  Image API specification (`color`, `gray`, `bitonal`). Can include arbitrary values,
+  including wildcards (`myext:*`), to allow qualities handled by extensions.
 - `default-quality`: Quality value that will be used when the `default` quality is requested. This
-  must be one of the values listed in `allowed`. Defaults to `color`.
+  must match one of the values listed in `allowed`. Defaults to `color`.
 
 ### Supported Image Output Formats
 
