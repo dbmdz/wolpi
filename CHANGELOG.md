@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quality configuration now supports wildcard patterns (e.g. `*` or
   `ai:*`) in the `iiif.qualities.allowed` list, matched via the new
   `Qualities.allows()` and `Qualities.isWildcard()` helpers.
+- ETag headers in image info and image responses now use the weak
+  validator prefix (`W/`), enabling conditional revalidation behind
+  cache layers that require weak validators.
 - Enabled GraalVM `js.text-encoding=true` option to make `TextEncoder`
   and `TextDecoder` APIs available to JavaScript-based extensions.
 

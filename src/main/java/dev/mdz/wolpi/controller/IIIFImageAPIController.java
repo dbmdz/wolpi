@@ -127,10 +127,9 @@ public class IIIFImageAPIController {
             boolean notModified = false;
             if (source.cacheInfo().lastModified() != null) {
                 notModified = webRequest.checkNotModified(
-                        source.cacheInfo().eTag(),
-                        source.cacheInfo().lastModified().toEpochMilli());
+                        cacheETag(source), source.cacheInfo().lastModified().toEpochMilli());
             } else if (source.cacheInfo().eTag() != null) {
-                notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
+                notModified = webRequest.checkNotModified(cacheETag(source));
             }
             if (notModified) {
                 outHeaders.setCacheControl(config.cacheControlHeaders().infoJson());
@@ -220,10 +219,9 @@ public class IIIFImageAPIController {
             boolean notModified = false;
             if (source.cacheInfo().lastModified() != null) {
                 notModified = webRequest.checkNotModified(
-                        source.cacheInfo().eTag(),
-                        source.cacheInfo().lastModified().toEpochMilli());
+                        cacheETag(source), source.cacheInfo().lastModified().toEpochMilli());
             } else if (source.cacheInfo().eTag() != null) {
-                notModified = webRequest.checkNotModified(source.cacheInfo().eTag());
+                notModified = webRequest.checkNotModified(cacheETag(source));
             }
 
             if (notModified) {
@@ -335,10 +333,24 @@ public class IIIFImageAPIController {
             return;
         }
         if (source.cacheInfo().eTag() != null && !headers.containsHeader("ETag")) {
-            headers.setETag("\"%s\"".formatted(source.cacheInfo().eTag()));
+            headers.setETag(cacheETag(source));
         }
         if (source.cacheInfo().lastModified() != null && !headers.containsHeader("Last-Modified")) {
             headers.setLastModified(source.cacheInfo().lastModified());
+        }
+    }
+
+    private @Nullable String cacheETag(ImageSource source) {
+        if (source.cacheInfo() == null || source.cacheInfo().eTag() == null) {
+            return null;
+        }
+        String eTag = source.cacheInfo().eTag();
+        if (eTag.startsWith("W/\"")) {
+            return eTag;
+        } else if (eTag.startsWith("\"")) {
+            return "W/%s".formatted(eTag);
+        } else {
+            return "W/\"%s\"".formatted(eTag);
         }
     }
 
