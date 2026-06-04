@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- HTTP image sources now relay upstream caching headers (`ETag`,
+  `Last-Modified`) to Wolpi clients. This enables proper conditional
+  request round-trips for S3 and other HTTP-backed image sources.
+
 ### Fixed
 - Extensions returning `tileSizes` or other collection-typed fields in their
   resolving data no longer cause a `ClassCastException`. The

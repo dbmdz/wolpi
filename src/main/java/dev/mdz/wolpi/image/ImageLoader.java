@@ -102,6 +102,9 @@ public class ImageLoader {
     /// Metrics
     private final WolpiMetrics metrics;
 
+    /// Carrier for a loaded VImage together with the upstream HTTP response headers.
+    private record HttpLoadResult(VImage image, HttpHeaders responseHeaders) {}
+
     public ImageLoader(
             WolpiConfig cfg,
             Arena arena,
@@ -390,8 +393,11 @@ public class ImageLoader {
                                 targetSize.width(),
                                 VipsOption.Int("height", targetSize.height()),
                                 VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-                    case HttpResolvedImage(URI uri, Map<String, String> headers) ->
-                        loadFromHttp(uri, headers, targetSize);
+                    case HttpResolvedImage(URI uri, Map<String, String> headers) -> {
+                        var result = loadFromHttp(uri, headers, targetSize);
+                        updateCacheInfoFromResponse(source, result.responseHeaders());
+                        yield result.image();
+                    }
                     case BinaryResolvedImage(byte[] data) ->
                         VImage.thumbnailBuffer(
                                 arena,
@@ -410,10 +416,28 @@ public class ImageLoader {
         return switch (source.resolvedImage()) {
             case FilesystemResolvedImage(Path path) ->
                 VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
-            case HttpResolvedImage(URI uri, Map<String, String> headers) -> loadFromHttp(uri, headers, null, options);
+            case HttpResolvedImage(URI uri, Map<String, String> headers) -> {
+                var result = loadFromHttp(uri, headers, null, options);
+                updateCacheInfoFromResponse(source, result.responseHeaders());
+                yield result.image();
+            }
             case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
             default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
         };
+    }
+
+    /// Populates [ImageSource.cacheInfo] from the upstream HTTP response headers when no
+    /// extension-provided cache info is already present. Extracts [ETag] and
+    /// [Last-Modified] so the controller can relay them to clients for conditional requests.
+    private static void updateCacheInfoFromResponse(ImageSource source, HttpHeaders responseHeaders) {
+        if (source.cacheInfo() != null) {
+            return; // Extension already provided cache info, do not overwrite
+        }
+        String eTag = responseHeaders.getETag();
+        long lastModified = responseHeaders.getLastModified();
+        if (eTag != null || lastModified != -1) {
+            source.setCacheInfo(new CacheInfo(eTag, lastModified != -1 ? Instant.ofEpochMilli(lastModified) : null));
+        }
     }
 
     /// Classifies the resolved source into the metric label used for load counters.
@@ -429,7 +453,10 @@ public class ImageLoader {
 
     /// Loads an HTTP source either directly or via libvips' thumbnail API, depending on whether a
     /// target size was requested.
-    private VImage loadFromHttp(
+    ///
+    /// Returns the loaded image together with the upstream response headers so that callers can
+    /// extract caching metadata (ETag, Last-Modified) and relay it to clients.
+    private HttpLoadResult loadFromHttp(
             URI uri, @Nullable Map<String, String> headers, @Nullable ImageSize targetSize, VipsOption... options)
             throws IOException, InterruptedException {
         var reqBuilder = HttpRequest.newBuilder().uri(uri);
@@ -451,12 +478,18 @@ public class ImageLoader {
             throw new HttpStatusException("Failed to load image", response.statusCode(), null, responseHeaders);
         }
 
+        // Capture response headers before the body stream is consumed by libvips.
+        HttpHeaders responseHeaders = response.headers() != null
+                ? new HttpHeaders(
+                        MultiValueMap.fromMultiValue(response.headers().map()))
+                : new HttpHeaders();
+
         // NOTE: For all `newFrom*Stream` methods in vips-ffm, we know that the passed InputStream
         //       is closed when the lifetime of the associated FFM Arena has ended. In our case, the
         //       lifetime of this Arena is tied to the lifetime of the Request Scope in Spring, i.e.
         //       we can be sure that we don't leak InputStreams across request-response cycles.
         if (targetSize == null) {
-            return VImage.newFromStream(arena, response.body(), options);
+            return new HttpLoadResult(VImage.newFromStream(arena, response.body(), options), responseHeaders);
         }
 
         var src = newFromInputStream(arena, response.body());
@@ -464,7 +497,8 @@ public class ImageLoader {
         System.arraycopy(options, 0, thumbOptions, 0, options.length);
         thumbOptions[options.length] = VipsOption.Int("height", targetSize.height());
         thumbOptions[options.length + 1] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
-        return VImage.thumbnailSource(arena, src, targetSize.width(), thumbOptions);
+        return new HttpLoadResult(
+                VImage.thumbnailSource(arena, src, targetSize.width(), thumbOptions), responseHeaders);
     }
 
     ///  Get image metadata from a loaded VImage.
