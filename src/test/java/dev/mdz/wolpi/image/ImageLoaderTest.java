@@ -13,9 +13,11 @@ import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
+import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageSource;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.foreign.Arena;
@@ -26,7 +28,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -269,6 +276,110 @@ class ImageLoaderTest {
         ImageSource source = filesystemFallbackLoader(baseDir).resolve("linked.jp2", null, null);
 
         assertThat(source).isNull();
+    }
+
+    @Test
+    void shouldCaptureUpstreamCacheHeadersIntoCacheInfo() throws IOException, InterruptedException {
+        var lastModified =
+                ZonedDateTime.of(2026, 1, 15, 10, 30, 0, 0, ZoneOffset.UTC).toInstant();
+        var loader = httpImageLoader(
+                Map.of(
+                        "ETag", List.of("\"s3-etag\""),
+                        "Last-Modified",
+                                List.of(DateTimeFormatter.RFC_1123_DATE_TIME.format(
+                                        lastModified.atZone(ZoneOffset.UTC)))),
+                200);
+        var source = httpSource(null);
+
+        loader.loadImage(source);
+
+        assertThat(source.cacheInfo()).isNotNull();
+        assertThat(source.cacheInfo().eTag()).isEqualTo("\"s3-etag\"");
+        assertThat(source.cacheInfo().lastModified()).isEqualTo(lastModified);
+    }
+
+    @Test
+    void shouldNotOverwriteCacheInfoWhenAlreadySet() throws IOException, InterruptedException {
+        var loader = httpImageLoader(Map.of("ETag", List.of("\"upstream-etag\"")), 200);
+        var source = httpSource(new CacheInfo("extension-etag", null));
+
+        loader.loadImage(source);
+
+        assertThat(source.cacheInfo().eTag()).isEqualTo("extension-etag");
+    }
+
+    @Test
+    void shouldNotSetCacheInfoWhenUpstreamHasNoHeaders() throws IOException, InterruptedException {
+        var loader = httpImageLoader(Map.of(), 200);
+        var source = httpSource(null);
+
+        loader.loadImage(source);
+
+        assertThat(source.cacheInfo()).isNull();
+    }
+
+    @Test
+    void shouldForward304HeadersToClient() throws IOException, InterruptedException {
+        var loader = httpImageLoader(
+                Map.of(
+                        "ETag", List.of("\"s3-current-etag\""),
+                        "Last-Modified", List.of("Thu, 15 Jan 2026 10:30:00 GMT")),
+                304);
+        var source = httpSource(null);
+
+        assertThatThrownBy(() -> loader.loadImage(source))
+                .isInstanceOf(HttpStatusException.class)
+                .satisfies(ex -> {
+                    var hse = (HttpStatusException) ex;
+                    assertThat(hse.httpStatusCode()).isEqualTo(304);
+                    assertThat(hse.responseHeaders()).isNotNull();
+                    assertThat(hse.responseHeaders().getETag()).isEqualTo("\"s3-current-etag\"");
+                    assertThat(hse.responseHeaders().getLastModified())
+                            .isEqualTo(ZonedDateTime.of(2026, 1, 15, 10, 30, 0, 0, ZoneOffset.UTC)
+                                    .toInstant()
+                                    .toEpochMilli());
+                });
+    }
+
+    private ImageLoader httpImageLoader(Map<String, List<String>> responseHeaders, int statusCode)
+            throws IOException, InterruptedException {
+        var imageBytes = Files.readAllBytes(Path.of("src/test/resources/images/embedded_icc_colorspace.jpg"));
+        HttpClient httpClient = mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<InputStream> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(statusCode);
+        when(response.body())
+                .thenReturn(statusCode == 304 ? mock(InputStream.class) : new ByteArrayInputStream(imageBytes));
+        when(response.headers()).thenReturn(HttpHeaders.of(responseHeaders, (name, value) -> true));
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(response);
+        return new ImageLoader(
+                new WolpiConfig(
+                        Path.of("/tmp/wolpi-test-tmp"),
+                        Path.of("src/test/resources/images"),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of()),
+                arena,
+                httpClient,
+                null,
+                null,
+                mock(WolpiMetrics.class));
+    }
+
+    private static ImageSource httpSource(@Nullable CacheInfo cacheInfo) {
+        return new ImageSource(
+                "remote-image",
+                new HttpResolvedImage(URI.create("https://example.com/image.jpg"), null),
+                null,
+                cacheInfo);
     }
 
     private ImageLoader filesystemFallbackLoader(Path baseDir) {
