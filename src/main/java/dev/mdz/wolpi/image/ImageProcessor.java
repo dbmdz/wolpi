@@ -336,8 +336,19 @@ public class ImageProcessor {
                 };
         // FIXME: There should be high-level API in vips-ffm for this, but there isn't yet
         int sourceInterpretation = VipsHelper.image_get_interpretation(image.getUnsafeStructAddress());
+        // For 1-bit source images, vips loads them into [0, 127], but we need [0, 255]
+        Integer bps = image.getInt("bits-per-sample");
+        if (bps != null && bps == 1) {
+            image = image.linear(List.of(2.0), List.of(0.0));
+        }
         if (outputInterpretation.getRawValue() != sourceInterpretation) {
-            return image.colourspace(outputInterpretation);
+            image = image.colourspace(outputInterpretation);
+        }
+
+        // For bitonal output, threshold the image
+        // TODO: Maybe we should get a bit fancier and use Sauvola?
+        if (quality == IIIFQuality.BITONAL) {
+            image = image.relationalConst(VipsOperationRelational.OPERATION_RELATIONAL_MOREEQ, List.of(128.0));
         }
         return image;
     }
@@ -461,17 +472,10 @@ public class ImageProcessor {
 
             List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
 
-            // Force 1bit output for bitonal images in PNG and GIF formats
-            if (image.getInt("interpretation") == VipsInterpretation.INTERPRETATION_B_W.getRawValue()) {
-                if (suffix.equals("png") || suffix.equals("gif")) {
-                    // Create a mutable copy of the options we can modify
-                    options = new ArrayList<>(options);
-                    options.add(VipsOption.Int("bitdepth", 1));
-                } else {
-                    // Other formats do not perform binarization themselves, so we need to threshold the
-                    // image
-                    image = image.relationalConst(VipsOperationRelational.OPERATION_RELATIONAL_MORE, List.of(128.0));
-                }
+            if (request.qualitySpec().equals("bitonal") && (suffix.equals("png") || suffix.equals("gif"))) {
+                // Create a mutable copy of the options we can modify
+                options = new ArrayList<>(options);
+                options.add(VipsOption.Int("bitdepth", 1));
             }
 
             String mimeType = Files.probeContentType(Paths.get("image.%s".formatted(suffix)));

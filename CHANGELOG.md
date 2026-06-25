@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RecordValueMapper` now converts parameterized `List<T>` members element
   by element, preventing raw polyglot proxy lists from escaping into type-
   specific iteration code.
+- Creating sRGB output images from 1-bit source images now correctly sets the
+  light color to pure white, instead of dark gray
+- Creating bitonal output images from 1-bit source images now correctly reproduces
+  the source image instead of being either all-black (unscaled) or inverted with
+  halos (downscaled).
 
 
 ## [0.2.0] - 2026-06-04
