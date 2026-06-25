@@ -48,7 +48,7 @@ wolpi:
   logging:
     level: info
     format: text
-  # Location to store extensions installed from packagesin
+  # Location to store extensions installed from packages in
   data-directory: "./data"
   # Fallback location where images are loaded from if no resolving
     # extension provides the image
