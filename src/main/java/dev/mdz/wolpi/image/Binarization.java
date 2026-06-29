@@ -28,7 +28,7 @@ public class Binarization {
     }
 
     /// Binarize an image using Otsu's method, resulting in an image that keeps clearly defined lines
-    /// and shapes, but elimites texture and gradients.
+    /// and shapes, but eliminates texture and gradients.
     public static VImage otsu(VImage image) {
         // Blur the image a bit before to help with noise, sigma=0.85 corresponds to a ~5x5 kernel
         image = image.gaussblur(0.85, VipsOption.Enum("precision", VipsPrecision.PRECISION_INTEGER));
