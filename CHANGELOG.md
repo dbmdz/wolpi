@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- New config option `image-processing.binarization-method` to select the method
+  used for converting to the `bitonal` quality. Currently supported methods are
+  `otsu` and `dither`. The implementation is public in
+  `dev.mdz.wolpi.image.Binarization` so extension authors can implement dynamic
+  strategies for determining the best method.
+
 ## [0.2.1] - 2026-06-26
 
 ### Added

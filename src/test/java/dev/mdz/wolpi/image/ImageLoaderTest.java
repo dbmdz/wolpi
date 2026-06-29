@@ -64,6 +64,7 @@ class ImageLoaderTest {
                         null,
                         null,
                         null,
+                        null,
                         Map.of()),
                 arena,
                 null,
@@ -105,6 +106,7 @@ class ImageLoaderTest {
                 new WolpiConfig(
                         Path.of("/tmp/wolpi-test-tmp"),
                         Path.of("src/test/resources/images"),
+                        null,
                         null,
                         null,
                         null,
@@ -157,6 +159,7 @@ class ImageLoaderTest {
                         null,
                         null,
                         null,
+                        null,
                         Map.of()),
                 arena,
                 httpClient,
@@ -197,6 +200,7 @@ class ImageLoaderTest {
                 new WolpiConfig(
                         Path.of("/tmp/wolpi-test-tmp"),
                         Path.of("src/test/resources/images"),
+                        null,
                         null,
                         null,
                         null,
@@ -366,6 +370,7 @@ class ImageLoaderTest {
                         null,
                         null,
                         null,
+                        null,
                         Map.of()),
                 arena,
                 httpClient,
@@ -389,6 +394,7 @@ class ImageLoaderTest {
                 new WolpiConfig(
                         Path.of("/tmp/wolpi-test-tmp"),
                         baseDir,
+                        null,
                         null,
                         null,
                         null,

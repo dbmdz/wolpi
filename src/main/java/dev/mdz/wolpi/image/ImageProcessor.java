@@ -9,7 +9,6 @@ import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsDirection;
 import app.photofox.vipsffm.enums.VipsIntent;
 import app.photofox.vipsffm.enums.VipsInterpretation;
-import app.photofox.vipsffm.enums.VipsOperationRelational;
 import app.photofox.vipsffm.enums.VipsPCS;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.WolpiConfig;
@@ -345,10 +344,11 @@ public class ImageProcessor {
             image = image.colourspace(outputInterpretation);
         }
 
-        // For bitonal output, threshold the image
-        // TODO: Maybe we should get a bit fancier and use Sauvola?
         if (quality == IIIFQuality.BITONAL) {
-            image = image.relationalConst(VipsOperationRelational.OPERATION_RELATIONAL_MOREEQ, List.of(128.0));
+            return switch (wolpiConfig.imageProcessing().binarizationMethod()) {
+                case OTSU -> Binarization.otsu(image);
+                case DITHER -> Binarization.blueNoiseDither(vipsArena, image);
+            };
         }
         return image;
     }

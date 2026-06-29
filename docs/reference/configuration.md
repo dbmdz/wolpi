@@ -138,6 +138,18 @@ encoding-options:
 [vips-subsample]: https://www.libvips.org/API/8.17/enum.ForeignSubsample.html
 [iiif-formats]: https://iiif.io/api/image/3.0/#45-format
 
+## Image Processing configuration
+
+In the `image-processing` section, you can tweak aspects of the image processing pipeline. As of
+now there is only one option:
+
+- `binarization-method`: One of `otsu` (default) or `dither`. `otsu` is a global thresholding-based
+  approach, i.e. Wolpi will determine a gray level as the boundary between foreground and background
+  and convert all pixels to black or white depending on that boundary. This results in a binarized
+  image that preserves hard structure and edges, but discards gradients and texture, making it most
+  suited to text and drawings. `dither` on the other hand will preserve textre and gradients, at the
+  expense of edges and structure, making it more suitable for photographic content.
+
 ## IIIF configuration
 
 The `iiif` section controls Wolpi's supported IIIF Image API features, output formats, and

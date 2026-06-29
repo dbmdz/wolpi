@@ -311,6 +311,7 @@ def resolve(self, identifier, etag, last_modified):
                 null,
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 null,
+                null,
                 null);
         return new ExtensionRegistry(
                 wolpiConfig,

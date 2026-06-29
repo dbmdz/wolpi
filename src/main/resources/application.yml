@@ -110,6 +110,10 @@ wolpi:
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"
     info-json: "public, max-age=604800, must-revalidate"
+
+  image-processing:
+    binarization-method: otsu
+
   encoding-options:
     jpg:
       Q: 80

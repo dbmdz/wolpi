@@ -167,6 +167,7 @@ public class ExtensionRuntimeTest {
                 mock(ExtensionPoolConfig.class),
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 mock(PackagingConfig.class),
+                null,
                 Map.of());
         if (graalContextSupplier == null) {
             graalContextSupplier = new GraalContextSupplier(config);

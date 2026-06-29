@@ -18,6 +18,7 @@ import org.springframework.boot.logging.LogLevel;
 /// @param extensionPool Configuration for the extension context pool
 /// @param packaging Configuration for installing extensions from package managers
 /// @param cacheControlHeaders Cache-Control header values for info.json and image responses
+/// @param imageProcessing Configuration for various image processing aspects
 /// @param encodingOptions Encoding options for image processing, such as JPEG quality and PNG
 /// compression level, will be passed directly to the VIPS *save functions,
 /// see their respective documentation in the [VIPS API](https://www.libvips.org/API/current/).
@@ -39,6 +40,7 @@ public record WolpiConfig(
         @NestedConfigurationProperty ExtensionPoolConfig extensionPool,
         @NestedConfigurationProperty ExtensionDebugConfig extensionDebug,
         @NestedConfigurationProperty PackagingConfig packaging,
+        @NestedConfigurationProperty ImageProcessingConfig imageProcessing,
         Map<String, Map<String, Object>> encodingOptions) {
 
     /// Configures the Cache-Control header for the IIIF endpoints
@@ -160,5 +162,22 @@ public record WolpiConfig(
         /// Structured JSON format, one JSON object per log line with fields `@timestamp`, `level`,
         /// `logger_name`, `message`, `stack_trace`, `stack_hash`, `request_id`
         JSON
+    }
+
+    /// Configure various image processing aspects
+    ///
+    /// @param binarizationMethod Select the binarization method to use for the `bitonal` output
+    ///                           quality, defaults to `otsu` (a global thresholding method)
+    public record ImageProcessingConfig(
+            @DefaultValue("otsu") BinarizationMethod binarizationMethod) {}
+
+    /// Supported binarization methods for the `bitonal` output quality
+    public enum BinarizationMethod {
+        /// Binarization through dithering, with a blue-noise approach, preferable for photographic
+        /// content
+        DITHER,
+        /// Binarization through global thresholding, with an automatically determined threshold,
+        /// preferable for text and drawing content
+        OTSU
     }
 }
