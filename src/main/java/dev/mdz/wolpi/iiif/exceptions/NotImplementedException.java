@@ -7,7 +7,7 @@ package dev.mdz.wolpi.iiif.exceptions;
 /// an image size larger than the original image.
 public class NotImplementedException extends Exception {
 
-  public NotImplementedException(String reason) {
-    super(reason);
-  }
+    public NotImplementedException(String reason) {
+        super(reason);
+    }
 }
