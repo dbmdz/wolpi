@@ -280,7 +280,6 @@
         <artifactId>spotless-maven-plugin</artifactId>
         <version>3.5.1</version>
         <configuration>
-          <ratchetFrom>origin/main</ratchetFrom>
           <java>
             <palantirJavaFormat>
               <version>2.78.0</version>
