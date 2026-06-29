@@ -147,7 +147,7 @@ now there is only one option:
   approach, i.e. Wolpi will determine a gray level as the boundary between foreground and background
   and convert all pixels to black or white depending on that boundary. This results in a binarized
   image that preserves hard structure and edges, but discards gradients and texture, making it most
-  suited to text and drawings. `dither` on the other hand will preserve textre and gradients, at the
+  suited to text and drawings. `dither` on the other hand will preserve texture and gradients, at the
   expense of edges and structure, making it more suitable for photographic content.
 
 ## IIIF configuration
