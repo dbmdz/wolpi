@@ -92,6 +92,8 @@ jobs:
     needs: verify
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/cache@v5
         with:
           path: ~/.m2/repository
