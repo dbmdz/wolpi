@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Credentials for a custom PyPI `index` are no longer passed to pip on the
   command line and are masked in logs. Packages are now resolved only from the
   custom index, no longer from both the custom index and PyPI.
+- URL-encoded `/` in identifiers are now properly supported, this was
+  documented as working before, but was actually broken due to a bad Tomcat
+  default setting
 
 ## [0.3.0] - 2026-06-29
 
