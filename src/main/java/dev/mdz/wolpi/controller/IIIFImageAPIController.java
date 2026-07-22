@@ -82,7 +82,10 @@ public class IIIFImageAPIController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Location", getPublicUrl("/v%d/%s/info.json".formatted(version.value(), identifier)));
+        headers.add(
+                "Location",
+                getPublicUrl(
+                        "/v%d/%s/info.json".formatted(version.value(), ImageRequest.encodePathSegment(identifier))));
         return ResponseEntity.status(HttpStatus.SEE_OTHER).headers(headers).build();
     }
 
@@ -146,7 +149,10 @@ public class IIIFImageAPIController {
         }
 
         Map<String, Object> infoJson = loader.getImageInfoJson(
-                identifier, imageInfo, version, getPublicUrl("/v%d/%s".formatted(version.value(), identifier)));
+                identifier,
+                imageInfo,
+                version,
+                getPublicUrl("/v%d/%s".formatted(version.value(), ImageRequest.encodePathSegment(identifier))));
 
         if (config.iiif().features().jsonLdMediaType()) {
             outHeaders.setContentType(
@@ -386,9 +392,9 @@ public class IIIFImageAPIController {
                 && !config.http().baseUri().isBlank()) {
             return "%s%s".formatted(config.http().baseUri(), requestPath);
         } else {
-            return ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path(requestPath)
-                    .toUriString();
+            // requestPath is already encoded where required. Appending it after building the base
+            // URL prevents encoded identifier delimiters such as %2F from becoming %252F.
+            return ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString() + requestPath;
         }
     }
 }
