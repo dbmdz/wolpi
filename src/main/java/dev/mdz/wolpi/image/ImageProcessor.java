@@ -445,6 +445,12 @@ public class ImageProcessor {
                             .formatted(image.getWidth(), image.getHeight()));
         }
 
+        if (request.formatSpec().equals("webp") && (image.getWidth() > 16383 || image.getHeight() > 16383)) {
+            throw new IllegalArgumentException(
+                    "Requested output format WebP does not support images with dimensions larger than 16383 pixels on either axis (requested size was %dx%d)"
+                            .formatted(image.getWidth(), image.getHeight()));
+        }
+
         var requestState = processingRequestState.get();
 
         // We can only arrive here after we've processed the image, so this is safe to assume

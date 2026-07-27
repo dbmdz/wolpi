@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- Requesting WebP images with either dimension larger than 16,383 pixels now
+  results in a HTTP 400 response instead of a HTTP 500 response.
+
 ## [0.3.0] - 2026-06-29
 
 ### Added
