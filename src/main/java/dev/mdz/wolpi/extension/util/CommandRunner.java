@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,6 +31,19 @@ public class CommandRunner {
     ///                              the command to complete
     public static String runCommand(Path executable, @Nullable Path workingDirectory, Duration timeout, String... args)
             throws IOException, InterruptedException {
+        return runCommand(executable, workingDirectory, timeout, Map.of(), args);
+    }
+
+    /// Like [#runCommand(Path, Path, Duration, String...)], but with additional environment
+    /// variables for the child process. Prefer this over argv for secrets, since argv is
+    /// world-readable via `/proc/<pid>/cmdline` and ends up in error messages.
+    public static String runCommand(
+            Path executable,
+            @Nullable Path workingDirectory,
+            Duration timeout,
+            Map<String, String> extraEnv,
+            String... args)
+            throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>();
         cmd.add(executable.toAbsolutePath().toString());
         cmd.addAll(Arrays.asList(args));
@@ -38,6 +52,7 @@ public class CommandRunner {
         if (workingDirectory != null) {
             pb.directory(workingDirectory.toFile());
         }
+        pb.environment().putAll(extraEnv);
         Process p = pb.start();
 
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
@@ -48,7 +63,7 @@ public class CommandRunner {
             if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 p.destroyForcibly();
                 throw new IOException("'%s' command timed out after %ds. cmd=%s"
-                        .formatted(executable, timeout.toSeconds(), String.join(" ", args)));
+                        .formatted(executable, timeout.toSeconds(), redact(String.join(" ", args))));
             }
             int code = p.exitValue();
 
@@ -62,10 +77,21 @@ public class CommandRunner {
             }
             if (code != 0) {
                 throw new IOException("'%s' command exited with code=%d. command='%s %s' stdout=%s stderr=%s"
-                        .formatted(executable, code, executable, String.join(" ", args), stdout, stderr));
+                        .formatted(
+                                executable,
+                                code,
+                                executable,
+                                redact(String.join(" ", args)),
+                                redact(stdout),
+                                redact(stderr)));
             }
             return stdout;
         }
+    }
+
+    /// Mask userinfo (`user:password@`) in anything that looks like an URL.
+    static String redact(String text) {
+        return text.replaceAll("://[^/\\s@]+@", "://***@");
     }
 
     ///  Find executable on the system PATH.
