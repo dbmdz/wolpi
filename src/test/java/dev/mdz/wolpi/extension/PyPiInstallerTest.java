@@ -2,6 +2,7 @@ package dev.mdz.wolpi.extension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 import dev.mdz.wolpi.config.ExtensionConfig.IndexAuth;
 import dev.mdz.wolpi.config.WolpiConfig;
@@ -15,7 +16,11 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -353,10 +358,18 @@ class PyPiInstallerTest {
         String inspectOutput = String.format(
                 "{" + "\"installed\": [{\"metadata\": {\"name\": \"test-package\"}, \"metadata_location\": \"%s\"}]}",
                 distInfoLocation);
+        List<List<String>> argvs = new ArrayList<>();
+        Map<String, String> env = new HashMap<>();
         var builder = ProcessBuilderMocks.builder()
                 .matchCommandTokenContains("pip")
                 .success()
-                .stdoutWhenContains("inspect", inspectOutput);
+                .stdoutWhenContains("inspect", inspectOutput)
+                .verify((pb, ctx) -> {
+                    @SuppressWarnings("unchecked")
+                    List<String> argv = (List<String>) ctx.arguments().getFirst();
+                    argvs.add(argv);
+                    when(pb.environment()).thenReturn(env);
+                });
         try (var _ = builder.build()) {
             Files.createDirectories(distInfoLocation);
             Files.writeString(
@@ -365,6 +378,10 @@ class PyPiInstallerTest {
             var auth = new IndexAuth("testuser", "testpass", null);
             installer.install("test-package", "1.2.3", URI.create("https://example.com/simple"), auth, false);
         }
+        // Credentials and index must only be passed via environment, never via argv
+        assertThat(argvs).flatMap(a -> a).noneMatch(t -> t.contains("testpass") || t.contains("index-url"));
+        assertThat(argvs).anyMatch(a -> a.contains("install") && a.contains("test-package==1.2.3"));
+        assertThat(env).containsEntry("PIP_INDEX_URL", "https://testuser:testpass@example.com/simple");
     }
 
     @Test

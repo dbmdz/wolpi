@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -106,31 +107,34 @@ public class PyPiInstaller {
             return venvPath;
         }
 
-        if (customIndex != null && indexAuth != null && indexAuth.username() != null && indexAuth.password() != null) {
-            String urlString = customIndex.toString();
-            if (!urlString.contains("://")) {
-                log.warn(
-                        "Custom index URL '{}' does not contain a valid scheme, cannot embed credentials", customIndex);
-            } else {
-                String encodedUsername = URLEncoder.encode(indexAuth.username(), StandardCharsets.UTF_8);
-                String encodedPassword = URLEncoder.encode(indexAuth.password(), StandardCharsets.UTF_8);
-                customIndex =
-                        URI.create(urlString.replace("://", "://%s:%s@".formatted(encodedUsername, encodedPassword)));
+        // Credentials go into the environment, never into argv (visible in /proc and error messages).
+        Map<String, String> env = new HashMap<>();
+        if (customIndex != null) {
+            String indexUrl = customIndex.toString();
+            if (indexAuth != null && indexAuth.username() != null && indexAuth.password() != null) {
+                if (!indexUrl.contains("://")) {
+                    log.warn("Custom index URL '{}' has no scheme, cannot embed credentials", customIndex);
+                } else {
+                    indexUrl = indexUrl.replace(
+                            "://",
+                            "://%s:%s@"
+                                    .formatted(
+                                            URLEncoder.encode(indexAuth.username(), StandardCharsets.UTF_8),
+                                            URLEncoder.encode(indexAuth.password(), StandardCharsets.UTF_8)));
+                }
             }
+            // Equivalent to --index-url: the custom index replaces PyPI instead of being added to it
+            env.put("PIP_INDEX_URL", indexUrl);
         }
 
         log.debug("Installing package '{}' version {} into virtual environment at {}", packageName, version, venvPath);
         List<String> pipArgs = new ArrayList<>();
         pipArgs.add("install");
-        if (customIndex != null) {
-            pipArgs.add("--extra-index-url");
-            pipArgs.add(customIndex.toString());
-        }
         if (skipDependencies) {
             pipArgs.add("--no-deps");
         }
         pipArgs.add("%s==%s".formatted(packageName, version));
-        runPip(venvPath, pipArgs.toArray(String[]::new));
+        runPip(venvPath, env, pipArgs.toArray(String[]::new));
         return venvPath;
     }
 
@@ -391,13 +395,17 @@ public class PyPiInstaller {
 
     /// Run pip with the given arguments in the given virtual environment.
     private String runPip(Path venvPath, String... args) throws PackageInstallException {
+        return runPip(venvPath, Map.of(), args);
+    }
+
+    private String runPip(Path venvPath, Map<String, String> env, String... args) throws PackageInstallException {
         Path pythonInVenv = venvPath.resolve("bin").resolve("python");
         List<String> cmd = new ArrayList<>();
         cmd.add("-m");
         cmd.add("pip");
         cmd.addAll(Arrays.stream(args).filter(s -> !s.isBlank()).toList());
         try {
-            return CommandRunner.runCommand(pythonInVenv, baseDir, processTimeout, cmd.toArray(new String[0]));
+            return CommandRunner.runCommand(pythonInVenv, baseDir, processTimeout, env, cmd.toArray(new String[0]));
         } catch (IOException | InterruptedException e) {
             throw new PackageInstallException(e);
         }

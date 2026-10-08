@@ -98,5 +98,12 @@ public record ExtensionConfig(
                         "Cannot provide both token and username/password for index authentication.");
             }
         }
+
+        /// Never print secrets, this record ends up in log messages via [ExtensionConfig#toString()].
+        @Override
+        public String toString() {
+            return "IndexAuth[username=%s, password=%s, token=%s]"
+                    .formatted(username, password == null ? null : "***", token == null ? null : "***");
+        }
     }
 }

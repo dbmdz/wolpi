@@ -88,7 +88,10 @@ extensions:
 Python extensions can also be installed from a private PyPI repository specified as a URL in the
 `index` key, optionally with `username` and `password` in an `indexAuth` section for basic auth
 authentication. Make sure that `index` points to the [Simple Repository API][py-repo-api] endpoint
-of the  repository, most commonly exposed at the `/simple` path.
+of the repository, most commonly exposed at the `/simple` path.
+
+Note that `pip` then uses only this repository and no longer consults the public PyPI index, so the
+repository must also provide the extension's dependencies, for example by proxying PyPI.
 
 ```yaml
   - pypi:
