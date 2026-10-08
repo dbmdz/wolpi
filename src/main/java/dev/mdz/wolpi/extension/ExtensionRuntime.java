@@ -16,6 +16,7 @@ import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.ResolvedImage;
 import java.lang.invoke.MethodHandles;
+import java.net.http.HttpTimeoutException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -428,9 +430,20 @@ public interface ExtensionRuntime extends AutoCloseable {
             var httpError = HttpStatusException.fromGuestException(pe);
             if (httpError != null) {
                 throw httpError;
-            } else {
-                throw new ExtensionExecutionException("Extension raised an error during execution", pe);
             }
+            if (pe.isHostException()) {
+                Throwable hostError = pe.asHostException();
+                while ((hostError instanceof CompletionException || hostError instanceof ExecutionException)
+                        && hostError.getCause() != null) {
+                    hostError = hostError.getCause();
+                }
+                // HttpConnectTimeoutException is also an HttpTimeoutException.
+                if (hostError instanceof HttpTimeoutException timeout) {
+                    throw new HttpStatusException(
+                            "Extension could not reach the upstream server: " + timeout.getMessage(), 504, null);
+                }
+            }
+            throw new ExtensionExecutionException("Extension raised an error during execution", pe);
         }
 
         private boolean runAuthExtension(

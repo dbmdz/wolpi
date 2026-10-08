@@ -333,6 +333,30 @@ environments.
 Disable this only if you explicitly want to restrict Python extensions to pure Python code and do
 not want GraalPy native module access.
 
+## Extension Timeouts Configuration
+
+```yaml title="application.yml"
+wolpi:
+  extension-timeouts:
+    http:
+      connect: 10s
+      request: 30s
+```
+
+- `http.connect`: Maximum time to establish an upstream HTTP connection. Defaults to `10s`.
+- `http.request`: Maximum time for an upstream HTTP request, including connection time.
+  Defaults to `30s`. The effective connection limit is the smaller of `connect` and `request`.
+
+These settings apply to JavaScript's built-in `fetchSync` function and the guest-context
+`httpClient` in both JavaScript and Python. They do not affect Wolpi's image-loading client or
+HTTP clients created by extensions themselves.
+
+Timeouts can result in HTTP 504 responses.
+
+For extension implementation details, see [HTTP requests and timeouts][extension-http].
+
+[extension-http]: ../extension-development.md#http-requests-and-timeouts
+
 ## Extension Pool Configuration
 
 Wolpi keeps extension runtimes in a pool so it can reuse them across requests.
@@ -409,6 +433,10 @@ extension-runtime:
   enable-python-native-modules: true
 extension-pool:
   eviction-timeout: 30m
+extension-timeouts:
+  http:
+    connect: 10s
+    request: 30s
 extension-debug:
   enabled: false
   host: localhost

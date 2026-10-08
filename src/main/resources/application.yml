@@ -83,6 +83,13 @@ wolpi:
 
     # Time after which idle contexts above min-idle are evicted (defaults to 30 minutes)
     eviction-timeout: 30m
+  extension-timeouts:
+    # Timeouts for the guest HTTP client in JavaScript and Python, including fetchSync
+    http:
+      # Maximum time to wait for the connection to be established (defaults to 10s)
+      connect: 10s
+      # Maximum total time for the whole request (defaults to 30s)
+      request: 30s
   packaging:
     install-timeout: 180s
 

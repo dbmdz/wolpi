@@ -1,12 +1,13 @@
 package dev.mdz.wolpi.extension;
 
+import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.mapping.ImageRequestParserProxy;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.Language;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.lang.foreign.Arena;
-import java.net.http.HttpClient;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.info.BuildProperties;
@@ -15,24 +16,31 @@ import org.springframework.stereotype.Component;
 /// Factory for creating [ExtensionGuestContext] instances for extensions that give access to
 /// various useful runtime objects such as configuration, logging and metrics.
 @Component
-public class GuestContextFactory {
+public class GuestContextFactory implements AutoCloseable {
     private final String wolpiVersion;
-    private final HttpClient httpClient;
+    private final ExtensionHttpClient httpClient;
     private final Arena vipsArena;
     private final ImageRequestParser imageRequestParser;
     private final MeterRegistry meterRegistry;
 
     public GuestContextFactory(
             BuildProperties buildProps,
-            HttpClient httpClient,
+            @Nullable WolpiConfig wolpiConfig,
             Arena vipsArena,
             ImageRequestParser imageRequestParser,
             MeterRegistry meterRegistry) {
         this.wolpiVersion = buildProps.getVersion();
-        this.httpClient = httpClient;
+        var timeouts = wolpiConfig == null ? null : wolpiConfig.extensionTimeouts();
+        this.httpClient = new ExtensionHttpClient(timeouts == null ? null : timeouts.http());
         this.vipsArena = vipsArena;
         this.imageRequestParser = imageRequestParser;
         this.meterRegistry = meterRegistry;
+    }
+
+    @PreDestroy
+    @Override
+    public void close() {
+        httpClient.close();
     }
 
     /// Creates a new [ExtensionGuestContext] for the given extension.

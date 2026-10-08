@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
+import com.sun.net.httpserver.HttpServer;
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.IIIFConfig.Limits;
@@ -15,6 +16,7 @@ import dev.mdz.wolpi.config.WolpiConfig.CacheControlHeaders;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionPoolConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionRuntimeConfig;
+import dev.mdz.wolpi.config.WolpiConfig.ExtensionTimeouts;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.exceptions.ExtensionExecutionException;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
@@ -40,9 +42,10 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.awt.Color;
 import java.io.IOException;
 import java.lang.foreign.Arena;
+import java.net.InetSocketAddress;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -53,6 +56,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -94,9 +99,6 @@ public class ExtensionRuntimeTest {
     private BuildProperties buildProperties;
 
     @Mock
-    private HttpClient httpClient;
-
-    @Mock
     private NpmInstaller npmInstaller;
 
     @Mock
@@ -118,6 +120,7 @@ public class ExtensionRuntimeTest {
 
     private WolpiConfig config;
     private Arena testArena;
+    private final List<GuestContextFactory> guestContextFactories = new ArrayList<>();
 
     @BeforeAll
     static void beforeAll() throws IOException {
@@ -168,6 +171,7 @@ public class ExtensionRuntimeTest {
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 mock(PackagingConfig.class),
                 null,
+                null,
                 Map.of());
         if (graalContextSupplier == null) {
             graalContextSupplier = new GraalContextSupplier(config);
@@ -202,6 +206,8 @@ public class ExtensionRuntimeTest {
         }
         try {
             contextPool.close();
+            guestContextFactories.forEach(GuestContextFactory::close);
+            guestContextFactories.clear();
         } catch (Exception e) {
             throw new RuntimeException("Failed to close context pool", e);
         }
@@ -540,13 +546,7 @@ public class ExtensionRuntimeTest {
                             false));
             config.extensions().addAll(exts);
             var registry = new ExtensionRegistry(
-                    config,
-                    pyPiInstaller,
-                    npmInstaller,
-                    null,
-                    graalContextSupplier,
-                    new GuestContextFactory(
-                            buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
+                    config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config));
             var metrics = new WolpiMetrics(meterRegistry);
             for (int i = 0; i < 3; i++) {
                 final int idx = i;
@@ -1114,13 +1114,7 @@ public class ExtensionRuntimeTest {
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
         var registry = new ExtensionRegistry(
-                config,
-                pyPiInstaller,
-                npmInstaller,
-                null,
-                graalContextSupplier,
-                new GuestContextFactory(
-                        buildProperties, httpClient, testArena, new ImageRequestParser(config), meterRegistry));
+                config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config));
         var metrics = new WolpiMetrics(meterRegistry);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics) {
             @Override
@@ -1201,5 +1195,202 @@ public class ExtensionRuntimeTest {
         PY_SINGLE,
         PY_PKG,
         JS
+    }
+
+    private enum HttpApi {
+        FETCH,
+        JS_CLIENT,
+        JS_ASYNC_CLIENT,
+        PYTHON_CLIENT,
+        PYTHON_ASYNC_CLIENT
+    }
+
+    private GuestContextFactory guestContextFactory(WolpiConfig cfg) {
+        var factory =
+                new GuestContextFactory(buildProperties, cfg, testArena, new ImageRequestParser(cfg), meterRegistry);
+        guestContextFactories.add(factory);
+        return factory;
+    }
+
+    /// Isolated fixture for HTTP timeout tests.
+    private class TimeoutHarness implements AutoCloseable {
+        final GraalContextSupplier supplier;
+        final GenericKeyedObjectPool<LoadedExtension, RuntimeContext> pool;
+        final ExtensionRegistry registry;
+        final ExecutorService executor = Executors.newFixedThreadPool(4);
+        final ExtensionRuntime runtime;
+
+        TimeoutHarness(ExtensionTimeouts timeouts, ExtensionConfig... extensions) {
+            var cfg = new WolpiConfig(
+                    tempDir,
+                    null,
+                    null,
+                    null,
+                    mock(IIIFConfig.class),
+                    mock(CacheControlHeaders.class),
+                    new ArrayList<>(List.of(extensions)),
+                    mock(ExtensionRuntimeConfig.class),
+                    mock(ExtensionPoolConfig.class),
+                    new ExtensionDebugConfig(false, "localhost", 4711, false, false),
+                    mock(PackagingConfig.class),
+                    timeouts,
+                    null,
+                    Map.of());
+            supplier = new GraalContextSupplier(cfg);
+            var poolConfig = new GenericKeyedObjectPoolConfig<RuntimeContext>();
+            poolConfig.setJmxEnabled(false);
+            pool = new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(supplier), poolConfig);
+            registry =
+                    new ExtensionRegistry(cfg, pyPiInstaller, npmInstaller, null, supplier, guestContextFactory(cfg));
+            runtime = new ExtensionRuntime.ExtensionRuntimeImpl(
+                    registry, pool, executor, new WolpiMetrics(meterRegistry));
+        }
+
+        @Override
+        public void close() throws Exception {
+            runtime.close();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+            registry.close();
+            pool.close();
+            supplier.resetEngine();
+        }
+    }
+
+    @Nested
+    @DisplayName("Extension HTTP Timeout Tests")
+    class HttpTimeoutTests {
+
+        /// How long the slow test server sleeps before responding, well above the request
+        /// timeouts used in the tests
+        private static final Duration SERVER_DELAY = Duration.ofSeconds(3);
+
+        private HttpServer fastServer;
+        private HttpServer slowServer;
+
+        @BeforeEach
+        void startTestServers() throws IOException {
+            fastServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            fastServer.createContext("/fast", exchange -> {
+                byte[] body = "OK".getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
+            slowServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            slowServer.createContext("/slow", exchange -> {
+                try {
+                    Thread.sleep(SERVER_DELAY.toMillis());
+                    byte[] body = "TOO-LATE".getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (IOException ignored) {
+                    // The request was aborted by the client timeout, nothing to send
+                } finally {
+                    exchange.close();
+                }
+            });
+            fastServer.start();
+            slowServer.start();
+        }
+
+        @AfterEach
+        void stopTestServers() {
+            fastServer.stop(0);
+            slowServer.stop(0);
+        }
+
+        @ParameterizedTest
+        @EnumSource(HttpApi.class)
+        @DisplayName("Guest HTTP calls should succeed within configured timeouts")
+        void shouldSucceedWithinTimeouts(HttpApi api) throws Exception {
+            var ext = httpExtension(api);
+            try (var harness = fetchHarness(Duration.ofSeconds(5), ext)) {
+                var runtime = harness.runtime;
+                var url = "http://127.0.0.1:%d/fast"
+                        .formatted(fastServer.getAddress().getPort());
+                var result = runtime.resolve(url, null, null);
+                assertThat(result).isNotNull();
+                assertThat(result.resolvedImage()).isInstanceOf(HttpResolvedImage.class);
+                assertThat(((HttpResolvedImage) result.resolvedImage()).url())
+                        .isEqualTo(URI.create("http://localhost/fetched/OK"));
+            }
+        }
+
+        @ParameterizedTest
+        @EnumSource(HttpApi.class)
+        @DisplayName("Guest HTTP calls should time out and report HTTP 504")
+        void shouldTimeOutOnSlowRequest(HttpApi api) throws Exception {
+            var ext = httpExtension(api);
+            try (var harness = fetchHarness(Duration.ofMillis(500), ext)) {
+                var runtime = harness.runtime;
+                var url = "http://127.0.0.1:%d/slow"
+                        .formatted(slowServer.getAddress().getPort());
+                long start = System.nanoTime();
+                Throwable thrown = Assertions.catchThrowable(() -> runtime.resolve(url, null, null));
+                Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+                assertThat(thrown).isNotNull();
+                // The upstream timeout is reported to the client as a gateway timeout
+                assertThat(thrown)
+                        .isInstanceOf(HttpStatusException.class)
+                        .hasFieldOrPropertyWithValue("httpStatusCode", 504);
+                assertThat(thrown.getMessage()).contains("upstream");
+                // The request must have been aborted long before the server finished
+                assertThat(elapsed).isLessThan(SERVER_DELAY);
+            }
+        }
+
+        private ExtensionConfig httpExtension(HttpApi api) throws IOException {
+            if (api == HttpApi.PYTHON_CLIENT || api == HttpApi.PYTHON_ASYNC_CLIENT) {
+                var call = api == HttpApi.PYTHON_CLIENT
+                        ? "wolpi.httpClient.send(request, BodyHandlers.ofString())"
+                        : "wolpi.httpClient.sendAsync(request, BodyHandlers.ofString()).get()";
+                return writePyExtension("http-timeout", """
+                        import java
+                        import wolpi
+                        HttpRequest = java.type('java.net.http.HttpRequest')
+                        BodyHandlers = java.type('java.net.http.HttpResponse$BodyHandlers')
+                        URI = java.type('java.net.URI')
+                        def info():
+                            return {'name': 'http-timeout', 'apiVersion': 1, 'description': 'HTTP test'}
+                        def cleanup():
+                            pass
+                        def resolve(identifier, etag, last_modified):
+                            request = HttpRequest.newBuilder(URI.create(identifier)).build()
+                            body = %s.body()
+                            return {'url': 'http://localhost/fetched/' + str(body)}
+                        """.formatted(call));
+            }
+            String body =
+                    switch (api) {
+                        case FETCH -> "fetchSync(identifier).text()";
+                        case JS_CLIENT -> "wolpi.httpClient.send(request, BodyHandlers.ofString()).body()";
+                        case JS_ASYNC_CLIENT ->
+                            "wolpi.httpClient.sendAsync(request, BodyHandlers.ofString()).join().body()";
+                        case PYTHON_CLIENT, PYTHON_ASYNC_CLIENT -> throw new AssertionError("handled above");
+                    };
+            return writeJsExtension("http-timeout", """
+                    import fetchSync from 'wolpi:fetch';
+                    const HttpRequest = Java.type('java.net.http.HttpRequest');
+                    const BodyHandlers = Java.type('java.net.http.HttpResponse.BodyHandlers');
+                    const URI = Java.type('java.net.URI');
+                    export default {
+                      info() { return { name: "http-timeout", apiVersion: 1, description: "HTTP test" }; },
+                      cleanup() {},
+                      resolve(identifier) {
+                        const request = HttpRequest.newBuilder(URI.create(identifier)).build();
+                        return { url: "http://localhost/fetched/" + %s };
+                      }
+                    };
+                    """.formatted(body));
+        }
+
+        private TimeoutHarness fetchHarness(Duration requestTimeout, ExtensionConfig ext) {
+            return new TimeoutHarness(
+                    new ExtensionTimeouts(new ExtensionTimeouts.HttpTimeouts(Duration.ofSeconds(2), requestTimeout)),
+                    ext);
+        }
     }
 }

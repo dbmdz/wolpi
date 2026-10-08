@@ -16,16 +16,17 @@ import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
 import java.io.IOException;
 import java.lang.foreign.Arena;
-import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,9 +43,6 @@ class ExtensionRegistryTest {
     private BuildProperties buildProperties;
 
     @Mock
-    private HttpClient httpClient;
-
-    @Mock
     private NpmInstaller npmInstaller;
 
     @Mock
@@ -52,6 +50,13 @@ class ExtensionRegistryTest {
 
     @TempDir
     private Path tempDir;
+
+    private final List<GuestContextFactory> guestContextFactories = new ArrayList<>();
+
+    @AfterEach
+    void closeHttpClients() {
+        guestContextFactories.forEach(GuestContextFactory::close);
+    }
 
     @DisplayName("should not load extensions when config is empty")
     @Test
@@ -312,14 +317,17 @@ def resolve(self, identifier, etag, last_modified):
                 new ExtensionDebugConfig(false, "localhost", 4711, false, false),
                 null,
                 null,
+                null,
                 null);
+        var guestContextFactory = new GuestContextFactory(buildProperties, wolpiConfig, Arena.ofAuto(), null, null);
+        guestContextFactories.add(guestContextFactory);
         return new ExtensionRegistry(
                 wolpiConfig,
                 pyPiInstaller,
                 npmInstaller,
                 mock(GenericKeyedObjectPool.class),
                 new GraalContextSupplier(wolpiConfig),
-                new GuestContextFactory(buildProperties, httpClient, Arena.ofAuto(), null, null));
+                guestContextFactory);
     }
 
     private ExtensionConfig writePyExtension(String name, String source) throws IOException {

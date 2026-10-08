@@ -72,6 +72,7 @@ public class ImageProcessorTest {
                 null,
                 null,
                 null,
+                null,
                 Map.of());
         runtime = mock(ExtensionRuntime.class);
         when(runtime.hasExtensionsForHook(any())).thenReturn(false);
