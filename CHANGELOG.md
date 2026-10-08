@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Requesting WebP images with either dimension larger than 16,383 pixels now
   results in a HTTP 400 response instead of a HTTP 500 response.
+- Credentials for a custom PyPI `index` are no longer passed to pip on the
+  command line and are masked in logs. Packages are now resolved only from the
+  custom index, no longer from both the custom index and PyPI.
 
 ## [0.3.0] - 2026-06-29
 
