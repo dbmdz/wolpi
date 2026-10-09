@@ -5,7 +5,7 @@ const URI = Java.type('java.net.URI');
 const JavaString = Java.type('java.lang.String');
 const StandardCharsets = Java.type('java.nio.charset.StandardCharsets');
 
-/** A bare-bones synchronous `fetch` implementation using Java's HttpClient. */
+/** A bare-bones synchronous `fetch` implementation using the guest context's HTTP client. */
 export default function fetchSync(url, options = {}) {
   const builder = HttpRequest.newBuilder(URI.create(url));
   const method = options.method || 'GET';

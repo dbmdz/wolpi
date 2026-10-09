@@ -39,8 +39,8 @@ class ImageRequestParserTest {
         IIIFConfig.Qualities qualities = new IIIFConfig.Qualities("color", List.of("color", "gray", "bitonal"));
         IIIFConfig.Formats formats = new IIIFConfig.Formats(List.of("jpg", "png"), List.of("jpg"));
         IIIFConfig iiifConfig = new IIIFConfig(limits, features, qualities, formats);
-        wolpiConfig =
-                new WolpiConfig(null, null, null, null, iiifConfig, null, null, null, null, null, null, null, null);
+        wolpiConfig = new WolpiConfig(
+                null, null, null, null, iiifConfig, null, null, null, null, null, null, null, null, null);
         parser = new ImageRequestParser(wolpiConfig);
     }
 
@@ -71,6 +71,7 @@ class ImageRequestParserTest {
                 wolpiConfig.extensionPool(),
                 wolpiConfig.extensionDebug(),
                 wolpiConfig.packaging(),
+                null,
                 wolpiConfig.imageProcessing(),
                 wolpiConfig.encodingOptions()));
     }
@@ -102,6 +103,7 @@ class ImageRequestParserTest {
                 wolpiConfig.extensionPool(),
                 wolpiConfig.extensionDebug(),
                 wolpiConfig.packaging(),
+                null,
                 wolpiConfig.imageProcessing(),
                 wolpiConfig.encodingOptions()));
     }
@@ -133,6 +135,7 @@ class ImageRequestParserTest {
                 wolpiConfig.extensionPool(),
                 wolpiConfig.extensionDebug(),
                 wolpiConfig.packaging(),
+                null,
                 wolpiConfig.imageProcessing(),
                 wolpiConfig.encodingOptions()));
     }
@@ -153,6 +156,7 @@ class ImageRequestParserTest {
                 wolpiConfig.extensionPool(),
                 wolpiConfig.extensionDebug(),
                 wolpiConfig.packaging(),
+                null,
                 wolpiConfig.imageProcessing(),
                 wolpiConfig.encodingOptions()));
     }
@@ -173,6 +177,7 @@ class ImageRequestParserTest {
                 wolpiConfig.extensionPool(),
                 wolpiConfig.extensionDebug(),
                 wolpiConfig.packaging(),
+                null,
                 wolpiConfig.imageProcessing(),
                 wolpiConfig.encodingOptions()));
     }

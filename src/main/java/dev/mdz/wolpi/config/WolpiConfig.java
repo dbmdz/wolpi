@@ -17,6 +17,7 @@ import org.springframework.boot.logging.LogLevel;
 /// @param extensions List of configured extensions
 /// @param extensionPool Configuration for the extension context pool
 /// @param packaging Configuration for installing extensions from package managers
+/// @param extensionTimeouts Timeouts for operations performed by extensions
 /// @param cacheControlHeaders Cache-Control header values for info.json and image responses
 /// @param imageProcessing Configuration for various image processing aspects
 /// @param encodingOptions Encoding options for image processing, such as JPEG quality and PNG
@@ -40,6 +41,7 @@ public record WolpiConfig(
         @NestedConfigurationProperty ExtensionPoolConfig extensionPool,
         @NestedConfigurationProperty ExtensionDebugConfig extensionDebug,
         @NestedConfigurationProperty PackagingConfig packaging,
+        @NestedConfigurationProperty @Nullable ExtensionTimeouts extensionTimeouts,
         @NestedConfigurationProperty ImageProcessingConfig imageProcessing,
         Map<String, Map<String, Object>> encodingOptions) {
 
@@ -69,6 +71,26 @@ public record WolpiConfig(
     ///                                  you want to restrict extensions to pure Python code only.
     public record ExtensionRuntimeConfig(
             @DefaultValue("true") boolean enablePythonNativeModules) {}
+
+    /// Configuration for timeouts of operations performed by extensions.
+    ///
+    /// @param http Timeouts for HTTP requests made through the guest context's `httpClient`,
+    ///             including JavaScript's `wolpi:fetch` module (`fetchSync`)
+    public record ExtensionTimeouts(
+            @NestedConfigurationProperty @Nullable HttpTimeouts http) {
+        /// Timeouts for the guest context's HTTP client in JavaScript and Python.
+        /// Clients created by extensions themselves are not subject to these settings.
+        ///
+        /// @param connect Maximum time to wait for the connection to the remote server to be
+        ///                established, defaults to `10s`
+        /// @param request Maximum total time for the whole request, including the connection,
+        ///                defaults to `30s`. The request timeout also acts as an upper bound for
+        ///                the connection, so the effective connection timeout is
+        ///                `min(connect, request)`
+        public record HttpTimeouts(
+                @DefaultValue("10s") Duration connect,
+                @DefaultValue("30s") Duration request) {}
+    }
 
     /// Configures limits for the pool handing out extension contexts to requests.
     ///

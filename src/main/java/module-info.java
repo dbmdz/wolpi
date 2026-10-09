@@ -26,6 +26,7 @@ open module wolpi {
     requires info.picocli;
     requires org.apache.commons.io;
     requires java.desktop; // only for test assertions
+    requires jdk.httpserver; // only for test assertions
     requires spring.boot.web.server;
     requires spring.boot.tomcat;
     requires spring.boot.jackson;

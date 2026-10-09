@@ -488,6 +488,31 @@ if (response.ok) {
 }
 ```
 
+`fetchSync` uses the guest context's `wolpi.httpClient` and shares its
+[HTTP timeouts](#http-requests-and-timeouts).
+
+### HTTP Requests and Timeouts
+
+JavaScript and Python extensions can make HTTP requests through `wolpi.httpClient`, which
+implements Java's `java.net.http.HttpClient` API. Wolpi configures its connection timeout with
+`wolpi.extension-timeouts.http.connect` (default `10s`) and caps the request timeout with
+`wolpi.extension-timeouts.http.request` (default `30s`). See the
+[configuration reference][extension-timeouts] for settings and defaults.
+
+The request deadline applies to `send` and both `sendAsync` overloads, even if you build an
+`HttpRequest` without a timeout. Wolpi preserves shorter explicit request timeouts and caps
+longer ones at the configured limit. `fetchSync` uses this same client and policy.
+
+A timeout raises `java.net.http.HttpTimeoutException` or its subclass `HttpConnectTimeoutException`.
+An asynchronous call reports the failure through its future; `join()` and `get()` wrap it in
+`CompletionException` and `ExecutionException`, respectively. You can handle the failure in your
+extension; otherwise Wolpi maps it to HTTP 504 through the normal hook error handling.
+
+These settings do not affect Python HTTP libraries such as `requests`, HTTP clients created
+through direct Java interop, or Wolpi's image-loading client.
+
+[extension-timeouts]: ./reference/configuration.md#extension-timeouts-configuration
+
 ### Working with Java Classes from Extensions
 
 Extensions have free access to all Java classes on the Wolpi classpath and can use them as needed
