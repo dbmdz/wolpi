@@ -1,5 +1,8 @@
 package dev.mdz.wolpi.iiif.model;
 
+import java.nio.charset.StandardCharsets;
+import org.springframework.web.util.UriUtils;
+
 public record ImageRequest(
         String identifier,
         IIIFVersion version,
@@ -20,11 +23,15 @@ public record ImageRequest(
         return "/%s/%s/%s/%s/%s/%s.%s"
                 .formatted(
                         version.name().toLowerCase(),
-                        identifier,
-                        cropSpec,
-                        sizeSpec,
-                        rotationSpec,
-                        qualitySpec,
-                        formatSpec);
+                        encodePathSegment(identifier),
+                        encodePathSegment(cropSpec),
+                        encodePathSegment(sizeSpec),
+                        encodePathSegment(rotationSpec),
+                        encodePathSegment(qualitySpec),
+                        encodePathSegment(formatSpec));
+    }
+
+    public static String encodePathSegment(String value) {
+        return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
     }
 }

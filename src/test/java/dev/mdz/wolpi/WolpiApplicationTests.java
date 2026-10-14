@@ -6,6 +6,7 @@ import dev.mdz.wolpi.validation.ImageApiValidator;
 import dev.mdz.wolpi.validation.model.ValidationResult;
 import dev.mdz.wolpi.validation.model.ValidationResult.ValidationFailure;
 import dev.mdz.wolpi.validation.model.ValidationTest;
+import java.net.URI;
 import java.util.stream.Stream;
 import org.assertj.core.api.AbstractAssert;
 import org.graalvm.polyglot.Context;
@@ -23,6 +24,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -33,7 +35,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @DisplayName("WolpiApplication")
 class WolpiApplicationTests {
     // Use PNG for validation, should be a lot faster than JP2
-    private static final String VALIDATION_ID = "67352ccc-d1b0-11e1-89ae-279075081939-png";
+    private static final String VALIDATION_BASE_ID = "67352ccc-d1b0-11e1-89ae-279075081939";
+    private static final String VALIDATION_ID = VALIDATION_BASE_ID + "-png";
 
     // NOTE: Needs to be public for @ArgumentsSource to work
     @LocalServerPort
@@ -90,6 +93,44 @@ class WolpiApplicationTests {
                 .uri("/v3/67352ccc-d1b0-11e1-89ae-279075081939/full/max/0/default.hdr-png")
                 .exchange();
         resp.expectHeader().valueEquals("X-Wolpi-Base-Uri", "http://localhost:%d".formatted(port));
+    }
+
+    @Test
+    void acceptsUrlEncodedSlashInIdentifier() {
+        var uri = URI.create("http://localhost:%d/v3/%s%%2Fnested/info.json".formatted(port, VALIDATION_BASE_ID));
+
+        client.get()
+                .uri(uri)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.id")
+                .isEqualTo("http://localhost:%d/v3/%s%%2Fnested".formatted(port, VALIDATION_BASE_ID));
+    }
+
+    @Test
+    void doesNotAcceptUnencodedSlashInIdentifier() {
+        var uri = URI.create("http://localhost:%d/v3/%s/nested/info.json".formatted(port, VALIDATION_BASE_ID));
+
+        client.get().uri(uri).exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void preservesEncodedSlashInCanonicalImageRedirect() {
+        var uri = URI.create(
+                "http://localhost:%d/v3/%s%%2Fnested/full/max/0/color.jpg".formatted(port, VALIDATION_BASE_ID));
+
+        client.get()
+                .uri(uri)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.MOVED_PERMANENTLY)
+                .expectHeader()
+                .valueEquals(
+                        "Location",
+                        "http://localhost:%d/v3/%s%%2Fnested/full/max/0/default.jpg"
+                                .formatted(port, VALIDATION_BASE_ID));
     }
 
     /// Generate tests from the python test classes

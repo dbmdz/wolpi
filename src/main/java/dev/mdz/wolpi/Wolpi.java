@@ -209,6 +209,10 @@ public class Wolpi implements WebMvcConfigurer, ApplicationContextAware {
     @Bean
     public WebServerFactoryCustomizer<TomcatServletWebServerFactory> tomcatCustomizer() {
         return factory -> factory.addConnectorCustomizers(connector -> {
+            // Keep encoded slashes inside a path segment until Spring has matched the route.
+            // This will allow method handlers to parse these into path variables without
+            // disrupting the routing.
+            connector.setEncodedSolidusHandling("passthrough");
             connector.setProperty("relaxedPathChars", "^");
             connector.setProperty("relaxedQueryChars", "^");
         });
