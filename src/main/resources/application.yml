@@ -83,13 +83,16 @@ wolpi:
 
     # Time after which idle contexts above min-idle are evicted (defaults to 30 minutes)
     eviction-timeout: 30m
-  extension-timeouts:
-    # Timeouts for the guest HTTP client in JavaScript and Python, including fetchSync
-    http:
-      # Maximum time to wait for the connection to be established (defaults to 10s)
-      connect: 10s
-      # Maximum total time for the whole request (defaults to 30s)
-      request: 30s
+  http-timeouts:
+    # Shared defaults for source images and the JavaScript/Python guest HTTP client
+    connect: 10s
+    # Wait for response headers; Java 25 does not bound response-body transfers
+    request: 30s
+    # Optional per-client overrides inherit omitted values:
+    # extensions:
+    #   request: 15s
+    # sources:
+    #   request: 2m
   packaging:
     install-timeout: 180s
 

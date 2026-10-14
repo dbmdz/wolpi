@@ -333,28 +333,47 @@ environments.
 Disable this only if you explicitly want to restrict Python extensions to pure Python code and do
 not want GraalPy native module access.
 
-## Extension Timeouts Configuration
+## HTTP Timeouts
+
+The `http-timeouts` section configures the stock JDK client's connect and request timeouts for
+HTTP image sources and the guest-context `httpClient`, including JavaScript's `fetchSync`.
+HTTP clients created by extensions themselves remain outside these limits.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `connect` | `10s` | Maximum time to establish a connection. |
+| `request` | `30s` | Maximum time to receive response headers on Java 25. Does not bound response-body transfers. |
+| `extensions.connect`, `extensions.request` | Inherit | Overrides for the guest HTTP client in JavaScript and Python. |
+| `sources.connect`, `sources.request` | Inherit | Overrides for HTTP image sources. |
+
+Durations must be positive. The request timeout includes connection establishment and waiting
+for response headers. The connect timeout additionally limits the connection-establishment phase,
+it does not add extra time to the request timeout.
+
+!!! warning "No response-body timeout on Java 25"
+
+    Wolpi running in a JVM <=25 (which includes the official container) does not support enforcing
+    time limits on trickling servers or slow/stalling response-body transfers. Reading a body can
+    block indefinitely after headers arrive, including through `fetchSync` or buffered handlers such
+    as `BodyHandlers.ofString()`. See [JDK-8258397] and [JDK-8208693], fixed in JDK 26. If this is
+    a requirement for you and lower extension performance is acceptable, run Wolpi under a JVM >=26.
+    Since GraalVM tracks only LTS JVM releases, a fix for the official container will not arrive
+    before Q4 2027, when [Java 29 is scheduled to be released](https://ops.java/releases/matrix) and
+    GraalVM will follow suit with a new release.
+
+Example with a longer response-header timeout for source images:
 
 ```yaml title="application.yml"
 wolpi:
-  extension-timeouts:
-    http:
-      connect: 10s
-      request: 30s
+  http-timeouts:
+    connect: 10s
+    request: 30s
+    sources:
+      request: 2m
 ```
 
-- `http.connect`: Maximum time to establish an upstream HTTP connection. Defaults to `10s`.
-- `http.request`: Maximum time for an upstream HTTP request, including connection time.
-  Defaults to `30s`. The effective connection limit is the smaller of `connect` and `request`.
-
-These settings apply to JavaScript's built-in `fetchSync` function and the guest-context
-`httpClient` in both JavaScript and Python. They do not affect Wolpi's image-loading client or
-HTTP clients created by extensions themselves.
-
-Timeouts can result in HTTP 504 responses.
-
-For extension implementation details, see [HTTP requests and timeouts][extension-http].
-
+[JDK-8258397]: https://bugs.openjdk.org/browse/JDK-8258397
+[JDK-8208693]: https://bugs.openjdk.org/browse/JDK-8208693
 [extension-http]: ../extension-development.md#http-requests-and-timeouts
 
 ## Extension Pool Configuration
@@ -433,10 +452,9 @@ extension-runtime:
   enable-python-native-modules: true
 extension-pool:
   eviction-timeout: 30m
-extension-timeouts:
-  http:
-    connect: 10s
-    request: 30s
+http-timeouts:
+  connect: 10s
+  request: 30s
 extension-debug:
   enabled: false
   host: localhost

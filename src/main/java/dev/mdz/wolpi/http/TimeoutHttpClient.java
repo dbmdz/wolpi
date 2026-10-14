@@ -1,6 +1,6 @@
-package dev.mdz.wolpi.extension;
+package dev.mdz.wolpi.http;
 
-import dev.mdz.wolpi.config.WolpiConfig.ExtensionTimeouts.HttpTimeouts;
+import dev.mdz.wolpi.config.HttpTimeoutConfig.Limits;
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookieHandler;
@@ -17,43 +17,41 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import org.jspecify.annotations.Nullable;
 
-/// HTTP client exposed to extensions in both languages. Applies the configured request deadline
-/// even when the extension builds an HttpRequest without a timeout.
-public final class ExtensionHttpClient extends HttpClient {
-    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
-
+/// Applies a default request timeout, preserving shorter explicit timeouts, and delegates to
+/// the stock JDK HTTP client. The JDK has no client-wide default request-timeout setting.
+///
+/// Implemented as a subclass of [HttpClient] to force extensions that use
+/// [dev.mdz.wolpi.extension.model.ExtensionGuestContext#httpClient()] to use the configured timeouts.
+///
+/// On Java 25, [HttpRequest.Builder#timeout(Duration)] only bounds the wait for response headers.
+/// Slow, stalled, or trickling response bodies can still block indefinitely. This adapter adds
+/// no body deadline or idle timeout. This is fixed from Java 26 to cover the response body, see
+/// [JDK-8208693](https://bugs.openjdk.org/browse/JDK-8208693)
+public final class TimeoutHttpClient extends HttpClient {
     private final HttpClient delegate;
     private final Duration requestTimeout;
 
-    public ExtensionHttpClient(@Nullable HttpTimeouts timeouts) {
-        this.requestTimeout = requirePositive(
-                timeouts == null || timeouts.request() == null ? DEFAULT_REQUEST_TIMEOUT : timeouts.request());
-        this.delegate = HttpClient.newBuilder()
-                .version(Version.HTTP_2)
-                .connectTimeout(
-                        timeouts == null || timeouts.connect() == null ? DEFAULT_CONNECT_TIMEOUT : timeouts.connect())
-                .build();
+    public TimeoutHttpClient(Limits limits) {
+        this(
+                HttpClient.newBuilder()
+                        .version(Version.HTTP_2)
+                        .connectTimeout(limits.connect())
+                        .build(),
+                limits.request());
     }
 
-    ExtensionHttpClient(HttpClient delegate, Duration requestTimeout) {
-        this.requestTimeout = requirePositive(requestTimeout);
-        this.delegate = delegate;
-    }
-
-    private static Duration requirePositive(Duration timeout) {
-        if (timeout.isZero() || timeout.isNegative()) {
-            throw new IllegalArgumentException("Extension HTTP request timeout must be positive");
+    TimeoutHttpClient(HttpClient delegate, Duration requestTimeout) {
+        if (requestTimeout.isZero() || requestTimeout.isNegative()) {
+            throw new IllegalArgumentException("HTTP request timeout must be positive");
         }
-        return timeout;
+        this.delegate = delegate;
+        this.requestTimeout = requestTimeout;
     }
 
     private HttpRequest withTimeout(HttpRequest request) {
         if (request.timeout()
-                .filter(timeout -> timeout.compareTo(requestTimeout) <= 0)
-                .isPresent()) {
-            return request;
-        }
+                .filter(value -> value.compareTo(requestTimeout) <= 0)
+                .isPresent()) return request;
         return HttpRequest.newBuilder(request, (name, value) -> true)
                 .timeout(requestTimeout)
                 .build();
@@ -72,7 +70,9 @@ public final class ExtensionHttpClient extends HttpClient {
 
     @Override
     public <T> CompletableFuture<HttpResponse<T>> sendAsync(
-            HttpRequest request, HttpResponse.BodyHandler<T> handler, HttpResponse.PushPromiseHandler<T> pushHandler) {
+            HttpRequest request,
+            HttpResponse.BodyHandler<T> handler,
+            HttpResponse.@Nullable PushPromiseHandler<T> pushHandler) {
         return delegate.sendAsync(withTimeout(request), handler, pushHandler);
     }
 

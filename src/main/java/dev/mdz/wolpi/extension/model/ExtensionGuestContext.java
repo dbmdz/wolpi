@@ -15,7 +15,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 /// @param wolpiVersion  The version of Wolpi currently running.
 /// @param extensionVersion The version of the extension currently running.
 /// @param httpClient    A shared [HttpClient] for extension HTTP requests, with connect and request
-///                      timeouts from `extension-timeouts.http`.
+///                      limits from `http-timeouts`, with optional `extensions` overrides.
 /// @param logger        A logger instance that can be used to log messages to the Wolpi log.
 /// @param config        The configuration object for the extension
 /// @param metrics       Can be used to register metrics from extensions.

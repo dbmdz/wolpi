@@ -1,13 +1,16 @@
 package dev.mdz.wolpi.extension;
 
+import dev.mdz.wolpi.config.HttpTimeoutConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.mapping.ImageRequestParserProxy;
 import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.Language;
+import dev.mdz.wolpi.http.TimeoutHttpClient;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.lang.foreign.Arena;
+import java.net.http.HttpClient;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.info.BuildProperties;
@@ -18,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class GuestContextFactory implements AutoCloseable {
     private final String wolpiVersion;
-    private final ExtensionHttpClient httpClient;
+    private final HttpClient httpClient;
     private final Arena vipsArena;
     private final ImageRequestParser imageRequestParser;
     private final MeterRegistry meterRegistry;
@@ -30,8 +33,8 @@ public class GuestContextFactory implements AutoCloseable {
             ImageRequestParser imageRequestParser,
             MeterRegistry meterRegistry) {
         this.wolpiVersion = buildProps.getVersion();
-        var timeouts = wolpiConfig == null ? null : wolpiConfig.extensionTimeouts();
-        this.httpClient = new ExtensionHttpClient(timeouts == null ? null : timeouts.http());
+        var timeouts = wolpiConfig == null ? HttpTimeoutConfig.defaults() : wolpiConfig.httpTimeouts();
+        this.httpClient = new TimeoutHttpClient(timeouts.forExtensions());
         this.vipsArena = vipsArena;
         this.imageRequestParser = imageRequestParser;
         this.meterRegistry = meterRegistry;

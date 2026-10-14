@@ -8,6 +8,7 @@ import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
 import com.sun.net.httpserver.HttpServer;
 import dev.mdz.wolpi.config.ExtensionConfig;
+import dev.mdz.wolpi.config.HttpTimeoutConfig;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.IIIFConfig.Limits;
 import dev.mdz.wolpi.config.IIIFConfig.ScalingFeature;
@@ -16,7 +17,6 @@ import dev.mdz.wolpi.config.WolpiConfig.CacheControlHeaders;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionPoolConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionRuntimeConfig;
-import dev.mdz.wolpi.config.WolpiConfig.ExtensionTimeouts;
 import dev.mdz.wolpi.config.WolpiConfig.PackagingConfig;
 import dev.mdz.wolpi.exceptions.ExtensionExecutionException;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
@@ -1220,7 +1220,7 @@ public class ExtensionRuntimeTest {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
         final ExtensionRuntime runtime;
 
-        TimeoutHarness(ExtensionTimeouts timeouts, ExtensionConfig... extensions) {
+        TimeoutHarness(HttpTimeoutConfig timeouts, ExtensionConfig... extensions) {
             var cfg = new WolpiConfig(
                     tempDir,
                     null,
@@ -1388,9 +1388,7 @@ public class ExtensionRuntimeTest {
         }
 
         private TimeoutHarness fetchHarness(Duration requestTimeout, ExtensionConfig ext) {
-            return new TimeoutHarness(
-                    new ExtensionTimeouts(new ExtensionTimeouts.HttpTimeouts(Duration.ofSeconds(2), requestTimeout)),
-                    ext);
+            return new TimeoutHarness(new HttpTimeoutConfig(Duration.ofSeconds(2), requestTimeout, null, null), ext);
         }
     }
 }

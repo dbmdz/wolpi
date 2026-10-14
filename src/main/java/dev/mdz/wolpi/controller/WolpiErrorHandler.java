@@ -4,6 +4,7 @@ import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.invoke.MethodHandles;
+import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -39,26 +40,32 @@ public class WolpiErrorHandler extends ResponseEntityExceptionHandler {
         this.corsEnabled = config.iiif().features().cors();
     }
 
+    @ExceptionHandler(HttpTimeoutException.class)
+    public ResponseEntity<?> handleHttpTimeout(HttpTimeoutException ex, HttpServletRequest req) {
+        return handleHttpStatusError(new HttpStatusException("Upstream HTTP request timed out", 504, null), req);
+    }
+
     @ExceptionHandler(HttpStatusException.class)
     public ResponseEntity<?> handleHttpStatusError(HttpStatusException ex, HttpServletRequest req) {
+        HttpHeaders headers = new HttpHeaders();
+        if (corsEnabled) {
+            headers.setAccessControlAllowOrigin(java.util.Optional.ofNullable(req.getHeader(HttpHeaders.ORIGIN))
+                    .orElse("*"));
+        }
         if (ex.responseHeaders() != null) {
             // Forward some headers from the backend response to the client (ETag/Last-Modified)
-            HttpHeaders headers = new HttpHeaders();
             FORWARDED_HEADERS.stream()
                     .filter(h -> ex.responseHeaders().containsHeader(h))
                     .forEach(h -> headers.set(h, ex.responseHeaders().getFirst(h)));
-            // Set CORS on the response if activated
-            if (corsEnabled) {
-                headers.setAccessControlAllowOrigin(java.util.Optional.ofNullable(req.getHeader(HttpHeaders.ORIGIN))
-                        .orElse("*"));
-            }
             return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode()))
                     .headers(headers)
                     .body(null);
         }
         Map<String, Object> body =
                 ex.details() != null ? ex.details() : Collections.singletonMap("message", ex.message());
-        return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode())).body(body);
+        return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode()))
+                .headers(headers)
+                .body(body);
     }
 
     @ExceptionHandler(Exception.class)
