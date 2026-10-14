@@ -6,6 +6,7 @@
     ":rebaseStalePrs",
     ":enableVulnerabilityAlertsWithLabel(security)"
   ],
+  "ignorePaths": ["samples/**"],
   "packageRules": [
     {
       "groupName": "all dependencies",
@@ -13,7 +14,7 @@
       "matchPackageNames": ["*"]
     }
   ],
-  "schedule": ["* * * * 0,6"],
+  "schedule": ["every weekend"],
   "separateMajorMinor": false,
   "osvVulnerabilityAlerts": true
 }

@@ -32,8 +32,6 @@
 
   <properties>
     <java.version>25</java.version>
-    <!-- Must not be updated, 4.8.181 has a bug:
-         https://github.com/classgraph/classgraph/issues/923 -->
     <classgraph.version>4.8.184</classgraph.version>
     <commons-io.version>2.22.0</commons-io.version>
     <guava.version>33.6.0-jre</guava.version>
