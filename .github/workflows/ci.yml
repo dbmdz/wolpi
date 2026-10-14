@@ -41,83 +41,33 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
       - run: mvn $MAVEN_CLI_OPTS verify
-
-  publish-snapshot:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    needs: verify
-    outputs:
-      skip_deploy: ${{ steps.extract-version.outputs.skip_deploy }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/cache@v5
+      - name: Save release JAR
+        if: github.event_name == 'release'
+        uses: actions/upload-artifact@v7
         with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
-      - name: Install XML utils
-        run: sudo apt-get install -y libxml2-utils
-      - name: Extract project version
-        id: extract-version
-        run: |
-          PROJECT_VERSION=$(xmllint --xpath '/*[local-name()="project"]/*[local-name()="version"]/text()' pom.xml)
-          echo "PROJECT_VERSION=$PROJECT_VERSION" >> "$GITHUB_ENV"
-          if [[ ! "$PROJECT_VERSION" =~ .*SNAPSHOT ]]; then
-            echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Set up JDK for publishing snapshot
-        if: endsWith(env.PROJECT_VERSION, 'SNAPSHOT')
-        uses: actions/setup-java@v5
-        with:
-          check-latest: true
-          distribution: oracle
-          java-version: '25'
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-      - name: Publish snapshot to Maven Central
-        if: endsWith(env.PROJECT_VERSION, 'SNAPSHOT')
-        run: mvn $MAVEN_CLI_OPTS deploy -P maven-central -DskipTests
-        env:
-          MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          name: release-jar
+          path: |
+            target/wolpi-*.jar
+            !target/*-sources.jar
+            !target/*-javadoc.jar
+          if-no-files-found: error
 
   publish-release:
     if: github.event_name == 'release'
     runs-on: ubuntu-24.04
     needs: verify
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/cache@v5
+      - uses: actions/download-artifact@v8
         with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
-      - name: Install XML utils
-        run: sudo apt-get install -y libxml2-utils
-      - name: Extract project version
-        run: |
-          PROJECT_VERSION=$(xmllint --xpath '/*[local-name()="project"]/*[local-name()="version"]/text()' pom.xml)
-          echo "PROJECT_VERSION=$PROJECT_VERSION" >> "$GITHUB_ENV"
-      - name: Set up JDK for publishing release
-        if: "!endsWith(env.PROJECT_VERSION, 'SNAPSHOT')"
-        uses: actions/setup-java@v5
-        with:
-          check-latest: true
-          distribution: oracle
-          java-version: '25'
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
-          server-id: central
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-      - name: Publish release to Maven Central
-        if: "!endsWith(env.PROJECT_VERSION, 'SNAPSHOT')"
-        run: mvn $MAVEN_CLI_OPTS deploy -Psign,maven-central -DskipTests
+          name: release-jar
+          path: release-assets
+      - name: Attach JAR to GitHub release
+        run: gh release upload "$RELEASE_TAG" release-assets/*.jar --repo "$GITHUB_REPOSITORY" --clobber
         env:
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
 
   docker-snapshot:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
