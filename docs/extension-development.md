@@ -494,24 +494,29 @@ if (response.ok) {
 ### HTTP Requests and Timeouts
 
 JavaScript and Python extensions can make HTTP requests through `wolpi.httpClient`, which
-implements Java's `java.net.http.HttpClient` API. Wolpi configures its connection timeout with
-`wolpi.extension-timeouts.http.connect` (default `10s`) and caps the request timeout with
-`wolpi.extension-timeouts.http.request` (default `30s`). See the
-[configuration reference][extension-timeouts] for settings and defaults.
+implements Java's `java.net.http.HttpClient` API. Shared limits come from `wolpi.http-timeouts`
+(defaults: `connect: 10s`, `request: 30s`). Optional `http-timeouts.extensions` overrides inherit
+omitted values. See the [configuration reference][http-timeouts] for settings and defaults.
 
-The request deadline applies to `send` and both `sendAsync` overloads, even if you build an
-`HttpRequest` without a timeout. Wolpi preserves shorter explicit request timeouts and caps
-longer ones at the configured limit. `fetchSync` uses this same client and policy.
+Wolpi sets `HttpRequest.timeout()` for `send` and both `sendAsync` overloads, even if you build an
+`HttpRequest` without a timeout. It preserves shorter explicit request timeouts and caps longer
+ones at the configured limit. `fetchSync` uses this same client and policy. Close streams you no
+longer need to release their resources.
 
 A timeout raises `java.net.http.HttpTimeoutException` or its subclass `HttpConnectTimeoutException`.
 An asynchronous call reports the failure through its future; `join()` and `get()` wrap it in
 `CompletionException` and `ExecutionException`, respectively. You can handle the failure in your
 extension; otherwise Wolpi maps it to HTTP 504 through the normal hook error handling.
 
-These settings do not affect Python HTTP libraries such as `requests`, HTTP clients created
-through direct Java interop, or Wolpi's image-loading client.
+Note that the `request` timeout only applies to the response headers, and **not** the whole response
+body, i.e. trickling/slow upstreams will not cause a timeout. See the note in
+the [configuration reference][http-timeouts] for more details.
 
-[extension-timeouts]: ./reference/configuration.md#extension-timeouts-configuration
+HTTP clients created by extensions, such as Python's `requests` or clients constructed through
+direct Java interop, remain outside these limits. Wolpi's image-loading client shares the defaults
+and accepts overrides under `http-timeouts.sources`.
+
+[http-timeouts]: ./reference/configuration.md#http-timeouts
 
 ### Working with Java Classes from Extensions
 

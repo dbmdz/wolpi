@@ -10,6 +10,7 @@ import dev.mdz.wolpi.extension.GraalContextSupplier;
 import dev.mdz.wolpi.extension.RuntimeContext;
 import dev.mdz.wolpi.extension.RuntimeContextPooledObjectFactory;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.http.TimeoutHttpClient;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.config.MeterFilter;
@@ -157,8 +158,8 @@ public class Wolpi implements WebMvcConfigurer, ApplicationContextAware {
 
     /// Create a new HttpClient using HTTP/2 for the application.
     @Bean
-    public HttpClient httpClient() {
-        return HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
+    public HttpClient httpClient(WolpiConfig config) {
+        return new TimeoutHttpClient(config.httpTimeouts().forSources());
     }
 
     @Bean

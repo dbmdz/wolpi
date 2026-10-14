@@ -8,9 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
-- `extension-timeouts.http.{connect,request}` configures the guest HTTP client in JavaScript
-  and Python, including JavaScript `fetchSync` (defaults `10s`/`30s`). Uncaught HTTP timeouts
-  report HTTP 504.
+- Shared `http-timeouts.{connect,request}` settings (defaults `10s`/`30s`), with optional
+  `extensions` and `sources` overrides to differentiate between HTTP requests made by Wolpi itself
+  and those made by extensions through the `httpClient` on the context or the JavaScript
+  `wolpi:fetchSync` function
 
 ### Fixed
 - Requesting WebP images with either dimension larger than 16,383 pixels now
