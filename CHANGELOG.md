@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Maven Repository, GitHub Releases and the GitHub Container Registry remain as
   the sole distribution channels. This is due to Maven Central's draconic
   limits that were introduced in October 2026, but it also serves to discourage
-  inherting from Wolpi in other Java projects, since the Extension API is
+  inheriting from Wolpi in other Java projects, since the Extension API is
   intended as the sole officially supported means of customizing Wolpi.
 
 
