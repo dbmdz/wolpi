@@ -21,6 +21,21 @@ $ docker run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi
 $ podman run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi:latest
 ```
 
+## Running as a different user
+
+You can override the default container user `10001/10001` to match your environment, e.g. to be compatible with existing NFS exports or filesystem permissions:
+
+```console
+$ docker run --rm -p 8080:8080 --user 1234:5678 \
+  -v ./wolpi.yml:/app/wolpi.yml \
+  -v /path/to/your/images:/app/images \
+  ghcr.io/dbmdz/wolpi:latest
+```
+
+`/app/data` inside the image is writable by any UID/GID. Bind-mounted host directories keep
+their host permissions, so they must be readable (`/app/images`, `wolpi.yml`) or writable
+(`/app/data`) for the user you choose. 
+
 ## Verify the container is serving requests
 
 Query the built-in validation image:

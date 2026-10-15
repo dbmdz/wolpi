@@ -43,9 +43,9 @@ and then copy it to that location in the Dockerfile.
 ```docker title="Dockerfile.customized"
 FROM ghcr.io/dbmdz/wolpi:latest
 
-COPY build-config.yml /app/wolpi.yml
+COPY --chmod=444 build-config.yml /app/wolpi.yml
 # copy your local extensions to the configured path here, if you have them
-# COPY ./my-extension /app/my-extension
+# COPY --chmod=755 ./my-extension /app/my-extension
 
 RUN wolpi install-extensions
 ```
@@ -53,7 +53,7 @@ RUN wolpi install-extensions
 ```console
 $ docker build . -f Dockerfile.customized -t ghcr.io/dbmdz/wolpi:latest-custom
 STEP 1/3: FROM ghcr.io/dbmdz/wolpi:latest
-STEP 2/3: COPY build-config.yml /app/wolpi.yml
+STEP 2/3: COPY --chmod=444 build-config.yml /app/wolpi.yml
 --> b48822d2be79
 STEP 3/3: RUN wolpi install-extensions
   Ѱ Ѱ

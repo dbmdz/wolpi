@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+- **Breaking:** The container image now runs as the unprivileged user 
+  (UID/GID `10001`) by default. Existing bind mounts or volumes for `/app/data`
+  that are owned by root must be writable by this user (or, in Kubernetes,
+  use `securityContext.fsGroup: 10001`). Mounted configuration and image files must
+  be readable by this user. The default user can be changed.
+
 ### Added
 - Shared `http-timeouts.{connect,request}` settings (defaults `10s`/`30s`), with optional
   `extensions` and `sources` overrides to differentiate between HTTP requests made by Wolpi itself

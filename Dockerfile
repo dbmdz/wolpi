@@ -39,15 +39,27 @@ ENV LD_PRELOAD="/usr/local/lib/libjemalloc.so"
 # Configure jemalloc to use background thread for purging dirty and muzzy pages after 5s
 ENV MALLOC_CONF="background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000"
 
-ENV GRAALVM_URL="https://download.oracle.com/graalvm/25/latest/graalvm-jdk-25_linux-x64_bin.tar.gz"
-RUN mkdir -p /opt/graalvm && \
-    curl -L "${GRAALVM_URL}" | tar -xz --strip-components=1 -C /opt/graalvm
+ENV GRAALVM_URL="https://gds.oracle.com/download/graal/25/archive/graalvm-jdk-25.0.3_linux-x64_bin.tar.gz"
+ARG GRAALVM_SHA256="1b5296613c3d12521d594e1c99302df88d8e1f07d74ab7983dbf572000b92c7c"
+RUN set -eux; \
+    curl --fail --show-error --location "${GRAALVM_URL}" \
+        --output /tmp/graalvm.tar.gz; \
+    echo "${GRAALVM_SHA256}  /tmp/graalvm.tar.gz" | sha256sum --check --strict -; \
+    mkdir -p /opt/graalvm; \
+    tar -xzf /tmp/graalvm.tar.gz --strip-components=1 -C /opt/graalvm; \
+    rm /tmp/graalvm.tar.gz
 
 # Install GraalPy for more compatiblity with native python packages
 ENV GRAALPY_URL="https://github.com/oracle/graalpython/releases/download/graal-25.0.1/graalpy-25.0.1-linux-amd64.tar.gz"
-RUN mkdir -p /opt/graalpy && \
-    curl -L "${GRAALPY_URL}" | tar -xz --strip-components=1 -C /opt/graalpy
-RUN ln -s /opt/graalpy/bin/graalpy /usr/local/bin/graalpy
+ARG GRAALPY_SHA256="b5baff786753ebb774300fcf68a9bca4d14cbb8099f055637bee11786abb2d57"
+RUN set -eux; \
+    curl --fail --show-error --location "${GRAALPY_URL}" \
+        --output /tmp/graalpy.tar.gz; \
+    echo "${GRAALPY_SHA256}  /tmp/graalpy.tar.gz" | sha256sum --check --strict -; \
+    mkdir -p /opt/graalpy; \
+    tar -xzf /tmp/graalpy.tar.gz --strip-components=1 -C /opt/graalpy; \
+    rm /tmp/graalpy.tar.gz; \
+    ln -s /opt/graalpy/bin/graalpy /usr/local/bin/graalpy
 
 # Make sure the output is by default colored when using text logging
 ENV SPRING_OUTPUT_ANSI_ENABLED="ALWAYS"
@@ -73,6 +85,11 @@ RUN java -Djarmode=tools -jar /app.jar extract && \
 RUN wolpi install-validator && \
     mv /app/data /app/.data_preinstalled && \
     mkdir -p /app/data
+
+# make /app/data writable by the non-root user
+RUN chmod 1777 /app/data
+
+USER 10001:10001
 
 EXPOSE 8080
 

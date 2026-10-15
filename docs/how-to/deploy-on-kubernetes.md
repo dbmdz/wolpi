@@ -53,6 +53,11 @@ spec:
       labels:
         app: wolpi
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001   # default of the image, can be changed to any UID
+        runAsGroup: 10001  # default of the image, change e.g. to match NFS permissions
+        fsGroup: 10001     
       containers:
         - name: wolpi
           image: ghcr.io/dbmdz/wolpi:latest
@@ -64,6 +69,8 @@ spec:
             - name: wolpi-config
               mountPath: /app/wolpi.yml
               subPath: wolpi.yml
+          securityContext:
+              allowPrivilegeEscalation: false
           env:
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxRAMPercentage=50.0 -XX:InitialRAMPercentage=12.5
@@ -102,6 +109,10 @@ traffic scales horizontally. If you install extensions at runtime or otherwise w
 To serve your own images, mount a PVC or NFS volume to `/app/images` inside the container so images
 can be resolved by relative path. If your identifiers do not map directly to file paths, add an
 extension-based resolver such as the [Pattern Resolver](../getting-started/using-an-extension-pattern-resolver.md).
+
+`fsGroup` makes sure that volumes mounted at `/app/data` (e.g. a shared PVC) are writable
+by the Wolpi user. Volumes with images (`/app/images`) only need to be *readable* by the configured
+UID/GID; for NFS this may require adjusting the export's permissions.
 
 !!! note
     The example uses `ghcr.io/dbmdz/wolpi:latest` for simplicity. For production, pin to a

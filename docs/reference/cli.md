@@ -48,6 +48,7 @@ $ docker run --rm \
   ghcr.io/dbmdz/wolpi:latest \
   --config="$(pwd)/wolpi.yml" validate "$(pwd)/my-extension"
 ```
+The mounted volumes must be accessible to the user the container runs as (UID/GID 10001 by default, overridable with --user)
 
 ## Configuration loading
 
