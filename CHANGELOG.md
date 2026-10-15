@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+- **Breaking:** The container image now runs as the unprivileged user `wolpi`
+  (UID/GID `10001`) instead of root. Existing bind mounts or volumes for `/app/data`
+  that are owned by root must be `chown`ed to `10001:10001` (or, in Kubernetes,
+  use `securityContext.fsGroup: 10001`). Mounted configuration and image files must
+  be readable by this user.
+
 ### Added
 - `extension-timeouts.http.{connect,request}` configures the guest HTTP client in JavaScript
   and Python, including JavaScript `fetchSync` (defaults `10s`/`30s`). Uncaught HTTP timeouts
