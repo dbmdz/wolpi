@@ -9,7 +9,9 @@ docker run -p 8080:8080 -v <path_to_your_images>:/app/images ghcr.io/dbmdz/wolpi
 By default, the container serves images from the `/app/images` directory and resolves them according
 to their path inside of it, e.g. an image located at `<path_to_your_images>/baz.jpg` on the
 host machine will be available at http://localhost:8080/v3/baz.jpg/info.json (for info.json)
-and e.g. http://localhost:8080/v3/baz.jpg/full/max/0/default.jpg (for an image request)
+and e.g. http://localhost:8080/v3/baz.jpg/full/max/0/default.jpg (for an image request).
+
+Host image directory must be readable by UID `10001`, which is the user the container runs as.
 
 Here is an example with the logo image from this documentation, assuming you've checked out the repository to `/home/user/src/wolpi`:
 

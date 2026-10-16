@@ -16,6 +16,10 @@ Use either Docker or Podman:
 ```console
 $ docker run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi:latest
 ```
+!!! note
+The container runs as the unprivileged user `wolpi` (UID/GID `10001`), not as root.
+Files you mount into the container must be readable by this user, and directories
+Wolpi writes to (e.g., `/app/data`) must be writable by it.
 
 ```console
 $ podman run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi:latest
@@ -42,6 +46,7 @@ $ docker run --rm -p 8080:8080 \
   -v /path/to/your/images:/app/images \
   ghcr.io/dbmdz/wolpi:latest
 ```
+Host image directory and wolpi.yml must be readable by UID `10001`.
 
 If your host has `foo/bar/baz.jpg`, you can request:
 
@@ -76,6 +81,8 @@ $ docker run --rm -p 8080:8080 \
   -v ./wolpi-data:/app/data \
   ghcr.io/dbmdz/wolpi:latest
 ```
+
+When using a bind mount for `/app/data`, the host directory must be writable by UID `10001`.
 
 If you want deterministic startup and no runtime package installation, use a
 custom image with pre-installed extensions as described in
