@@ -17,11 +17,11 @@ env:
 
 jobs:
   compile:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -29,13 +29,13 @@ jobs:
       - run: mvn $MAVEN_CLI_OPTS -U clean compile
 
   verify:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install libvips
         run: sudo apt update && sudo apt install -y libvips-dev
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: jdx/mise-action@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -54,7 +54,7 @@ jobs:
 
   publish-release:
     if: github.event_name == 'release'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: verify
     permissions:
       contents: write
@@ -71,13 +71,13 @@ jobs:
 
   docker-snapshot:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: verify
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -92,13 +92,13 @@ jobs:
 
   docker-release:
     if: github.event_name == 'release'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: verify
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io

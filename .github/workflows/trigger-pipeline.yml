@@ -7,7 +7,7 @@ on:
 
 jobs:
   trigger:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Trigger pipeline
         env:
