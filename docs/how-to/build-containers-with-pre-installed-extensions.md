@@ -45,7 +45,7 @@ FROM ghcr.io/dbmdz/wolpi:latest
 
 COPY --chmod=444 build-config.yml /app/wolpi.yml
 # copy your local extensions to the configured path here, if you have them
-# COPY --chown=10001:10001 ./my-extension /app/my-extension
+# COPY --chmod=755 ./my-extension /app/my-extension
 
 RUN wolpi install-extensions
 ```

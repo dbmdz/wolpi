@@ -86,11 +86,8 @@ RUN wolpi install-validator && \
     mv /app/data /app/.data_preinstalled && \
     mkdir -p /app/data
 
-# Create non-root application user
-RUN groupadd --system --gid 10001 wolpi && \
-    useradd --system --uid 10001 --gid 10001 \
-        --home-dir /app --no-create-home wolpi && \
-    chown -R 10001:10001 /app/data
+# make /app/data writable by the non-root user
+RUN chmod 1777 /app/data
 
 USER 10001:10001
 
