@@ -11,7 +11,8 @@ to their path inside of it, e.g. an image located at `<path_to_your_images>/baz.
 host machine will be available at http://localhost:8080/v3/baz.jpg/info.json (for info.json)
 and e.g. http://localhost:8080/v3/baz.jpg/full/max/0/default.jpg (for an image request).
 
-Host image directory must be readable by UID `10001`, which is the user the container runs as.
+The host image directory must be readable by the user the container runs as (UID/GID 10001 by default, 
+see [Running as a different user](../how-to/deploy-using-docker-podman.md#running-as-a-different-user))..
 
 Here is an example with the logo image from this documentation, assuming you've checked out the repository to `/home/user/src/wolpi`:
 
