@@ -16,11 +16,6 @@ Use either Docker or Podman:
 ```console
 $ docker run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi:latest
 ```
-!!! note
-By default, the container runs as the unprivileged non-root user with UID/GID `10001`.
-This user can be overridden, see [Running as a different user](#running-as-a-different-user)
-Files you mount into the container must be readable by this user, and directories
-Wolpi writes to (e.g., `/app/data`) must be writable by it.
 
 ```console
 $ podman run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi:latest
@@ -28,7 +23,7 @@ $ podman run --rm -p 8080:8080 -v ./wolpi.yml:/app/wolpi.yml ghcr.io/dbmdz/wolpi
 
 ## Running as a different user
 
-You can override the default user to match your environment, e.g. to be compatible with existing NFS exports or filesystem permissions:
+You can override the default container user `10001/10001` to match your environment, e.g. to be compatible with existing NFS exports or filesystem permissions:
 
 ```console
 $ docker run --rm -p 8080:8080 --user 1234:5678 \
