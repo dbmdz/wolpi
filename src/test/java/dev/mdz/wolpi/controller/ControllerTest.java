@@ -125,7 +125,7 @@ public class ControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"disk-hit", "revalidated", "bypass=unknown-length"})
+    @ValueSource(strings = {"disk-hit", "stale", "bypass=unknown-length"})
     public void testHttpSourceCacheDiagnostics(String value) throws Exception {
         stubHttpSourceCacheStatus(value);
         mockMvc.perform(get("/v3/cache-test/info.json"))
@@ -178,7 +178,8 @@ public class ControllerTest {
                         defaults.maxSize(),
                         defaults.maxFreshness(),
                         defaults.maxResourceSize(),
-                        false));
+                        false,
+                        defaults.staleIfError()));
         mockMvc.perform(get("/v3/cache-test/info.json"))
                 .andExpect(status().isOk())
                 .andExpect(header().doesNotExist("X-Wolpi-Http-Source-Cache"))

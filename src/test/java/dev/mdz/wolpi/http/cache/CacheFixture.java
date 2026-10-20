@@ -54,7 +54,13 @@ final class CacheFixture {
 
     HttpSourceCache cache(boolean enabled) {
         var config = new HttpSourceCacheConfig(
-                enabled, directory, DataSize.ofBytes(128), Duration.ofSeconds(60), DataSize.ofBytes(128), true);
+                enabled,
+                directory,
+                DataSize.ofBytes(128),
+                Duration.ofSeconds(60),
+                DataSize.ofBytes(128),
+                true,
+                Duration.ofDays(7));
         return new HttpSourceCache(config, directory, client, clock, Duration.ofSeconds(5));
     }
 

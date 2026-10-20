@@ -36,7 +36,7 @@ class HttpSourceCacheConcurrencyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"miss", "revalidated"})
+    @ValueSource(strings = {"miss", "revalidated", "stale"})
     void overlappingAcquisitionsShareOutcome(String outcome) throws Exception {
         var fixture = new CacheFixture(directory);
         boolean warm = !outcome.equals("miss");
@@ -49,12 +49,20 @@ class HttpSourceCacheConcurrencyTest {
                     await(release);
                 }
                 return response(
-                        200, "body", Map.of("Content-Length", "4", "Cache-Control", "no-cache", "ETag", "\"v1\""));
+                        200,
+                        "body",
+                        Map.of(
+                                "Content-Length",
+                                "4",
+                                "Cache-Control",
+                                outcome.equals("stale") ? "max-age=0" : "no-cache",
+                                "ETag",
+                                "\"v1\""));
             }
             assertThat(request.headers().firstValue("If-None-Match")).contains("\"v1\"");
             entered.countDown();
             await(release);
-            return response(304, "", Map.of());
+            return response(outcome.equals("stale") ? 503 : 304, "", Map.of());
         };
         try (var cache = fixture.cache();
                 var workers = Executors.newVirtualThreadPerTaskExecutor()) {

@@ -3,7 +3,7 @@ package dev.mdz.wolpi.http.cache;
 import java.util.Locale;
 
 /// Reasons an acquisition is not retained for future reuse; tokens appear in
-/// `X-Wolpi-Http-Source-Cache`. A revalidated body may still use a pinned file for this request.
+/// `X-Wolpi-Http-Source-Cache`.
 enum CacheBypassReason implements CacheResult {
     DISABLED,
     REQUEST_NO_STORE,

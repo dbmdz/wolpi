@@ -97,7 +97,13 @@ class ImageLoaderTest {
     private static HttpSourceCache uncached(HttpClient client) {
         var defaults = HttpSourceCacheConfig.defaults();
         var disabled = new HttpSourceCacheConfig(
-                false, null, defaults.maxSize(), defaults.maxFreshness(), defaults.maxResourceSize(), false);
+                false,
+                null,
+                defaults.maxSize(),
+                defaults.maxFreshness(),
+                defaults.maxResourceSize(),
+                false,
+                defaults.staleIfError());
         return new HttpSourceCache(
                 disabled, Path.of("/tmp/wolpi-test-tmp"), client, Clock.systemUTC(), Duration.ofSeconds(30));
     }
@@ -317,7 +323,8 @@ class ImageLoaderTest {
                 DataSize.ofBytes(bytes.length * 2L),
                 Duration.ofMinutes(1),
                 DataSize.ofBytes(bytes.length),
-                true);
+                true,
+                Duration.ofDays(7));
         var signatures = new AtomicInteger();
         ExtensionRuntime runtime = mock(ExtensionRuntime.class);
         when(runtime.resolve(any(), any(), any()))
@@ -388,7 +395,13 @@ class ImageLoaderTest {
         byte[] bytes = Files.readAllBytes(IMAGES.resolve("embedded_icc_colorspace.jpg"));
         HttpClient client = clientReturningImage(bytes);
         var settings = new HttpSourceCacheConfig(
-                true, dir, DataSize.ofBytes(bytes.length), Duration.ofMinutes(1), DataSize.ofBytes(bytes.length), true);
+                true,
+                dir,
+                DataSize.ofBytes(bytes.length),
+                Duration.ofMinutes(1),
+                DataSize.ofBytes(bytes.length),
+                true,
+                Duration.ofDays(7));
         URI first = URI.create("https://example.com/first");
         URI other = URI.create("https://example.com/other");
         ExtensionRuntime runtime = mock(ExtensionRuntime.class);
@@ -426,7 +439,8 @@ class ImageLoaderTest {
                 DataSize.ofBytes(bytes.length * 2L),
                 Duration.ofMinutes(1),
                 DataSize.ofBytes(bytes.length),
-                true);
+                true,
+                Duration.ofDays(7));
         ExtensionRuntime runtime = mock(ExtensionRuntime.class);
         try (var cache = new HttpSourceCache(settings, dir, client, Clock.systemUTC(), Duration.ofSeconds(30))) {
             for (String version : List.of("resolver-v1", "resolver-v2")) {

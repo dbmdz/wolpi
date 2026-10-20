@@ -107,12 +107,15 @@ the client-facing [HTTP caching headers](#http-caching-headers).
   caching if it cannot free enough space. Metadata and filesystem overhead require additional space.
 - `max-resource-size`: Maximum source image size to cache, defaults to `512MB`. Larger images and
   responses without a known length stream without caching.
-- `max-freshness`: Maximum time to reuse an image before checking the origin, defaults to `30s`.
+- `max-freshness`: Maximum time to reuse an image before checking the origin, defaults to `1h`.
   Shorter origin freshness limits still apply. This does not limit how long files remain on disk.
+- `stale-if-error`: How long after freshness expires Wolpi may reuse an image if the origin fails,
+  defaults to `7d`. Set to `0s` to disable fallback. Origin cache directives can prohibit fallback.
 - `expose-response-headers`: Whether to include the `X-Wolpi-Http-Source-Cache` diagnostic header,
   defaults to `true`.
 
-Sizes accept `KB`, `MB`, and `GB` in powers of 1024. Sizes and `max-freshness` must be positive.
+Sizes accept `KB`, `MB`, and `GB` in powers of 1024. Sizes and `max-freshness` must be positive;
+`stale-if-error` may be zero.
 
 Example:
 
@@ -122,7 +125,8 @@ http-source-cache:
   directory: /var/cache/wolpi/http-source-cache
   max-size: 10GB
   max-resource-size: 512MB
-  max-freshness: 30s
+  max-freshness: 1h
+  stale-if-error: 7d
   expose-response-headers: true
 ```
 
@@ -517,7 +521,8 @@ http-source-cache:
   max-resource-size: 512MB
   expose-response-headers: true
   max-size: 10GB
-  max-freshness: 30s
+  max-freshness: 1h
+  stale-if-error: 7d
 cache-control-headers:
   images: "public, max-age=604800, must-revalidate"
   info-json: "public, max-age=604800, must-revalidate"

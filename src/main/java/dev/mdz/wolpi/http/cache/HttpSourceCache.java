@@ -190,7 +190,11 @@ public final class HttpSourceCache implements AutoCloseable {
                 }
 
                 CacheEntry latest = current(key);
-                if (latest != null
+                if (acquisition.completedResult == CacheOutcome.STALE) {
+                    // Share the failed attempt, but check this caller's policy and the window again.
+                    Lease stale = staleIfError(key, request);
+                    if (stale != null) return stale;
+                } else if (latest != null
                         && latest != observed
                         && acquisition.completedResult != null
                         && CachePolicy.responseBypassReason(request, latest.headers) == null) {
@@ -208,6 +212,10 @@ public final class HttpSourceCache implements AutoCloseable {
             Lease result = fetch(uri, request, key, previous, deadline);
             acquisition.completedResult = result.result;
             return result;
+        } catch (HttpTimeoutException e) {
+            Lease stale = staleIfError(key, request);
+            if (stale != null) return stale;
+            throw e;
         } finally {
             if (locked) {
                 acquisition.lock.unlock();
@@ -244,7 +252,14 @@ public final class HttpSourceCache implements AutoCloseable {
 
             // Perform the request
             Instant sentAt = clock.instant();
-            HttpResponse<InputStream> response = send(uri, upstreamHeaders, deadline);
+            HttpResponse<InputStream> response;
+            try {
+                response = send(uri, upstreamHeaders, deadline);
+            } catch (IOException e) {
+                Lease stale = staleIfError(key, requestHeaders);
+                if (stale != null) return stale;
+                throw e;
+            }
             Instant receivedAt = clock.instant();
             HttpHeaders headers = responseHeaders(response);
 
@@ -269,7 +284,15 @@ public final class HttpSourceCache implements AutoCloseable {
                     return result;
                 }
             } else {
-                checkStatus(response, headers, CacheBypassReason.UPSTREAM_STATUS);
+                try {
+                    checkStatus(response, headers, CacheBypassReason.UPSTREAM_STATUS);
+                } catch (HttpStatusException e) {
+                    if (response.statusCode() >= 500 && response.statusCode() < 600) {
+                        Lease stale = staleIfError(key, requestHeaders);
+                        if (stale != null) return stale;
+                    }
+                    throw e;
+                }
                 if (previous != null) {
                     // Invalidate and close the previous cache lease.
                     synchronized (this) {
@@ -448,6 +471,16 @@ public final class HttpSourceCache implements AutoCloseable {
         return CachePolicy.responseBypassReason(request, stored.headers) == null
                         && CachePolicy.fresh(stored, config.maxFreshness(), request, clock.instant())
                 ? lease(stored, CacheOutcome.HIT)
+                : null;
+    }
+
+    /// Pin an expired body after an origin failure, without changing its validation time.
+    private synchronized @Nullable Lease staleIfError(String key, HttpHeaders request) {
+        CacheEntry stored = current(key);
+        return stored != null
+                        && CachePolicy.canServeStale(
+                                stored, config.maxFreshness(), config.staleIfError(), request, clock.instant())
+                ? lease(stored, CacheOutcome.STALE)
                 : null;
     }
 

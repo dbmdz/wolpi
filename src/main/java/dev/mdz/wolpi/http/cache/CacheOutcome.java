@@ -7,7 +7,9 @@ enum CacheOutcome implements CacheResult {
     /// The cache downloaded and published a complete body.
     DOWNLOADED("miss"),
     /// An origin `304` confirmed the stored body.
-    REVALIDATED("revalidated");
+    REVALIDATED("revalidated"),
+    /// A transient origin failure caused reuse of an expired body within the configured allowance.
+    STALE("stale");
 
     private final String headerValue;
 

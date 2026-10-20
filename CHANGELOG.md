@@ -24,9 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and those made by extensions through the `httpClient` on the context or the JavaScript
   `wolpi:fetchSync` function
 - Disk-backed caching of complete HTTP image sources, enabled by default, with a configurable
-  byte limit, maximum freshness, and per-resource size limit. Upstream cache directives and
-  conditional revalidation govern reuse. The optional `X-Wolpi-Http-Source-Cache` response header
-  reports hits, misses, revalidation, and bypass reasons. Unknown-length and partial responses
+  byte limit, maximum freshness (default `1h`), and per-resource size limit. Upstream cache directives
+  and conditional revalidation govern reuse. Configurable `stale-if-error` fallback (default `7d`,
+  `0s` to disable) can serve expired bodies during origin failures when HTTP policy allows it.
+  The optional `X-Wolpi-Http-Source-Cache` response header reports hits, misses, revalidation, stale
+  fallback, and bypass reasons. Unknown-length and partial responses
   bypass caching.
 - New extension API: optional `HttpResolvedImage.cacheIdentity` supplies a stable, resolver-controlled
   source identity for cache reuse across rotating signed URLs and fetch headers, including S3

@@ -124,7 +124,8 @@ wolpi:
     # Default: ${wolpi.data-directory}/http-source-cache
     # directory: /var/cache/wolpi/http-source-cache
     max-size: 10GB
-    max-freshness: 30s
+    max-freshness: 1h
+    stale-if-error: 7d
 
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"

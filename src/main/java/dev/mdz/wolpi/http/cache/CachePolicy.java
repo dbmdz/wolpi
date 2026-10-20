@@ -9,10 +9,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 
-/// Shared-cache rules for complete HTTP responses.
-///
-/// No stale-on-error or heuristic freshness beyond the administrator's configured maximum freshness
-/// is used.
+/// Shared-cache rules for complete HTTP responses, including bounded reuse after origin failures.
 final class CachePolicy {
     private CachePolicy() {}
 
@@ -125,8 +122,7 @@ final class CachePolicy {
     static boolean fresh(CacheEntry entry, Duration maxFreshness, HttpHeaders request, Instant now) {
         // Does the request force us to revalidate?
         Map<String, String> requestControl = directives(request);
-        if (requestControl.containsKey("no-cache")
-                || (requestControl.containsKey("max-age") && seconds(requestControl.get("max-age")) == 0)) {
+        if (requiresValidation(requestControl)) {
             return false;
         }
 
@@ -136,14 +132,38 @@ final class CachePolicy {
             return false;
         }
 
-        // Revalidate when either the configured freshness cap or the origin lifetime expires.
-        Instant cacheDeadline = entry.validatedAt.plus(maxFreshness);
-        Instant originDeadline = originDeadline(entry, entryControl);
-        if (!now.isBefore(cacheDeadline) || (originDeadline != null && !now.isBefore(originDeadline))) {
+        return now.isBefore(freshUntil(entry, maxFreshness, entryControl));
+    }
+
+    /// Allow fallback only within the configured window and when neither side requires validation.
+    static boolean canServeStale(
+            CacheEntry entry, Duration maxFreshness, Duration staleIfError, HttpHeaders request, Instant now) {
+        if (staleIfError.isZero()
+                || requestBypassReason(request) != null
+                || requiresValidation(directives(request))
+                || responseBypassReason(request, entry.headers) != null) {
             return false;
         }
+        Map<String, String> control = directives(entry.headers);
+        if (control.containsKey("no-cache")
+                || control.containsKey("must-revalidate")
+                || control.containsKey("proxy-revalidate")
+                || control.containsKey("s-maxage")) {
+            return false;
+        }
+        Instant expiredAt = freshUntil(entry, maxFreshness, control);
+        return !now.isBefore(expiredAt) && now.isBefore(expiredAt.plus(staleIfError));
+    }
 
-        return true;
+    private static boolean requiresValidation(Map<String, String> control) {
+        return control.containsKey("no-cache")
+                || (control.containsKey("max-age") && seconds(control.get("max-age")) == 0);
+    }
+
+    private static Instant freshUntil(CacheEntry entry, Duration maxFreshness, Map<String, String> control) {
+        Instant cap = entry.validatedAt.plus(maxFreshness);
+        Instant origin = originDeadline(entry, control);
+        return origin != null && origin.isBefore(cap) ? origin : cap;
     }
 
     static Duration initialAge(HttpHeaders headers, Instant sentAt, Instant receivedAt) {
@@ -172,8 +192,7 @@ final class CachePolicy {
                     : nonnegative(Duration.between(date == null ? entry.validatedAt : date, expires));
         }
         // Lifetime counts from origin generation, so the age at receipt is already spent.
-        Duration remaining = lifetime.minus(entry.initialAge);
-        return remaining.isNegative() ? entry.validatedAt : entry.validatedAt.plus(remaining);
+        return entry.validatedAt.plus(lifetime.minus(entry.initialAge));
     }
 
     static long seconds(@Nullable String value) {

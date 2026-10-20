@@ -28,6 +28,11 @@ class CachePolicyTest {
         return CachePolicy.fresh(entry, MAX_FRESHNESS, new HttpHeaders(), NOW.plusSeconds(seconds));
     }
 
+    private boolean stale(CacheEntry entry, HttpHeaders request, long seconds) {
+        return CachePolicy.canServeStale(
+                entry, MAX_FRESHNESS, Duration.ofSeconds(10), request, NOW.plusSeconds(seconds));
+    }
+
     private static String date(Instant value) {
         return DateTimeFormatter.RFC_1123_DATE_TIME.format(value.atZone(ZoneOffset.UTC));
     }
@@ -129,6 +134,46 @@ class CachePolicyTest {
         headers.setCacheControl("s-maxage=999999999999999999999999999999");
         headers.set(HttpHeaders.AGE, "999999999999999999999999999999");
         assertThat(fresh(entry(headers, NOW, NOW), 0)).isFalse();
+    }
+
+    @Test
+    void staleWindowStartsWhenOriginFreshnessOrTheConfiguredCapExpires() {
+        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders request = new HttpHeaders();
+        headers.setCacheControl("max-age=5");
+        CacheEntry entry = entry(headers, NOW, NOW);
+        assertThat(stale(entry, request, 5)).isTrue();
+        assertThat(stale(entry, request, 15)).isFalse();
+        headers.setCacheControl("max-age=3600");
+        entry = entry(headers, NOW, NOW);
+        assertThat(stale(entry, request, 30)).isTrue();
+        assertThat(stale(entry, request, 40)).isFalse();
+        headers.setCacheControl("max-age=5");
+        headers.set(HttpHeaders.AGE, "20");
+        assertThat(stale(entry(headers, NOW, NOW), request, 0)).isFalse();
+    }
+
+    @Test
+    void staleFallbackRespectsRequestPolicyAndCurrentCredentials() {
+        HttpHeaders request = new HttpHeaders();
+        for (String control :
+                new String[] {"no-cache", "must-revalidate", "proxy-revalidate", "s-maxage=30", "private", "no-store"
+                }) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setCacheControl(control);
+            assertThat(stale(entry(headers, NOW, NOW), request, 31)).as(control).isFalse();
+        }
+        CacheEntry entry = entry(new HttpHeaders(), NOW, NOW);
+        for (String control : new String[] {"no-cache", "max-age=0", "no-store"}) {
+            request.setCacheControl(control);
+            assertThat(stale(entry, request, 31)).as(control).isFalse();
+        }
+        request = new HttpHeaders();
+        request.setBearerAuth("new-credentials");
+        assertThat(stale(entry, request, 31)).isFalse();
+        HttpHeaders publicHeaders = new HttpHeaders();
+        publicHeaders.setCacheControl("public");
+        assertThat(stale(entry(publicHeaders, NOW, NOW), request, 31)).isTrue();
     }
 
     @Test

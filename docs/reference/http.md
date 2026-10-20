@@ -176,13 +176,20 @@ Expired files can remain on disk for conditional revalidation with ETag or Last-
 validators, Wolpi must download the image again. Source-request `no-cache` or `max-age=0`, and
 origin `no-cache`, require validation before reuse.
 
-Origin failures reach the client. Wolpi keeps expired files and validators for a later
-revalidation, but does not serve stale images in place of an error.
+If contacting the origin fails, times out, or returns HTTP 5xx, Wolpi can reuse an expired image
+within the configured `stale-if-error` window. Set that allowance to `0s` to disable fallback.
+Fallback neither extends freshness nor prevents eviction; later independent requests still try
+the origin.
+
+Fallback does not override source-request `no-cache` or `max-age=0`, or origin `no-cache`,
+`must-revalidate`, `proxy-revalidate`, or `s-maxage`. Wolpi checks storage permission against the
+current source request headers. HTTP 4xx, unsupported encodings, and failures after a replacement
+`200` download begins still fail the request.
 
 The `http-timeouts.sources.request` limit covers waiting for another acquisition, retries, and the
 complete cached-body download, including stalled transfers on Java 25. On timeout, Wolpi stops the
-download, removes incomplete files, and returns HTTP `504`. Direct streams have
-[more limited timeout protection](configuration.md#http-timeouts).
+download and removes incomplete files. It returns HTTP `504` unless an eligible stale image is
+available. Direct streams have [more limited timeout protection](configuration.md#http-timeouts).
 
 ### Response diagnostics
 
@@ -193,6 +200,7 @@ The optional `X-Wolpi-Http-Source-Cache` header describes the initial source acq
 | `disk-hit` | Reused the cached file without contacting the origin. |
 | `miss` | Downloaded and cached the complete source. |
 | `revalidated` | Reused the body after an origin `304`. |
+| `stale` | Reused an expired body after an origin failure or acquisition timeout. |
 | `bypass=<reason>` | Did not retain the acquisition for future reuse. |
 
 Bypass reasons:

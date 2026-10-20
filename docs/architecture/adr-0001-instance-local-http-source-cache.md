@@ -36,8 +36,9 @@ downloads and storage when requests reach different instances. Ordinary file
 reads can benefit from the kernel page cache without a separate
 application-managed memory cache.
 
-Revalidate stored sources after a bounded freshness period. Propagate origin
-failures rather than serving stale content.
+Assume source images change infrequently. Revalidate after a bounded freshness
+period and allow bounded stale fallback during origin failures when HTTP policy
+permits it, favoring availability over immediate freshness.
 
 ## Guarantees
 
@@ -97,7 +98,7 @@ Disk pressure can cause bypasses and increase origin traffic. Each instance
 needs a dedicated local directory, protected like the source images; shared
 directories and network filesystems are unsupported. Persistence enables reuse
 after restarts, but the cache is disposable storage, not a durable source of
-record.
+record. Stale fallback can expose an older image during an origin outage.
 
 ## Alternatives considered
 

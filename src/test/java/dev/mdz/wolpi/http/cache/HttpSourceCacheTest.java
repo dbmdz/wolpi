@@ -5,6 +5,7 @@ import static dev.mdz.wolpi.http.cache.CacheFixture.response;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -21,6 +22,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +42,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.unit.DataSize;
 import reactor.core.publisher.Flux;
@@ -72,13 +75,19 @@ class HttpSourceCacheTest {
     }
 
     private HttpSourceCacheConfig config(long maxSize, Duration freshness, long maxResourceSize) {
+        return config(maxSize, freshness, maxResourceSize, Duration.ofDays(7));
+    }
+
+    private HttpSourceCacheConfig config(
+            long maxSize, Duration freshness, long maxResourceSize, Duration staleIfError) {
         return new HttpSourceCacheConfig(
                 true,
                 directory.resolve("cache"),
                 DataSize.ofBytes(maxSize),
                 freshness,
                 DataSize.ofBytes(maxResourceSize),
-                true);
+                true,
+                staleIfError);
     }
 
     private HttpSourceCache cache() {
@@ -126,7 +135,8 @@ class HttpSourceCacheTest {
                 DataSize.ofBytes(128),
                 Duration.ofSeconds(60),
                 DataSize.ofBytes(128),
-                true);
+                true,
+                Duration.ofDays(7));
         try (var cache = configuredCache(settings)) {
             assertThatThrownBy(() -> cache.acquire(URI_IMAGE, invalidRequest ? Map.of(header, "gzip") : null, null))
                     .isInstanceOf(HttpStatusException.class)
@@ -215,7 +225,8 @@ class HttpSourceCacheTest {
                 defaults.maxSize(),
                 defaults.maxFreshness(),
                 defaults.maxResourceSize(),
-                false);
+                false,
+                defaults.staleIfError());
         try (var cache = configuredCache(config)) {
             try (var first = cache.acquire(URI_IMAGE, null, null)) {}
             try (var cached = cache.acquire(URI_IMAGE, Map.of("If-None-Match", "W/\"v1\""), null)) {
@@ -367,7 +378,8 @@ class HttpSourceCacheTest {
                 defaults.maxSize(),
                 defaults.maxFreshness(),
                 defaults.maxResourceSize(),
-                true);
+                true,
+                defaults.staleIfError());
         try (var cache = configuredCache(config);
                 var lease = cache.acquire(URI_IMAGE, null, null)) {
             assertThat(lease.cacheStatusHeaderValue()).isEqualTo("bypass=disabled");
@@ -475,16 +487,24 @@ class HttpSourceCacheTest {
         }
     }
 
-    @Test
-    void originErrorsRetainBodiesForLaterValidation() throws Exception {
-        try (var cache = cache()) {
+    @ParameterizedTest
+    @ValueSource(longs = {0, 604800})
+    void originErrorsRetainBodiesAndUseConfiguredFallback(long staleSeconds) throws Exception {
+        try (var cache = configuredCache(config(128, Duration.ofSeconds(60), 128, Duration.ofSeconds(staleSeconds)))) {
             try (var first = cache.acquire(URI_IMAGE, null, null)) {}
             clock.advance(61);
             responder = request -> response(503, "", Map.of("Content-Encoding", "gzip"));
-            assertThatThrownBy(() -> cache.acquire(URI_IMAGE, null, null))
-                    .isInstanceOf(HttpStatusException.class)
-                    .extracting("httpStatusCode")
-                    .isEqualTo(503);
+            if (staleSeconds > 0) {
+                try (var stale = cache.acquire(URI_IMAGE, null, null)) {
+                    assertThat(stale.cacheStatusHeaderValue()).isEqualTo("stale");
+                    assertThat(read(stale)).isEqualTo("body");
+                }
+            } else {
+                assertThatThrownBy(() -> cache.acquire(URI_IMAGE, null, null))
+                        .isInstanceOf(HttpStatusException.class)
+                        .extracting("httpStatusCode")
+                        .isEqualTo(503);
+            }
             responder = request -> {
                 assertThat(request.headers().firstValue("If-None-Match")).contains("W/\"v1\"");
                 return response(304, "", Map.of());
@@ -493,6 +513,35 @@ class HttpSourceCacheTest {
                 assertThat(recovered.cacheStatusHeaderValue()).isEqualTo("revalidated");
                 assertThat(read(recovered)).isEqualTo("body");
             }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void connectionFailuresAndTimeoutsCanUseStaleBodies(boolean timeout) throws Exception {
+        try (var cache = cache()) {
+            try (var first = cache.acquire(URI_IMAGE, null, null)) {}
+            clock.advance(61);
+            IOException failure = timeout ? new HttpTimeoutException("origin timeout") : new IOException("offline");
+            doThrow(failure).when(client).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+            try (var stale = cache.acquire(URI_IMAGE, null, null)) {
+                assertThat(stale.cacheStatusHeaderValue()).isEqualTo("stale");
+                assertThat(read(stale)).isEqualTo("body");
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {401, 403, 404})
+    void clientErrorsNeverUseStaleBodies(int status) throws Exception {
+        try (var cache = cache()) {
+            try (var first = cache.acquire(URI_IMAGE, null, null)) {}
+            clock.advance(61);
+            responder = request -> response(status, "", Map.of());
+            assertThatThrownBy(() -> cache.acquire(URI_IMAGE, null, null))
+                    .isInstanceOf(HttpStatusException.class)
+                    .extracting("httpStatusCode")
+                    .isEqualTo(status);
         }
     }
 
