@@ -55,7 +55,8 @@ class NpmInstallerTest {
                 new PackagingConfig(npmPath, null, Duration.ofSeconds(5)),
                 null,
                 null,
-                Collections.emptyMap());
+                Collections.emptyMap(),
+                null);
         installer = new NpmInstaller(config, new JsonMapper());
         nodeModulesDir = tempDir.resolve("npm", "node_modules");
         Files.createDirectories(nodeModulesDir);
@@ -143,7 +144,8 @@ class NpmInstallerTest {
                 new PackagingConfig(null, null, Duration.ofSeconds(5)),
                 null,
                 null,
-                Collections.emptyMap());
+                Collections.emptyMap(),
+                null);
         try (MockedStatic<CommandRunner> runner = Mockito.mockStatic(CommandRunner.class)) {
             runner.when(() -> CommandRunner.getEnvVar("PATH")).thenReturn("");
 

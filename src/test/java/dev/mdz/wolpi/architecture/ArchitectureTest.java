@@ -30,6 +30,8 @@ public class ArchitectureTest {
             .definedBy("..iiif..")
             .layer("Image Processing")
             .definedBy("..wolpi.image")
+            .layer("HTTP Source Caching")
+            .definedBy("dev.mdz.wolpi.http.cache..")
             .layer("Model")
             .definedBy("dev.mdz.wolpi.model")
             .layer("Shared Exceptions")
@@ -48,12 +50,25 @@ public class ArchitectureTest {
             .mayOnlyBeAccessedByLayers("App", "Image Processing")
             .whereLayer("Image Processing")
             .mayOnlyBeAccessedByLayers("Controller")
+            .whereLayer("HTTP Source Caching")
+            .mayOnlyBeAccessedByLayers("App", "Controller", "Image Processing")
+            .whereLayer("HTTP Source Caching")
+            .mayOnlyAccessLayers("Model", "Config", "Shared Exceptions")
             .whereLayer("Model")
-            .mayOnlyBeAccessedByLayers("Controller", "Extension Management", "Image Processing", "IIIF")
+            .mayOnlyBeAccessedByLayers(
+                    "Controller", "Extension Management", "Image Processing", "HTTP Source Caching", "IIIF")
 
             // Support components should not access other components
             .whereLayer("Config")
             .mayNotAccessAnyLayer();
+
+    @ArchTest
+    static final ArchRule httpCacheDoesNotDependOnImageProcessing = noClasses()
+            .that()
+            .resideInAPackage("dev.mdz.wolpi.http.cache..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage("dev.mdz.wolpi.image..", "app.photofox.vipsffm..");
 
     @ArchTest
     static final ArchRule exceptionConventions = classes()

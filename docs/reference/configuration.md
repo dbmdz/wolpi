@@ -93,6 +93,45 @@ cache-control-headers:
   images: "public, max-age=604800, must-revalidate"
 ```
 
+## HTTP source cache
+
+The `http-source-cache` section controls local disk caching of HTTP source images. Tile requests
+for the same image can reuse one download. This does not cache generated IIIF responses or change
+the client-facing [HTTP caching headers](#http-caching-headers).
+
+- `enabled`: Whether to cache HTTP source images, defaults to `true`.
+- `directory`: Dedicated local directory for this instance's cache, defaults to
+  `<data-directory>/http-source-cache`. Wolpi retains cached files across restarts.
+- `max-size`: Maximum space for image bodies, including downloads in progress and files still in
+  use by requests, defaults to `10GB`. Wolpi evicts least-recently-used files to make room or skips
+  caching if it cannot free enough space. Metadata and filesystem overhead require additional space.
+- `max-resource-size`: Maximum source image size to cache, defaults to `512MB`. Larger images and
+  responses without a known length stream without caching.
+- `max-freshness`: Maximum time to reuse an image before checking the origin, defaults to `30s`.
+  Shorter origin freshness limits still apply. This does not limit how long files remain on disk.
+- `expose-response-headers`: Whether to include the `X-Wolpi-Http-Source-Cache` diagnostic header,
+  defaults to `true`.
+
+Sizes accept `KB`, `MB`, and `GB` in powers of 1024. Sizes and `max-freshness` must be positive.
+
+Example:
+
+```yaml
+http-source-cache:
+  enabled: true
+  directory: /var/cache/wolpi/http-source-cache
+  max-size: 10GB
+  max-resource-size: 512MB
+  max-freshness: 30s
+  expose-response-headers: true
+```
+
+Use a separate local directory for each instance; shared directories and network filesystems are
+unsupported. Protect cached files like the source images and do not modify them while Wolpi runs.
+For multi-instance deployments, see [routing by image identifier](../how-to/expose-wolpi-behind-a-reverse-proxy.md#route-requests-by-image-identifier).
+
+See [HTTP source caching](http.md#http-source-caching) for cache behavior and diagnostic headers.
+
 ## Image encoding options
 
 Encoding options for image processing, such as JPEG quality and PNG compression level, can be
@@ -342,26 +381,29 @@ HTTP clients created by extensions themselves remain outside these limits.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `connect` | `10s` | Maximum time to establish a connection. |
-| `request` | `30s` | Maximum time to receive response headers on Java 25. Does not bound response-body transfers. |
+| `request` | `30s` | Maximum wait for response headers on Java 25. For images downloaded into the source cache, also limits the complete download. |
 | `extensions.connect`, `extensions.request` | Inherit | Overrides for the guest HTTP client in JavaScript and Python. |
-| `sources.connect`, `sources.request` | Inherit | Overrides for HTTP image sources. |
+| `sources.connect`, `sources.request` | Inherit | Overrides for HTTP image sources, whether cached or streamed. |
 
 Durations must be positive. The request timeout includes connection establishment and waiting
 for response headers. The connect timeout additionally limits the connection-establishment phase,
 it does not add extra time to the request timeout.
 
-!!! warning "No response-body timeout on Java 25"
+!!! warning "Java 25: downloads without caching can stall"
 
-    Wolpi running in a JVM <=25 (which includes the official container) does not support enforcing
-    time limits on trickling servers or slow/stalling response-body transfers. Reading a body can
-    block indefinitely after headers arrive, including through `fetchSync` or buffered handlers such
-    as `BodyHandlers.ofString()`. See [JDK-8258397] and [JDK-8208693], fixed in JDK 26. If this is
+    On Java 25 and earlier (including the official container), the timeout stops applying once the
+    server sends response headers, unless Wolpi is downloading an image into the source cache.
+    If the server then stops sending data or sends it extremely slowly, the request can remain
+    stuck indefinitely. This affects images streamed without caching and HTTP requests made through
+    the extension `httpClient`, including JavaScript's `fetchSync`.
+    See [JDK-8258397] and [JDK-8208693], fixed in JDK 26. If this is
     a requirement for you and lower extension performance is acceptable, run Wolpi under a JVM >=26.
     Since GraalVM tracks only LTS JVM releases, a fix for the official container will not arrive
     before Q4 2027, when [Java 29 is scheduled to be released](https://ops.java/releases/matrix) and
     GraalVM will follow suit with a new release.
 
-Example with a longer response-header timeout for source images:
+Example allowing up to two minutes for image downloads into the cache (or for response headers
+when streaming without caching on Java 25):
 
 ```yaml title="application.yml"
 wolpi:
@@ -371,6 +413,11 @@ wolpi:
     sources:
       request: 2m
 ```
+
+HTTP timeouts produce HTTP 504 (Gateway Timeout) responses unless an extension handles the error.
+For details on download timeouts when caching images, see [HTTP source caching](http.md#http-source-caching).
+
+For extension implementation details, see [HTTP requests and timeouts][extension-http].
 
 [JDK-8258397]: https://bugs.openjdk.org/browse/JDK-8258397
 [JDK-8208693]: https://bugs.openjdk.org/browse/JDK-8208693
@@ -463,6 +510,12 @@ extension-debug:
   waitAttached: false
 packaging:
   install-timeout: 180s
+http-source-cache:
+  enabled: true
+  max-resource-size: 512MB
+  expose-response-headers: true
+  max-size: 10GB
+  max-freshness: 30s
 cache-control-headers:
   images: "public, max-age=604800, must-revalidate"
   info-json: "public, max-age=604800, must-revalidate"

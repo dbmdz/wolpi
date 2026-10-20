@@ -19,6 +19,7 @@ import org.springframework.boot.logging.LogLevel;
 /// @param packaging Configuration for installing extensions from package managers
 /// @param httpTimeouts Shared HTTP connect/request timeouts and optional client-specific overrides
 /// @param cacheControlHeaders Cache-Control header values for info.json and image responses
+/// @param httpSourceCache Whole-response cache for HTTP image sources
 /// @param imageProcessing Configuration for various image processing aspects
 /// @param encodingOptions Encoding options for image processing, such as JPEG quality and PNG
 /// compression level, will be passed directly to the VIPS *save functions,
@@ -43,10 +44,12 @@ public record WolpiConfig(
         @NestedConfigurationProperty PackagingConfig packaging,
         @DefaultValue @NestedConfigurationProperty HttpTimeoutConfig httpTimeouts,
         @NestedConfigurationProperty ImageProcessingConfig imageProcessing,
-        Map<String, Map<String, Object>> encodingOptions) {
+        Map<String, Map<String, Object>> encodingOptions,
+        @DefaultValue @NestedConfigurationProperty HttpSourceCacheConfig httpSourceCache) {
 
     public WolpiConfig {
         httpTimeouts = httpTimeouts == null ? HttpTimeoutConfig.defaults() : httpTimeouts;
+        httpSourceCache = httpSourceCache == null ? HttpSourceCacheConfig.defaults() : httpSourceCache;
     }
 
     /// Configures the Cache-Control header for the IIIF endpoints

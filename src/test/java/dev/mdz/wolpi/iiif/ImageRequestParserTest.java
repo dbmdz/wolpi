@@ -40,7 +40,7 @@ class ImageRequestParserTest {
         IIIFConfig.Formats formats = new IIIFConfig.Formats(List.of("jpg", "png"), List.of("jpg"));
         IIIFConfig iiifConfig = new IIIFConfig(limits, features, qualities, formats);
         wolpiConfig = new WolpiConfig(
-                null, null, null, null, iiifConfig, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, iiifConfig, null, null, null, null, null, null, null, null, null, null);
         parser = new ImageRequestParser(wolpiConfig);
     }
 
@@ -73,7 +73,8 @@ class ImageRequestParserTest {
                 wolpiConfig.packaging(),
                 null,
                 wolpiConfig.imageProcessing(),
-                wolpiConfig.encodingOptions()));
+                wolpiConfig.encodingOptions(),
+                wolpiConfig.httpSourceCache()));
     }
 
     private ImageRequestParser parserWithRegion(IIIFConfig.RegionFeature regionFeature) {
@@ -105,7 +106,8 @@ class ImageRequestParserTest {
                 wolpiConfig.packaging(),
                 null,
                 wolpiConfig.imageProcessing(),
-                wolpiConfig.encodingOptions()));
+                wolpiConfig.encodingOptions(),
+                wolpiConfig.httpSourceCache()));
     }
 
     private ImageRequestParser parserWithScaling(IIIFConfig.ScalingFeature scalingFeature) {
@@ -137,7 +139,8 @@ class ImageRequestParserTest {
                 wolpiConfig.packaging(),
                 null,
                 wolpiConfig.imageProcessing(),
-                wolpiConfig.encodingOptions()));
+                wolpiConfig.encodingOptions(),
+                wolpiConfig.httpSourceCache()));
     }
 
     private ImageRequestParser parserWithLimits(IIIFConfig.Limits limits) {
@@ -158,7 +161,8 @@ class ImageRequestParserTest {
                 wolpiConfig.packaging(),
                 null,
                 wolpiConfig.imageProcessing(),
-                wolpiConfig.encodingOptions()));
+                wolpiConfig.encodingOptions(),
+                wolpiConfig.httpSourceCache()));
     }
 
     private ImageRequestParser parserWithQualities(IIIFConfig.Qualities qualities) {
@@ -179,7 +183,8 @@ class ImageRequestParserTest {
                 wolpiConfig.packaging(),
                 null,
                 wolpiConfig.imageProcessing(),
-                wolpiConfig.encodingOptions()));
+                wolpiConfig.encodingOptions(),
+                wolpiConfig.httpSourceCache()));
     }
 
     @Nested

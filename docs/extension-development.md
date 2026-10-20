@@ -1192,6 +1192,23 @@ incoming request headers (`If-Modified-Since` and `If-None-Match`) and decide if
 HTTP 304 "Not Modified" response. If you want to override this behavior, you can return a
 `SourceNotModified` to force a HTTP 304 response.
 
+For `HttpResolvedImage`, Wolpi caches complete upstream response bodies as local files,
+subject to upstream HTTP cache headers and configured size limits. The cache separates URLs and
+source request headers, including credentials. The `authorize` and `resolve` hooks still run for
+each request. Supplying `imageInfo` avoids a source download for `info.json`, but does not warm the
+body cache. Returning bytes as `BinaryResolvedImage` does not use the HTTP source cache, even if
+your extension downloaded those bytes over HTTP. See
+[HTTP source cache configuration](reference/configuration.md#http-source-cache) for settings and
+[HTTP source caching](reference/http.md#http-source-caching) for reuse rules and diagnostic headers.
+
+HTTP image sources require `Accept-Encoding: identity`. Omit that header or supply `identity`,
+including when signing requests. A conflicting resolver value produces HTTP 500 rather than being
+silently overwritten. Unsupported upstream content encodings produce HTTP 502, even with caching
+disabled.
+
+When signing source requests, leave `If-None-Match` and `If-Modified-Since` unsigned. Wolpi manages
+these headers during revalidation and cannot re-sign a request after changing them.
+
 === "JavaScript"
 
     ```typescript

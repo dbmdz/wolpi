@@ -172,7 +172,8 @@ public class ExtensionRuntimeTest {
                 mock(PackagingConfig.class),
                 null,
                 null,
-                Map.of());
+                Map.of(),
+                null);
         if (graalContextSupplier == null) {
             graalContextSupplier = new GraalContextSupplier(config);
         }
@@ -1235,7 +1236,8 @@ public class ExtensionRuntimeTest {
                     mock(PackagingConfig.class),
                     timeouts,
                     null,
-                    Map.of());
+                    Map.of(),
+                    null);
             supplier = new GraalContextSupplier(cfg);
             var poolConfig = new GenericKeyedObjectPoolConfig<RuntimeContext>();
             poolConfig.setJmxEnabled(false);

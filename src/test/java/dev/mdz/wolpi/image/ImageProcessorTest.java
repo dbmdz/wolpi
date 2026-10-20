@@ -73,7 +73,8 @@ public class ImageProcessorTest {
                 null,
                 null,
                 null,
-                Map.of());
+                Map.of(),
+                null);
         runtime = mock(ExtensionRuntime.class);
         when(runtime.hasExtensionsForHook(any())).thenReturn(false);
         when(runtime.getSkippableHooks(any()))
@@ -88,7 +89,8 @@ public class ImageProcessorTest {
         var timer = mock(WolpiMetrics.ImageProcessingTimer.class);
         when(metrics.startImageProcessingTimer(any(), any(), any(), any(), any()))
                 .thenReturn(timer);
-        loader = new ImageLoader(config, arena, null, runtime, null, metrics);
+        loader = new ImageLoader(
+                config, arena, runtime, null, metrics, mock(dev.mdz.wolpi.http.cache.HttpSourceCache.class));
         processor = new ImageProcessor(arena, config, loader, new ImageRequestParser(config), runtime, metrics);
     }
 
