@@ -9,6 +9,11 @@
   "ignorePaths": ["samples/**"],
   "packageRules": [
     {
+      "description": "GraalVM libraries must stay on the Oracle GraalVM JDK release line pinned in mise.toml",
+      "matchPackageNames": ["/^org\\.graalvm/"],
+      "allowedVersions": "/^25\\.0\\./"
+    },
+    {
       "groupName": "all dependencies",
       "groupSlug": "all",
       "matchPackageNames": ["*"]

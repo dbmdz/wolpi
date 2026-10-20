@@ -39,8 +39,8 @@ ENV LD_PRELOAD="/usr/local/lib/libjemalloc.so"
 # Configure jemalloc to use background thread for purging dirty and muzzy pages after 5s
 ENV MALLOC_CONF="background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000"
 
-ENV GRAALVM_URL="https://gds.oracle.com/download/graal/25/archive/graalvm-jdk-25.0.3_linux-x64_bin.tar.gz"
-ARG GRAALVM_SHA256="1b5296613c3d12521d594e1c99302df88d8e1f07d74ab7983dbf572000b92c7c"
+ENV GRAALVM_URL="https://gds.oracle.com/download/graal/25/archive/graalvm-jdk-25.0.5_linux-x64_bin.tar.gz"
+ARG GRAALVM_SHA256="2ae8b03dfcb0a5bbcb55ffd122e8ffee24e3afce04bccc82932789acd005d1e1"
 RUN set -eux; \
     curl --fail --show-error --location "${GRAALVM_URL}" \
         --output /tmp/graalvm.tar.gz; \
@@ -50,8 +50,8 @@ RUN set -eux; \
     rm /tmp/graalvm.tar.gz
 
 # Install GraalPy for more compatiblity with native python packages
-ENV GRAALPY_URL="https://github.com/oracle/graalpython/releases/download/graal-25.0.1/graalpy-25.0.1-linux-amd64.tar.gz"
-ARG GRAALPY_SHA256="b5baff786753ebb774300fcf68a9bca4d14cbb8099f055637bee11786abb2d57"
+ENV GRAALPY_URL="https://github.com/oracle/graalpython/releases/download/graal-25.0.3/graalpy-25.0.3-linux-amd64.tar.gz"
+ARG GRAALPY_SHA256="c351b503d212519ad5e7e835fd9eb56b557ca9d5b6ef59e32b40435603f90bf8"
 RUN set -eux; \
     curl --fail --show-error --location "${GRAALPY_URL}" \
         --output /tmp/graalpy.tar.gz; \
