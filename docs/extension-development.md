@@ -1193,21 +1193,20 @@ HTTP 304 "Not Modified" response. If you want to override this behavior, you can
 `SourceNotModified` to force a HTTP 304 response.
 
 For `HttpResolvedImage`, Wolpi caches complete upstream response bodies as local files,
-subject to upstream HTTP cache headers and configured size limits. The cache separates URLs and
-source request headers, including credentials. The `authorize` and `resolve` hooks still run for
-each request. Supplying `imageInfo` avoids a source download for `info.json`, but does not warm the
-body cache. Returning bytes as `BinaryResolvedImage` does not use the HTTP source cache, even if
-your extension downloaded those bytes over HTTP. See
+subject to upstream HTTP cache headers and configured size limits. By default, the cache separates
+URLs and source request headers, including credentials. An optional `cacheIdentity` lets your
+resolver provide a stable identity for changing signed URLs; see
+[Stable cache identities for HTTP sources](#stable-cache-identities-for-http-sources).
+The `authorize` and `resolve` hooks still run for each request. Supplying `imageInfo` avoids a source download for `info.json`, but does not
+warm the body cache. Returning bytes as `BinaryResolvedImage` does not use the HTTP source cache,
+even if your extension downloaded those bytes over HTTP. See
 [HTTP source cache configuration](reference/configuration.md#http-source-cache) for settings and
 [HTTP source caching](reference/http.md#http-source-caching) for reuse rules and diagnostic headers.
 
 HTTP image sources require `Accept-Encoding: identity`. Omit that header or supply `identity`,
 including when signing requests. A conflicting resolver value produces HTTP 500 rather than being
-silently overwritten. Unsupported upstream content encodings produce HTTP 502, even with caching
-disabled.
-
-When signing source requests, leave `If-None-Match` and `If-Modified-Since` unsigned. Wolpi manages
-these headers during revalidation and cannot re-sign a request after changing them.
+silently overwritten. If an upstream response declares another content encoding, Wolpi closes it
+and returns HTTP 502, even with caching disabled; libvips cannot decode HTTP gzip or Brotli coding.
 
 === "JavaScript"
 
@@ -1277,6 +1276,9 @@ these headers during revalidation and cannot re-sign a request after changing th
     interface HttpResolvedImage {
         url: string;
         headers?: Record<string, string>;
+
+        /** Optional stable name for the source, independent of its URL and headers. */
+        cacheIdentity?: string | null;
 
         imageInfo?: ImageInfo;
         cacheInfo?: CacheInfo;
@@ -1353,6 +1355,7 @@ these headers during revalidation and cannot re-sign a request after changing th
     class HttpResolvedImage(TypedDict):
         url: str
         headers: NotRequired[Mapping[str, str]]
+        cacheIdentity: NotRequired[str | None]
         imageInfo: NotRequired[ImageInfo]
         cacheInfo: NotRequired[CacheInfo]
 
@@ -1379,6 +1382,85 @@ these headers during revalidation and cannot re-sign a request after changing th
     ```
 
 If there are multiple extensions that implement the `resolve` hook, Wolpi will call them in parallel until one of them returns a valid result. If none of them do, Wolpi falls back to resolving the identifier against the configured filesystem image base directory.
+
+#### Stable cache identities for HTTP sources
+
+A resolver can return a signed HTTP URL, such as an S3 presigned URL, through `HttpResolvedImage`
+without a storage-specific source type. Wolpi fetches it as an ordinary HTTP source. However, a
+new signature changes the URL: without a stable identity, Wolpi treats it as a different cache
+entry even if it points to the same object.
+
+If your extension generates a different signed URL for the same image on each request, return a
+stable name for that image in `cacheIdentity`. For example, keep the name `my-archive/photo.tif`
+while the URL's signature changes. Wolpi can then recognize and reuse its cached copy.
+
+With `cacheIdentity`, Wolpi uses that name instead of the URL and request headers to identify the
+cached image. If you also return `cacheInfo`, changing its `eTag` or `lastModified` selects a
+separate cached copy. You can use this to prevent reuse after the source image changes.
+
+The name must not be blank. Omit `cacheIdentity` or return `null` to keep the default behavior,
+where different URLs or request headers identify different cached copies. Python resolvers can
+also use the field name `cache_identity`.
+
+Choose an identity that is unique across all resolvers in the deployment and covers the complete
+representation and access scope. For an S3-backed resolver, include your resolver/storage namespace,
+endpoint, tenant or access partition, bucket, object key, and any object version or representation
+variants. Do not include the changing signature. Use an unambiguous encoding such as a JSON array
+rather than concatenating fields with separators that might occur in the values.
+
+After your resolver selects the object and generates its current signed URL, it can return the
+following. These snippets assume you already have the indicated storage and access-scope values;
+Wolpi does not generate or refresh signatures itself.
+
+!!! warning "Leave cache validation headers unsigned"
+    When presigning cache-managed requests, do not bind `If-None-Match` or `If-Modified-Since` to
+    fixed values in the signature. Wolpi adds, replaces, or removes these headers using its stored
+    origin validators during revalidation. Typical S3 presigned GET URLs accept these headers when
+    they are not in the signed-header set; signing them can cause revalidation to fail with HTTP
+    403. Wolpi does not re-sign requests. On a cold miss, it adds no conditional headers of its own.
+
+=== "JavaScript"
+
+    ```javascript
+    return {
+      url: signedUrl,
+      cacheIdentity: JSON.stringify([
+        "my-s3-resolver", endpoint, tenantId, bucket, objectKey, versionId ?? null
+      ])
+    };
+    ```
+
+=== "Python"
+
+    ```python
+    import json
+
+    return {
+        "url": signed_url,
+        "cacheIdentity": json.dumps(
+            ["my-s3-resolver", endpoint, tenant_id, bucket, object_key, version_id],
+            separators=(",", ":"),
+        ),
+    }
+    ```
+
+Wolpi uses the current `url` and `headers` whenever it downloads the image or checks the origin for
+changes. An authorized request can reuse a fresh cached image after the URL used to download it
+has expired; Wolpi does not contact the origin on a fresh hit. URL expiry does not invalidate the
+cached image or replace the need to authorize each client request.
+
+The cache still honors upstream cache policy and configured size and freshness limits;
+`cacheIdentity` does not override `no-store`, `private`, or other storage restrictions. Wolpi stores
+a hash of the identity, not the raw name or fetch credentials.
+
+!!! warning "Your resolver owns isolation when it supplies cacheIdentity"
+    Reusing an identity allows reuse of the stored body and extracted image metadata even if the
+    URL, credentials, or representation-affecting headers change. Distinguish tenants, permission
+    scopes, and variants that must not share content. Do not accept a client-provided identity
+    without validating its scope. Use the `authorize` hook to enforce client access on each request;
+    do not rely on the signed URL's expiry as the only access check. If the origin must authorize
+    each request, require revalidation through source-request `Cache-Control: no-cache`, or bypass
+    storage with `Cache-Control: no-store`.
 
 ### `augmentInfoJson` Hook
 

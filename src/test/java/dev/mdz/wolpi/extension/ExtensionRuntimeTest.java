@@ -365,6 +365,56 @@ public class ExtensionRuntimeTest {
                 assertThat(result.resolvedImage()).isInstanceOf(HttpResolvedImage.class);
                 var httpResolved = (HttpResolvedImage) result.resolvedImage();
                 assertThat(httpResolved.url()).isEqualTo(URI.create("https://example.com/resource/test"));
+                assertThat(httpResolved.cacheIdentity()).isNull();
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"js,cacheIdentity", "python,cacheIdentity", "python,cache_identity"})
+        void shouldResolveOptionalStableHttpCacheIdentity(String language, String member) throws IOException {
+            ExtensionConfig extension;
+            if (language.equals("js")) {
+                extension = writeJsExtension("cache-identity", """
+                        export default {
+                          info() { return { name: "cache-identity", apiVersion: 1, description: "HTTP identity test" }; },
+                          cleanup() {},
+                          resolve(identifier) {
+                            const result = {
+                              url: "https://storage.example/image?signature=" + identifier,
+                              headers: { "X-Fetch-Signature": identifier }
+                            };
+                            if (identifier !== "legacy") result.%s = "resolver:tenant-a:object";
+                            return result;
+                          }
+                        };
+                        """.formatted(member));
+            } else {
+                extension = writePyExtension("cache-identity", """
+                        def info():
+                            return {'name': 'cache-identity', 'apiVersion': 1, 'description': 'HTTP identity test'}
+                        def cleanup():
+                            pass
+                        def resolve(identifier, etag, last_modified):
+                            result = {
+                                'url': 'https://storage.example/image?signature=' + identifier,
+                                'headers': {'X-Fetch-Signature': identifier}
+                            }
+                            if identifier != 'legacy':
+                                result['%s'] = 'resolver:tenant-a:object'
+                            return result
+                        """.formatted(member));
+            }
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(extension)) {
+                var legacy = (HttpResolvedImage)
+                        runtime.resolve("legacy", null, null).resolvedImage();
+                assertThat(legacy.cacheIdentity()).isNull();
+                for (String signature : List.of("first", "second")) {
+                    var result = (HttpResolvedImage)
+                            runtime.resolve(signature, null, null).resolvedImage();
+                    assertThat(result.cacheIdentity()).isEqualTo("resolver:tenant-a:object");
+                    assertThat(result.url().getQuery()).isEqualTo("signature=" + signature);
+                    assertThat(result.headers()).containsEntry("X-Fetch-Signature", signature);
+                }
             }
         }
 

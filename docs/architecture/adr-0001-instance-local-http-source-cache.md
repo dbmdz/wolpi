@@ -55,11 +55,22 @@ failures rather than serving stale content.
 
 ### Extension API and authorization
 
-A fresh cache hit can skip the origin entirely. Extensions must enforce client
-access themselves rather than rely on the origin checking credentials on every
-request. If origin validation is essential for each request, extensions must
-require revalidation or bypass caching. Resolver-supplied validators partition
-cached source versions.
+Extensions can supply `HttpResolvedImage.cacheIdentity` to identify a source
+independently of its current URL and headers. We introduced this for anticipated
+S3 extensions using presigned URLs: rotating a signature should not force
+another download of an unchanged source. Fetches still use the current
+resolver-supplied URL and credentials; Wolpi needs no S3-specific signing logic.
+
+An extension supplying an explicit identity owns its isolation across resolvers,
+storage namespaces, tenants/access scopes, and representation variants. Changing
+fetch credentials does not invalidate that identity. Resolver-supplied validators
+also partition cached versions, allowing extensions to signal source changes.
+
+An authorized request can reuse a fresh cached source even after the presigned
+URL used to download it has expired. Expiry of fetch credentials does not
+invalidate cached bytes; extensions remain responsible for authorizing each
+client request. If origin validation is essential for each request, extensions
+must require revalidation or bypass caching.
 
 ### Breaking change: client and origin validators
 

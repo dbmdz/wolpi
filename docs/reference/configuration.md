@@ -130,7 +130,9 @@ Use a separate local directory for each instance; shared directories and network
 unsupported. Protect cached files like the source images and do not modify them while Wolpi runs.
 For multi-instance deployments, see [routing by image identifier](../how-to/expose-wolpi-behind-a-reverse-proxy.md#route-requests-by-image-identifier).
 
-See [HTTP source caching](http.md#http-source-caching) for cache behavior and diagnostic headers.
+See [HTTP source caching](http.md#http-source-caching) for cache behavior and diagnostic headers,
+and [stable source identities](../extension-development.md#stable-cache-identities-for-http-sources)
+for extensions using signed URLs.
 
 ## Image encoding options
 

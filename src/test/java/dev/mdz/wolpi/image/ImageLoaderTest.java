@@ -295,7 +295,7 @@ class ImageLoaderTest {
     }
 
     @Test
-    void infoThenTilesDownloadsWholeSourceOnce(@TempDir Path dir) throws Exception {
+    void infoAndTilesReuseTheWholeBodyAcrossSignedUrls(@TempDir Path dir) throws Exception {
         byte[] bytes = Files.readAllBytes(IMAGES.resolve("embedded_icc_colorspace.jpg"));
         AtomicInteger downloads = new AtomicInteger();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -318,9 +318,17 @@ class ImageLoaderTest {
                 Duration.ofMinutes(1),
                 DataSize.ofBytes(bytes.length),
                 true);
+        var signatures = new AtomicInteger();
         ExtensionRuntime runtime = mock(ExtensionRuntime.class);
         when(runtime.resolve(any(), any(), any()))
-                .thenAnswer(ignored -> new ImageSource("remote-image", new HttpResolvedImage(uri, null), null, null));
+                .thenAnswer(ignored -> new ImageSource(
+                        "remote-image",
+                        new HttpResolvedImage(
+                                URI.create(uri + "?signature=" + signatures.incrementAndGet()),
+                                null,
+                                "resolver:tenant-a:object"),
+                        null,
+                        null));
         try (var client = new TimeoutHttpClient(config(dir).httpTimeouts().forSources());
                 var cache = new HttpSourceCache(settings, dir, client, Clock.systemUTC(), Duration.ofSeconds(30))) {
             try (Arena request = Arena.ofConfined()) {
@@ -333,6 +341,10 @@ class ImageLoaderTest {
                 try (Arena request = Arena.ofConfined()) {
                     var loader = loader(dir, runtime, cache, request);
                     var source = loader.resolve("remote-image", null, null);
+                    assertThat(((HttpResolvedImage) source.resolvedImage())
+                                    .url()
+                                    .getQuery())
+                            .isEqualTo("signature=" + (i + 2));
                     assertThat(source.imageInfo()).isNotNull();
                     assertThat(source.httpSourceCacheStatus()).isEqualTo("disk-hit");
                     assertThat(source.httpSourceLease().path()).isNotNull();

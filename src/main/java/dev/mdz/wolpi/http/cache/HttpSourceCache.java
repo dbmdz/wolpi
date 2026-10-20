@@ -114,7 +114,7 @@ public final class HttpSourceCache implements AutoCloseable {
     /// The caller must close the returned lease after lazy image decoding finishes.
     ///
     /// @return a lease or null if no fresh entry exists, caching is disabled, or request policy bypasses it
-    /// @param source fetch URL and source request headers from the resolver
+    /// @param source current fetch URL/headers and optional stable cache identity from the resolver
     /// @param resolverValidators if present, validators that partition source versions
     public synchronized @Nullable Lease tryAcquireFresh(
             HttpResolvedImage source, @Nullable CacheInfo resolverValidators) {
@@ -123,7 +123,7 @@ public final class HttpSourceCache implements AutoCloseable {
         if (disk == null || CachePolicy.requestBypassReason(finalRequestHeaders) != null) {
             return null;
         }
-        String key = CacheKey.create(source.url(), finalRequestHeaders, resolverValidators);
+        String key = CacheKey.create(source.url(), finalRequestHeaders, resolverValidators, source.cacheIdentity());
         return tryAcquireFreshEntry(key, finalRequestHeaders);
     }
 
@@ -135,6 +135,7 @@ public final class HttpSourceCache implements AutoCloseable {
 
     /// Acquire a body, waiting for another acquisition or fetching/revalidating as needed.
     /// The caller owns the returned lease, including when caching is bypassed.
+    /// Fetches use the current source URL/headers even when its stable cache identity matches an older URL.
     public Lease acquire(HttpResolvedImage source, @Nullable CacheInfo resolverValidators)
             throws IOException, InterruptedException {
         try (var scope = beginAcquisition()) {
@@ -153,7 +154,7 @@ public final class HttpSourceCache implements AutoCloseable {
             return direct(uri, request, bypass, deadline);
         }
 
-        String key = CacheKey.create(uri, request, resolverValidators);
+        String key = CacheKey.create(uri, request, resolverValidators, source.cacheIdentity());
         CacheEntry observed;
         AcquisitionLock acquisition;
         synchronized (this) {
@@ -442,7 +443,8 @@ public final class HttpSourceCache implements AutoCloseable {
             invalidate(key);
             return null;
         }
-        // Check storage permission before reusing the body.
+        // A stable identity may span changing request headers. Storage permission must still
+        // hold for the current request, e.g. when it introduces Authorization or Cookie.
         return CachePolicy.responseBypassReason(request, stored.headers) == null
                         && CachePolicy.fresh(stored, config.maxFreshness(), request, clock.instant())
                 ? lease(stored, CacheOutcome.HIT)

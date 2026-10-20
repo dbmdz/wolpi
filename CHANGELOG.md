@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conditional revalidation govern reuse. The optional `X-Wolpi-Http-Source-Cache` response header
   reports hits, misses, revalidation, and bypass reasons. Unknown-length and partial responses
   bypass caching.
+- New extension API: optional `HttpResolvedImage.cacheIdentity` supplies a stable, resolver-controlled
+  source identity for cache reuse across rotating signed URLs and fetch headers, including S3
+  presigned URLs. Omitting it preserves URL-and-header cache keying.
 
 ### Removed
 - Wolpi is no longer published to Maven Central or the Sonatype OSS Snapshot

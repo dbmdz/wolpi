@@ -19,18 +19,34 @@ final class CacheKey {
 
     private CacheKey() {}
 
-    /// Include the URI, resolver validators, and source headers except conditional validators.
     static String create(URI uri, HttpHeaders headers, @Nullable CacheInfo version) {
+        return create(uri, headers, version, null);
+    }
+
+    /// Default to the URI and all source request headers except conditional validators. An explicit
+    /// identity replaces both: the trusted resolver owns representation and access-scope isolation.
+    /// Resolver validators partition versions in either mode. No raw identity is persisted.
+    static String create(URI uri, HttpHeaders headers, @Nullable CacheInfo version, @Nullable String cacheIdentity) {
         try {
             MessageDigest hash = MessageDigest.getInstance("SHA-256");
-            add(hash, uri.toString());
+            if (cacheIdentity == null) {
+                // Preserve the existing default key format for entries already on disk.
+                add(hash, uri.toString());
+            } else {
+                // A negative length cannot begin a default key. Keep the two identity namespaces disjoint.
+                hash.update(ByteBuffer.allocate(4).putInt(-1).array());
+                add(hash, cacheIdentity);
+            }
+            // Resolver validators use their own namespace; do not compare them to origin ETags.
             add(hash, version == null || version.eTag() == null ? "" : version.eTag());
             add(
                     hash,
                     version == null || version.lastModified() == null
                             ? ""
                             : version.lastModified().toString());
-            addRequestHeaders(hash, headers);
+            if (cacheIdentity == null) {
+                addRequestHeaders(hash, headers);
+            }
             return HexFormat.of().formatHex(hash.digest());
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 unavailable", e);
@@ -41,7 +57,9 @@ final class CacheKey {
         TreeMap<String, List<String>> canonical = new TreeMap<>();
         headers.forEach((name, values) -> {
             String lower = name.toLowerCase(Locale.ROOT);
-            if (!VALIDATORS.contains(lower)) canonical.put(lower, values);
+            if (!VALIDATORS.contains(lower)) {
+                canonical.put(lower, values);
+            }
         });
         canonical.forEach((name, values) -> {
             add(hash, name);

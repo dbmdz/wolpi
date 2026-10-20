@@ -155,7 +155,8 @@ override other storage restrictions. Source-request `no-store`, `Range`, `If-Ran
 and `If-Unmodified-Since` also bypass storage.
 
 By default, Wolpi distinguishes cached sources by URL, source request headers, and resolver-provided
-versions. Origin conditional validators do not identify separate copies.
+versions. Origin conditional validators do not identify separate copies. Extensions using rotating
+signed URLs can supply [stable source identities](../extension-development.md#stable-cache-identities-for-http-sources).
 Authorization and resolution still run for every client request, even when a fresh hit skips the
 origin. Source-cache reuse does not change the client-facing `Cache-Control` policy.
 
