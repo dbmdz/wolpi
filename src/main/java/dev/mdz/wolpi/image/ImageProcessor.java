@@ -28,7 +28,6 @@ import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ImageSource;
 import io.github.classgraph.ClassGraph;
-import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -36,7 +35,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,20 +82,21 @@ public class ImageProcessor {
     private static Map<String, List<VipsOption>> determineEncodingOptions(Map<String, Map<String, Object>> options) {
         // Build a cache for all possible Vips enum values so we can look up enum values
         Map<String, VNamedEnum> vipsEnumCache = new HashMap<>();
-        HashSet<Class<?>> subTypes;
         try (ScanResult scanResult = new ClassGraph()
-                .enableAllInfo()
+                .enableClasspath()
+                .enableNonSystemModules()
+                .enableClassInfo()
                 .acceptPackages("app.photofox.vipsffm.enums")
                 .scan()) {
-            ClassInfoList classInfos = scanResult.getClassesImplementing("app.photofox.vipsffm.VNamedEnum");
-            subTypes = new HashSet<>(classInfos.loadClasses());
-        }
-
-        for (Class<?> enumClass : subTypes) {
-            for (var constant : enumClass.getEnumConstants()) {
-                var enumVal = (VNamedEnum) constant;
-                vipsEnumCache.put(enumVal.getName(), enumVal);
+            for (var classInfo : scanResult.getAllClassesImplementing(VNamedEnum.class)) {
+                var enumClass = Class.forName(classInfo.getName(), false, VNamedEnum.class.getClassLoader())
+                        .asSubclass(VNamedEnum.class);
+                for (var enumVal : enumClass.getEnumConstants()) {
+                    vipsEnumCache.put(enumVal.getName(), enumVal);
+                }
             }
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("Could not load a discovered libvips enum", e);
         }
 
         // Now map the options for each format
