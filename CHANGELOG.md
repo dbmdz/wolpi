@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   forwarded to HTTP image sources. Wolpi evaluates them after reading the source, so a conditional
   request may download the full source before returning `304`, including when the HTTP source cache
   is disabled. An origin `304` without a stored body now produces HTTP `502`, not a client `304`.
+- **Deployment change:** HTTP source caching is enabled by default and requires a separate cache
+  directory for each instance. Existing Kubernetes Deployments with multiple replicas must mount
+  a pod-local `emptyDir` at the cache directory, switch to a StatefulSet with a separate volume per
+  replica, or disable caching with `wolpi.http-source-cache.enabled: false`. Replicas cannot share
+  one cache directory; Wolpi refuses to start if another instance owns it.
 
 ### Added
 - Shared `http-timeouts.{connect,request}` settings (defaults `10s`/`30s`), with optional
