@@ -1203,6 +1203,12 @@ even if your extension downloaded those bytes over HTTP. See
 [HTTP source cache configuration](reference/configuration.md#http-source-cache) for settings and
 [HTTP source caching](reference/http.md#http-source-caching) for reuse rules and diagnostic headers.
 
+!!! note "Changing source credentials"
+    If your resolver returns rotating or client-specific credentials in the URL or HTTP headers,
+    provide a stable `cacheIdentity` to reuse the cached image across credential changes. Otherwise,
+    each credential change creates a separate cache entry even when the image is unchanged.
+    Keep different access scopes separate when choosing the identity.
+
 HTTP image sources require `Accept-Encoding: identity`. Omit that header or supply `identity`,
 including when signing requests. A conflicting resolver value produces HTTP 500 rather than being
 silently overwritten. If an upstream response declares another content encoding, Wolpi closes it
