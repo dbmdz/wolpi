@@ -10,6 +10,7 @@ import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
+import dev.mdz.wolpi.http.cache.HttpSourceCache;
 import dev.mdz.wolpi.iiif.IIIFComplianceRegistry;
 import dev.mdz.wolpi.iiif.IIIFImageInfo;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
@@ -19,30 +20,23 @@ import dev.mdz.wolpi.model.BinaryResolvedImage;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
+import dev.mdz.wolpi.model.HttpSourceLease;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.model.TileSize;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.foreign.Arena;
 import java.lang.invoke.MethodHandles;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
+import java.net.http.HttpTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,7 +49,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
-import org.springframework.util.MultiValueMap;
 
 /// ImageLoader is responsible for resolving and loading images from various sources.
 @Component
@@ -74,9 +67,6 @@ public class ImageLoader {
     /// Taken from libvips `resample/thumbnail.c`, L299-304 to match libvips vips_thumbnail logic
     private static final int PYRAMID_PIXEL_THRESHOLD = 5;
 
-    private static final DateTimeFormatter IF_MODIFIED_SINCE_FORMATTER =
-            DateTimeFormatter.RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC);
-
     private static final Logger log =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -86,8 +76,8 @@ public class ImageLoader {
     /// Memory [Arena] for libvips
     private final Arena arena;
 
-    /// [HttpClient] for making requests to external image sources
-    private final HttpClient httpClient;
+    /// Shared whole-response cache for HTTP image sources.
+    private final HttpSourceCache httpSourceCache;
 
     /// Base directory for images in the filesystem. This is used to resolve image paths when no
     /// extension can handle the request.
@@ -102,18 +92,15 @@ public class ImageLoader {
     /// Metrics
     private final WolpiMetrics metrics;
 
-    /// Carrier for a loaded VImage together with the upstream HTTP response headers.
-    private record HttpLoadResult(VImage image, HttpHeaders responseHeaders) {}
-
     public ImageLoader(
             WolpiConfig cfg,
             Arena arena,
-            HttpClient httpClient,
             ExtensionRuntime extensionRuntime,
             IIIFComplianceRegistry complianceRegistry,
-            WolpiMetrics metrics) {
+            WolpiMetrics metrics,
+            HttpSourceCache httpSourceCache) {
         this.arena = arena;
-        this.httpClient = httpClient;
+        this.httpSourceCache = httpSourceCache;
         this.imageBaseDirectory = cfg.imageBaseDir();
         this.iiifConfig = cfg.iiif();
         this.extensionRuntime = extensionRuntime;
@@ -155,9 +142,12 @@ public class ImageLoader {
         if (source == null) {
             return null;
         }
-        if (source.cacheInfo() == null && source.resolvedImage() instanceof FilesystemResolvedImage(Path path)) {
+        // If the resolver did not provide cache information and the file is sourced from the file
+        // system, set cache validators based on the filesystem metadata of the image file.
+        if (source.resolverValidators() == null
+                && source.resolvedImage() instanceof FilesystemResolvedImage(Path path)) {
             try {
-                source.setCacheInfo(CacheInfo.fromPath(path));
+                source.updateSourceValidators(CacheInfo.fromPath(path));
             } catch (IOException e) {
                 log.warn(
                         "Failed to determine cache information from file path '{}' for {}",
@@ -165,26 +155,17 @@ public class ImageLoader {
                         identifier);
             }
         }
-        if (source.resolvedImage() instanceof HttpResolvedImage(URI url, @Nullable Map<String, String> httpHeaders)) {
-            // Add HTTP caching headers, if not already set by the extension
-            if (httpHeaders == null) {
-                httpHeaders = new HashMap<>();
-            }
-            HttpHeaders parsedHeaders = new HttpHeaders(MultiValueMap.fromSingleValue(httpHeaders));
-            Map<String, String> extraHeaders = new HashMap<>();
-            if (eTag != null && !parsedHeaders.containsHeader("If-None-Match")) {
-                extraHeaders.put("If-None-Match", eTag);
-            }
-            if (lastModified != null && !parsedHeaders.containsHeader("If-Modified-Since")) {
-                extraHeaders.put("If-Modified-Since", IF_MODIFIED_SINCE_FORMATTER.format(lastModified));
-            }
-            if (!extraHeaders.isEmpty()) {
-                extraHeaders.putAll(httpHeaders);
-                return new ImageSource(
-                        source.identifier(),
-                        new HttpResolvedImage(url, extraHeaders),
-                        source.imageInfo(),
-                        source.cacheInfo());
+        if (source.resolvedImage() instanceof HttpResolvedImage httpSource) {
+            // Acquire a fresh cached body if available, without waiting for an in-progress fetch.
+            // Bind its pin to this request so metadata and subsequent loads use the same body.
+            HttpSourceCache.Lease cached = httpSourceCache.tryAcquireFresh(httpSource, source.resolverValidators());
+            if (cached != null) {
+                bindHttpLease(source, cached);
+                updateSourceValidatorsFromResponse(source, cached.responseHeaders());
+                if (source.imageInfo() == null && cached.imageInfo() != null) {
+                    source.setImageInfo(cached.imageInfo());
+                }
+                return source;
             }
         }
         return source;
@@ -279,7 +260,12 @@ public class ImageLoader {
             var info = getImageInfo(source, image);
             // Getting the image information is expensive, cache it
             source.setImageInfo(info);
+            if (source.httpSourceLease() != null && source.httpSourceLease().canReopenBody()) {
+                source.httpSourceLease().cacheImageInfo(info);
+            }
             return info;
+        } catch (HttpTimeoutException e) {
+            throw new HttpStatusException("HTTP source request deadline exceeded", 504, null);
         } catch (IOException | InterruptedException e) {
             log.warn("Failed to load image to obtain image information for id={}", source.identifier(), e);
             return null;
@@ -393,11 +379,7 @@ public class ImageLoader {
                                 targetSize.width(),
                                 VipsOption.Int("height", targetSize.height()),
                                 VipsOption.Enum("size", VipsSize.SIZE_FORCE));
-                    case HttpResolvedImage(URI uri, Map<String, String> headers) -> {
-                        var result = loadFromHttp(uri, headers, targetSize);
-                        updateCacheInfoFromResponse(source, result.responseHeaders());
-                        yield result.image();
-                    }
+                    case HttpResolvedImage ignored -> loadFromHttp(source, targetSize);
                     case BinaryResolvedImage(byte[] data) ->
                         VImage.thumbnailBuffer(
                                 arena,
@@ -416,28 +398,21 @@ public class ImageLoader {
         return switch (source.resolvedImage()) {
             case FilesystemResolvedImage(Path path) ->
                 VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
-            case HttpResolvedImage(URI uri, Map<String, String> headers) -> {
-                var result = loadFromHttp(uri, headers, null, options);
-                updateCacheInfoFromResponse(source, result.responseHeaders());
-                yield result.image();
-            }
+            case HttpResolvedImage ignored -> loadFromHttp(source, null, options);
             case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
             default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
         };
     }
 
-    /// Populates [ImageSource.cacheInfo] from the upstream HTTP response headers when no
-    /// extension-provided cache info is already present. Extracts [ETag] and
-    /// [Last-Modified] so the controller can relay them to clients for conditional requests.
-    private static void updateCacheInfoFromResponse(ImageSource source, HttpHeaders responseHeaders) {
-        if (source.cacheInfo() != null) {
-            return; // Extension already provided cache info, do not overwrite
-        }
+    /// Record validators from the HTTP body actually acquired. ImageSource.cacheInfo() still
+    /// gives resolver-supplied validators precedence for client conditional responses.
+    private static void updateSourceValidatorsFromResponse(ImageSource source, HttpHeaders responseHeaders) {
         String eTag = responseHeaders.getETag();
         long lastModified = responseHeaders.getLastModified();
-        if (eTag != null || lastModified != -1) {
-            source.setCacheInfo(new CacheInfo(eTag, lastModified != -1 ? Instant.ofEpochMilli(lastModified) : null));
-        }
+        source.updateSourceValidators(
+                eTag != null || lastModified != -1
+                        ? new CacheInfo(eTag, lastModified != -1 ? Instant.ofEpochMilli(lastModified) : null)
+                        : null);
     }
 
     /// Classifies the resolved source into the metric label used for load counters.
@@ -454,51 +429,67 @@ public class ImageLoader {
     /// Loads an HTTP source either directly or via libvips' thumbnail API, depending on whether a
     /// target size was requested.
     ///
-    /// Returns the loaded image together with the upstream response headers so that callers can
-    /// extract caching metadata (ETag, Last-Modified) and relay it to clients.
-    private HttpLoadResult loadFromHttp(
-            URI uri, @Nullable Map<String, String> headers, @Nullable ImageSize targetSize, VipsOption... options)
+    /// Updates the source validators from the acquired body before returning the loaded image.
+    private VImage loadFromHttp(ImageSource imageSource, @Nullable ImageSize targetSize, VipsOption... options)
             throws IOException, InterruptedException {
-        var reqBuilder = HttpRequest.newBuilder().uri(uri);
-        if (headers != null) {
-            headers.forEach(reqBuilder::header);
+        var resolved = (HttpResolvedImage) imageSource.resolvedImage();
+        HttpSourceLease lease = imageSource.httpSourceLease();
+        if (lease == null || !lease.canReopenBody()) {
+            var opened = httpSourceCache.acquire(resolved, imageSource.resolverValidators());
+            bindHttpLease(imageSource, opened);
+            lease = opened;
         }
+        VImage image;
+        if (lease.path() != null) {
+            image = targetSize == null
+                    ? VImage.newFromFile(arena, lease.path().toString(), options)
+                    : VImage.thumbnail(
+                            arena, lease.path().toString(), targetSize.width(), thumbnailOptions(targetSize, options));
+        } else {
+            image = targetSize == null
+                    ? VImage.newFromStream(arena, lease.openStream(), options)
+                    : VImage.thumbnailSource(
+                            arena,
+                            newFromInputStream(arena, lease.openStream()),
+                            targetSize.width(),
+                            thumbnailOptions(targetSize, options));
+        }
+        updateSourceValidatorsFromResponse(imageSource, lease.responseHeaders());
+        return image;
+    }
 
-        HttpResponse<InputStream> response = httpClient.send(reqBuilder.build(), BodyHandlers.ofInputStream());
-        if (response.statusCode() == 304 || response.statusCode() >= 400) {
-            if (response.statusCode() != 304) {
-                log.warn("Failed to load image from '{}', received HTTP {}", uri, response.statusCode());
+    /// Release the lease only when the request-scoped arena closes.
+    ///
+    /// libvips reads the input lazily, so the body is still needed after this method returns. The
+    /// arena is the only reliable signal that all processing for the request has finished.
+    private void bindHttpLease(ImageSource source, HttpSourceCache.Lease lease) {
+        try {
+            // Attach the callback to the arena's lifetime through a dummy buffer: the buffer's
+            // cleanup releases the lease when the arena closes.
+            arena.allocate(1).reinterpret(arena, ignored -> {
+                try {
+                    lease.close();
+                } catch (IOException e) {
+                    log.warn("Could not close HTTP source cache lease", e);
+                }
+            });
+            source.setHttpSourceLease(lease);
+        } catch (RuntimeException e) {
+            try {
+                lease.close();
+            } catch (IOException closeFailure) {
+                e.addSuppressed(closeFailure);
             }
-            response.body().close();
-            HttpHeaders responseHeaders = new HttpHeaders();
-            if (response.headers() != null) {
-                responseHeaders = new HttpHeaders(
-                        MultiValueMap.fromMultiValue(response.headers().map()));
-            }
-            throw new HttpStatusException("Failed to load image", response.statusCode(), null, responseHeaders);
+            throw e;
         }
+    }
 
-        // Capture response headers before the body stream is consumed by libvips.
-        HttpHeaders responseHeaders = response.headers() != null
-                ? new HttpHeaders(
-                        MultiValueMap.fromMultiValue(response.headers().map()))
-                : new HttpHeaders();
-
-        // NOTE: For all `newFrom*Stream` methods in vips-ffm, we know that the passed InputStream
-        //       is closed when the lifetime of the associated FFM Arena has ended. In our case, the
-        //       lifetime of this Arena is tied to the lifetime of the Request Scope in Spring, i.e.
-        //       we can be sure that we don't leak InputStreams across request-response cycles.
-        if (targetSize == null) {
-            return new HttpLoadResult(VImage.newFromStream(arena, response.body(), options), responseHeaders);
-        }
-
-        var src = newFromInputStream(arena, response.body());
+    private static VipsOption[] thumbnailOptions(ImageSize targetSize, VipsOption... options) {
         var thumbOptions = new VipsOption[options.length + 2];
         System.arraycopy(options, 0, thumbOptions, 0, options.length);
         thumbOptions[options.length] = VipsOption.Int("height", targetSize.height());
         thumbOptions[options.length + 1] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
-        return new HttpLoadResult(
-                VImage.thumbnailSource(arena, src, targetSize.width(), thumbOptions), responseHeaders);
+        return thumbOptions;
     }
 
     ///  Get image metadata from a loaded VImage.

@@ -86,7 +86,7 @@ wolpi:
   http-timeouts:
     # Shared defaults for source images and the JavaScript/Python guest HTTP client
     connect: 10s
-    # Wait for response headers; Java 25 does not bound response-body transfers
+    # Wait for response headers; cache-owned downloads also bound body transfers
     request: 30s
     # Optional per-client overrides inherit omitted values:
     # extensions:
@@ -116,6 +116,16 @@ wolpi:
     suspend: false
     # Only begin executing after a debugger has connected
     waitAttached: false
+
+  http-source-cache:
+    enabled: true
+    max-resource-size: 128MB
+    expose-response-headers: true
+    # Default: ${wolpi.data-directory}/http-source-cache
+    # directory: /var/cache/wolpi/http-source-cache
+    max-size: 10GB
+    max-freshness: 1h
+    stale-if-error: 7d
 
   cache-control-headers:
     images: "public, max-age=604800, must-revalidate"

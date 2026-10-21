@@ -197,6 +197,8 @@ $ curl -s http://127.0.0.1:8080/v3/67352ccc-d1b0-11e1-89ae-279075081939/info.jso
 
 ## Next steps
 
+- If you run multiple instances, give each its own source cache and
+  [route requests by image identifier](./expose-wolpi-behind-a-reverse-proxy.md#route-requests-by-image-identifier).
 - If you want to publish Wolpi behind a public web server, ingress, or TLS terminator, see
   [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md).
 - For extension configuration examples, see [Using Extensions](./install-extensions.md).

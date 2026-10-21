@@ -5,7 +5,7 @@ reverse proxy, ingress controller, or API gateway.
 
 It does not provide full proxy configuration examples, since the exact syntax depends on the proxy
 you use. The goal here is to make sure Wolpi generates correct public URLs, redirects, and IIIF
-`id` values.
+`id` values, and that multi-instance deployments route requests for good cache locality.
 
 ## Forward the public request information
 
@@ -58,6 +58,40 @@ reason and separate access controls.
 
 This reduces accidental exposure of operational endpoints and makes the public trust boundary
 clearer.
+
+## Route requests by image identifier
+
+When serving HTTP image sources from multiple Wolpi instances, give each instance its own local
+source cache and route by image identifier instead of sharing a disk cache. Send `info.json` and
+all tiles and transformations of the same image to the same instance so they reuse its cached
+source file. This applies to containers, JAR processes, and Kubernetes pods.
+
+Configure your reverse proxy, ingress controller, or gateway as follows. The exact settings depend
+on the proxy you use:
+
+1. Extract the image identifier from the IIIF path. Use the same key across IIIF versions and
+   exclude `info.json`, region, size, rotation, quality, and format. Include a stable tenant or
+   namespace if identifiers are not globally unique.
+2. Choose a healthy backend using a stable, well-distributed hash of that key. Prefer consistent
+   hashing with virtual nodes, or rendezvous hashing, to spread identifiers across instances and
+   limit reassignment when instances join or leave. Weight placement by capacity if backends differ.
+3. Send traffic to the selected instance without another load-balancing hop choosing a different
+   backend. Neither client-IP affinity nor hashing the complete request URL gives all requests for
+   an image the same routing key.
+4. Check the proxy's upstream logs: requests for one identifier's `info.json` and several tile
+   URLs should reach the same instance while the backend set stays unchanged. Repeat with many
+   different identifiers to check that placement spreads across the instances. Then remove or add
+   an instance and verify that reassigned requests succeed through the new instance's cold cache.
+
+Hashing distributes identifiers, not necessarily equal amounts of traffic. One popular image can
+still overload its assigned instance; downstream caching of IIIF responses can reduce that load.
+Failover or scaling may move an identifier to another instance, which warms its own cache without
+access to the previous instance's files. Routing affects cache efficiency, not correctness.
+
+For cache limits, freshness settings, and diagnostics, see the
+[HTTP source cache configuration](../reference/configuration.md#http-source-cache). For Kubernetes
+endpoint selection and per-pod storage, see the
+[Kubernetes deployment guide](./deploy-on-kubernetes.md#route-requests-to-pod-endpoints).
 
 ## Verify the public URL behavior
 

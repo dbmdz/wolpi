@@ -13,17 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that are owned by root must be writable by this user (or, in Kubernetes,
   use `securityContext.fsGroup: 10001`). Mounted configuration and image files must
   be readable by this user. The default user can be changed.
+- **Breaking:** Client conditional headers (`If-None-Match`, `If-Modified-Since`) are no longer
+  forwarded to HTTP image sources. Wolpi evaluates them after reading the source, so a conditional
+  request may download the full source before returning `304`, including when the HTTP source cache
+  is disabled. An origin `304` without a stored body now produces HTTP `502`, not a client `304`.
+- **Deployment change:** HTTP source caching is enabled by default and requires a separate cache
+  directory for each instance. Existing Kubernetes Deployments with multiple replicas must mount
+  a pod-local `emptyDir` at the cache directory, switch to a StatefulSet with a separate volume per
+  replica, or disable caching with `wolpi.http-source-cache.enabled: false`. Replicas cannot share
+  one cache directory; Wolpi refuses to start if another instance owns it.
 
 ### Added
 - Shared `http-timeouts.{connect,request}` settings (defaults `10s`/`30s`), with optional
   `extensions` and `sources` overrides to differentiate between HTTP requests made by Wolpi itself
   and those made by extensions through the `httpClient` on the context or the JavaScript
   `wolpi:fetchSync` function
+- Disk-backed caching of complete HTTP image sources, enabled by default, with a configurable
+  byte limit, maximum freshness (default `1h`), and per-resource size limit. Upstream cache directives
+  and conditional revalidation govern reuse. Configurable `stale-if-error` fallback (default `7d`,
+  `0s` to disable) can serve expired bodies during origin failures when HTTP policy allows it.
+  The optional `X-Wolpi-Http-Source-Cache` response header reports hits, misses, revalidation, stale
+  fallback, and bypass reasons. Unknown-length and partial responses
+  bypass caching.
+- New extension API: optional `HttpResolvedImage.cacheIdentity` supplies a stable, resolver-controlled
+  source identity for cache reuse across rotating signed URLs and fetch headers, including S3
+  presigned URLs. Omitting it preserves URL-and-header cache keying.
 
 ### Removed
 - Wolpi is no longer published to Maven Central or the Sonatype OSS Snapshot
   Maven Repository, GitHub Releases and the GitHub Container Registry remain as
-  the sole distribution channels. This is due to Maven Central's draconic
+  the sole distribution channels. This is due to Maven Central's draconian
   limits that were introduced in October 2026, but it also serves to discourage
   inheriting from Wolpi in other Java projects, since the Extension API is
   intended as the sole officially supported means of customizing Wolpi.

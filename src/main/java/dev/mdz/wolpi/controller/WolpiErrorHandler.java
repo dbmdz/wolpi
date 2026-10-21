@@ -2,6 +2,7 @@ package dev.mdz.wolpi.controller;
 
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
+import dev.mdz.wolpi.http.cache.HttpSourceCache;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.invoke.MethodHandles;
 import java.net.http.HttpTimeoutException;
@@ -34,10 +35,12 @@ public class WolpiErrorHandler extends ResponseEntityExceptionHandler {
 
     private final boolean logDetails;
     private final boolean corsEnabled;
+    private final boolean exposeSourceCacheHeaders;
 
     public WolpiErrorHandler(WolpiConfig config) {
         this.logDetails = config.logging() == null || config.logging().logRequestDetailsOnCrash();
         this.corsEnabled = config.iiif().features().cors();
+        this.exposeSourceCacheHeaders = config.httpSourceCache().exposeResponseHeaders();
     }
 
     @ExceptionHandler(HttpTimeoutException.class)
@@ -57,6 +60,13 @@ public class WolpiErrorHandler extends ResponseEntityExceptionHandler {
             FORWARDED_HEADERS.stream()
                     .filter(h -> ex.responseHeaders().containsHeader(h))
                     .forEach(h -> headers.set(h, ex.responseHeaders().getFirst(h)));
+            String cacheStatus = ex.responseHeaders().getFirst(HttpSourceCache.RESPONSE_HEADER);
+            if (exposeSourceCacheHeaders && cacheStatus != null) {
+                headers.set(HttpSourceCache.RESPONSE_HEADER, cacheStatus);
+                if (corsEnabled) {
+                    headers.setAccessControlExposeHeaders(List.of(HttpSourceCache.RESPONSE_HEADER));
+                }
+            }
             return ResponseEntity.status(HttpStatus.valueOf(ex.httpStatusCode()))
                     .headers(headers)
                     .body(null);
