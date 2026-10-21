@@ -13,7 +13,7 @@ public record HttpSourceCacheConfig(
         @Nullable Path directory,
         @DefaultValue("10GB") DataSize maxSize,
         @DefaultValue("1h") Duration maxFreshness,
-        @DefaultValue("512MB") DataSize maxResourceSize,
+        @DefaultValue("128MB") DataSize maxResourceSize,
         @DefaultValue("true") boolean exposeResponseHeaders,
         @DefaultValue("7d") Duration staleIfError) {
     public HttpSourceCacheConfig {
@@ -38,7 +38,7 @@ public record HttpSourceCacheConfig(
                 null,
                 DataSize.ofGigabytes(10),
                 Duration.ofHours(1),
-                DataSize.ofMegabytes(512),
+                DataSize.ofMegabytes(128),
                 true,
                 Duration.ofDays(7));
     }

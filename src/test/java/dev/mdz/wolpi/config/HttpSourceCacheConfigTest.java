@@ -17,6 +17,7 @@ class HttpSourceCacheConfigTest {
         var config = new Binder(new MapConfigurationPropertySource(Map.of()))
                 .bindOrCreate("wolpi.http-source-cache", HttpSourceCacheConfig.class);
         assertThat(config).isEqualTo(HttpSourceCacheConfig.defaults());
+        assertThat(config.maxResourceSize().toBytes()).isEqualTo(128L * 1024 * 1024);
         assertThat(config.maxFreshness()).isEqualTo(Duration.ofHours(1));
         assertThat(config.staleIfError()).isEqualTo(Duration.ofDays(7));
     }

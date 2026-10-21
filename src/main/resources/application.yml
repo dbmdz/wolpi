@@ -119,7 +119,7 @@ wolpi:
 
   http-source-cache:
     enabled: true
-    max-resource-size: 512MB
+    max-resource-size: 128MB
     expose-response-headers: true
     # Default: ${wolpi.data-directory}/http-source-cache
     # directory: /var/cache/wolpi/http-source-cache

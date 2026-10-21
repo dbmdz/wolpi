@@ -105,7 +105,7 @@ the client-facing [HTTP caching headers](#http-caching-headers).
 - `max-size`: Maximum space for image bodies, including downloads in progress and files still in
   use by requests, defaults to `10GB`. Wolpi evicts least-recently-used files to make room or skips
   caching if it cannot free enough space. Metadata and filesystem overhead require additional space.
-- `max-resource-size`: Maximum source image size to cache, defaults to `512MB`. Larger images and
+- `max-resource-size`: Maximum source image size to cache, defaults to `128MB`. Larger images and
   responses without a known length stream without caching.
 - `max-freshness`: Maximum time to reuse an image before checking the origin, defaults to `1h`.
   Shorter origin freshness limits still apply. This does not limit how long files remain on disk.
@@ -124,7 +124,7 @@ http-source-cache:
   enabled: true
   directory: /var/cache/wolpi/http-source-cache
   max-size: 10GB
-  max-resource-size: 512MB
+  max-resource-size: 128MB
   max-freshness: 1h
   stale-if-error: 7d
   expose-response-headers: true
@@ -518,7 +518,7 @@ packaging:
   install-timeout: 180s
 http-source-cache:
   enabled: true
-  max-resource-size: 512MB
+  max-resource-size: 128MB
   expose-response-headers: true
   max-size: 10GB
   max-freshness: 1h
