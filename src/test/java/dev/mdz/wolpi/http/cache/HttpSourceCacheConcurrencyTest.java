@@ -8,8 +8,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mdz.wolpi.exceptions.HttpStatusException;
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
@@ -102,6 +104,92 @@ class HttpSourceCacheConcurrencyTest {
                 }
             } finally {
                 release.countDown();
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "unknown-length",
+                "resource-too-large",
+                "no-store",
+                "private",
+                "set-cookie",
+                "vary-star",
+                "capacity"
+            })
+    void responseBypassedWaitersFetchConcurrently(String reason) throws Exception {
+        var fixture = new CacheFixture(directory);
+        var leaderEntered = new CountDownLatch(1);
+        var releaseLeader = new CountDownLatch(1);
+        var directRequestsEntered = new CountDownLatch(2);
+        var releaseDirectResponses = new CountDownLatch(1);
+        Map<String, String> headers =
+                switch (reason) {
+                    case "unknown-length" -> Map.of();
+                    case "resource-too-large" -> Map.of("Content-Length", "129");
+                    case "no-store", "private" -> Map.of("Content-Length", "4", "Cache-Control", reason);
+                    case "set-cookie" -> Map.of("Content-Length", "4", "Set-Cookie", "session=value");
+                    case "vary-star" -> Map.of("Content-Length", "4", "Vary", "*");
+                    default -> Map.of("Content-Length", "4");
+                };
+        // For the capacity case, keep the whole byte budget pinned by another source.
+        fixture.responder = request -> response(200, "x".repeat(128), Map.of("Content-Length", "128"));
+        try (var cache = fixture.cache();
+                var workers = Executors.newVirtualThreadPerTaskExecutor();
+                var pinned = reason.equals("capacity")
+                        ? cache.acquire(URI.create("https://example.com/pinned"), null, null)
+                        : null) {
+            int leaderRequest = pinned == null ? 1 : 2;
+            fixture.responder = request -> {
+                if (fixture.requests.get() == leaderRequest) {
+                    leaderEntered.countDown();
+                    await(releaseLeader);
+                } else {
+                    directRequestsEntered.countDown();
+                    await(releaseDirectResponses);
+                }
+                return response(200, "body", headers);
+            };
+            Callable<String> acquire = () -> {
+                try (var lease = cache.acquire(IMAGE, null, null)) {
+                    assertThat(lease.cacheStatusHeaderValue()).isEqualTo("bypass=" + reason);
+                    assertThat(lease.path()).isNull();
+                    return read(lease);
+                }
+            };
+            try {
+                var leader = workers.submit(acquire);
+                await(leaderEntered);
+                var firstWaiting = new FutureTask<>(acquire);
+                var secondWaiting = new FutureTask<>(acquire);
+                Thread firstWaiter = Thread.ofVirtual().start(firstWaiting);
+                Thread secondWaiter = Thread.ofVirtual().start(secondWaiting);
+                try {
+                    awaitAcquisitionWait(firstWaiter);
+                    awaitAcquisitionWait(secondWaiter);
+                    releaseLeader.countDown();
+                    assertThat(directRequestsEntered.await(2, TimeUnit.SECONDS))
+                            .as("both bypassed waiters must reach the origin before either receives headers")
+                            .isTrue();
+                    releaseDirectResponses.countDown();
+                    assertThat(leader.get(5, TimeUnit.SECONDS)).isEqualTo("body");
+                    assertThat(firstWaiting.get(5, TimeUnit.SECONDS)).isEqualTo("body");
+                    assertThat(secondWaiting.get(5, TimeUnit.SECONDS)).isEqualTo("body");
+                    assertThat(fixture.requests).hasValue(leaderRequest + 2);
+                    assertThat(cache.tryAcquireFresh(IMAGE, null, null)).isNull();
+                } finally {
+                    releaseLeader.countDown();
+                    releaseDirectResponses.countDown();
+                    firstWaiting.cancel(true);
+                    secondWaiting.cancel(true);
+                    firstWaiter.join(5000);
+                    secondWaiter.join(5000);
+                }
+            } finally {
+                releaseLeader.countDown();
+                releaseDirectResponses.countDown();
             }
         }
     }

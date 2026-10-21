@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
 /// Client-facing IIIF cache conditions belong to [dev.mdz.wolpi.controller.IIIFImageAPIController].
 ///
 /// Three locks protect different things:
-/// - `AcquisitionLock.lock` (per-key): only one request may fetch or revalidate a given key at a time.
+/// - `AcquisitionLock.lock` (per-key): serializes cache fills and revalidation, not direct streams.
 /// - `synchronized (this)`: keeps shutdown from racing with requests. It protects the per-key
 ///   lock map and counts requests and file leases still using the cache. Hold it while choosing
 ///   and pinning a file so shutdown cannot intervene.
@@ -178,9 +178,8 @@ public final class HttpSourceCache implements AutoCloseable {
             // Make sure we haven't exceeded the deadline yet
             deadline.check();
 
-            // At this point we're either the first caller to request the acquisition (and need to
-            // fetch it ourselves), another caller has failed to fetch (and we need to retry
-            // ourselves) or another caller was successful, and we can reuse the new entry.
+            // The previous caller may have published a reusable entry, bypassed storage, or failed.
+            // Recheck the entry and its acquisition result before starting another origin request.
             Lease previous;
             synchronized (this) {
                 // Check if we now have a fresh cache entry and return it if that's the case
@@ -207,6 +206,14 @@ public final class HttpSourceCache implements AutoCloseable {
                 // disappear, we might need it after all if the data is still fresh according
                 // to the upstream
                 previous = latest == null ? null : lease(latest, CacheOutcome.REVALIDATED);
+            }
+
+            if (previous == null && acquisition.completedResult instanceof CacheBypassReason reason) {
+                // A previous caller found nothing we can retain. Let waiting callers fetch their
+                // own streams concurrently rather than serialize their origin response headers.
+                acquisition.lock.unlock();
+                locked = false;
+                return direct(uri, request, reason, deadline);
             }
 
             Lease result = fetch(uri, request, key, previous, deadline);
