@@ -56,12 +56,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
@@ -328,6 +332,18 @@ public class ExtensionRuntimeTest {
                         .hasMessageContaining("Extension raised an error during execution");
             }
         }
+
+        @Test
+        @DisplayName("Should fail closed instead of spinning when the waiting thread is interrupted")
+        void shouldFailClosedWhenWaitingThreadIsInterrupted() throws IOException, InterruptedException {
+            var exts = List.of(blockingAuthExtension("blocking-auth-a"), blockingAuthExtension("blocking-auth-b"));
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                var thrown = interruptDuring(() -> runtime.authorize("someId", Map.of(), "127.0.0.1"));
+                assertThat(thrown)
+                        .isInstanceOf(ExtensionExecutionException.class)
+                        .hasMessageContaining("Interrupted while waiting for extension authorization");
+            }
+        }
     }
 
     @Nested
@@ -339,6 +355,19 @@ public class ExtensionRuntimeTest {
         void shouldReturnNullWithNoResolverExtensions() {
             try (ExtensionRuntime runtime = getRuntimeWithExtensions()) {
                 assertThat(runtime.resolve("not-found", null, null)).isNull();
+            }
+        }
+
+        @Test
+        @DisplayName("Should fail instead of spinning when the waiting thread is interrupted")
+        void shouldFailWhenWaitingThreadIsInterrupted() throws IOException, InterruptedException {
+            var exts = List.of(
+                    blockingResolveExtension("blocking-resolve-a"), blockingResolveExtension("blocking-resolve-b"));
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                var thrown = interruptDuring(() -> runtime.resolve("someId", null, null));
+                assertThat(thrown)
+                        .isInstanceOf(ExtensionExecutionException.class)
+                        .hasMessageContaining("Interrupted while waiting for extension resolution");
             }
         }
 
@@ -597,7 +626,7 @@ public class ExtensionRuntimeTest {
                             false));
             config.extensions().addAll(exts);
             var registry = new ExtensionRegistry(
-                    config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config));
+                    config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
             var metrics = new WolpiMetrics(meterRegistry);
             for (int i = 0; i < 3; i++) {
                 final int idx = i;
@@ -1165,7 +1194,7 @@ public class ExtensionRuntimeTest {
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
         var registry = new ExtensionRegistry(
-                config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config));
+                config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
         var metrics = new WolpiMetrics(meterRegistry);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics) {
             @Override
@@ -1180,6 +1209,78 @@ public class ExtensionRuntimeTest {
                 }
             }
         };
+    }
+
+    /// Run a hook call on a separate thread and interrupt that thread while it waits for the
+    /// results of the parallel extension invocations.
+    ///
+    /// @param hookCall the hook invocation under test
+    /// @return the error the hook call failed with
+    private Throwable interruptDuring(Callable<?> hookCall) throws InterruptedException {
+        var callerExecutor = Executors.newSingleThreadExecutor(r -> {
+            var thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
+        });
+        Future<?> call;
+        try {
+            call = callerExecutor.submit(hookCall);
+            // Give the runtime time to hand the hook to all extensions, then interrupt the calling
+            // thread while it waits on their results.
+            Thread.sleep(500);
+        } finally {
+            callerExecutor.shutdownNow();
+        }
+        Throwable failure;
+        try {
+            call.get(5, TimeUnit.SECONDS);
+            throw new AssertionError("Hook call returned normally even though its thread was interrupted");
+        } catch (ExecutionException e) {
+            failure = e.getCause();
+        } catch (TimeoutException e) {
+            // Without dedicated interrupt handling, the caller spins in `poll` forever after the
+            // interrupt, since `poll` fails immediately on an interrupted thread.
+            throw new AssertionError("Hook call kept running after its thread was interrupted", e);
+        }
+        // Wait for the cancelled extension invocations to finish before the caller returns the
+        // borrowed runtime contexts to the pool.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (threadPool.getActiveCount() > 0 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        return failure;
+    }
+
+    private ExtensionConfig blockingAuthExtension(String name) throws IOException {
+        return writeJsExtension(name, """
+                export function info() {
+                  return { name: "%s", apiVersion: 1, description: "blocks until interrupted" };
+                }
+
+                export function authorize(identifier, headers, clientIp) {
+                  // Blocks until the worker thread is cancelled by the interrupted caller
+                  Java.type("java.lang.Thread").sleep(60000);
+                  return true;
+                }
+
+                export function cleanup() {}
+                """.formatted(name));
+    }
+
+    private ExtensionConfig blockingResolveExtension(String name) throws IOException {
+        return writeJsExtension(name, """
+                export function info() {
+                  return { name: "%s", apiVersion: 1, description: "blocks until interrupted" };
+                }
+
+                export function resolve(identifier, etag, lastModified) {
+                  // Blocks until the worker thread is cancelled by the interrupted caller
+                  Java.type("java.lang.Thread").sleep(60000);
+                  return null;
+                }
+
+                export function cleanup() {}
+                """.formatted(name));
     }
 
     private ExtensionConfig writeJsExtension(String name, String source) throws IOException {
@@ -1292,8 +1393,8 @@ public class ExtensionRuntimeTest {
             var poolConfig = new GenericKeyedObjectPoolConfig<RuntimeContext>();
             poolConfig.setJmxEnabled(false);
             pool = new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(supplier), poolConfig);
-            registry =
-                    new ExtensionRegistry(cfg, pyPiInstaller, npmInstaller, null, supplier, guestContextFactory(cfg));
+            registry = new ExtensionRegistry(
+                    cfg, pyPiInstaller, npmInstaller, null, supplier, guestContextFactory(cfg), null);
             runtime = new ExtensionRuntime.ExtensionRuntimeImpl(
                     registry, pool, executor, new WolpiMetrics(meterRegistry));
         }

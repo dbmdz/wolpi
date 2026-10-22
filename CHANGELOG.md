@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Changed
+- **Breaking:** Wolpi now refuses to start when a configured extension cannot be loaded, instead
+  of logging the error and starting without it. An extension that is configured but not loaded no
+  longer enforces its hooks, so e.g. an `authorize` extension that failed to load left the server
+  publicly accessible. The startup error lists every failing extension together with the position
+  in the extension code that caused the failure. The `validate` and `install-extensions`
+  subcommands are exempt, they log the failure and continue with the remaining extensions.
 - **Breaking:** The container image now runs as the unprivileged user 
   (UID/GID `10001`) by default. Existing bind mounts or volumes for `/app/data`
   that are owned by root must be writable by this user (or, in Kubernetes,
@@ -49,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Fixed
+- An interrupted request thread no longer spins in the parallel `authorize` and `resolve` hook
+  loops. The remaining extension calls are cancelled and the request fails with an error response
+  instead.
 - Requesting WebP images with either dimension larger than 16,383 pixels now
   results in a HTTP 400 response instead of a HTTP 500 response.
 - Credentials for a custom PyPI `index` are no longer passed to pip on the

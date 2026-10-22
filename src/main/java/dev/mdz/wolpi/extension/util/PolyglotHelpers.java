@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyArray;
 import org.graalvm.polyglot.proxy.ProxyHashMap;
@@ -104,6 +105,27 @@ public class PolyglotHelpers {
         } else {
             throw new IllegalArgumentException("Polyglot Value is not a hash/dict and does not support members!");
         }
+    }
+
+    /// Format the guest-side stack trace of a polyglot exception.
+    ///
+    /// Useful for error messages that are shown to users, where the host-side Java stack trace is
+    /// noise but the location inside the extension code is the relevant information.
+    ///
+    /// @param err the error to format the guest stack trace for
+    /// @return the guest stack trace, with every frame on its own line and indented, or `null` if
+    ///         the error was not raised by guest code (i.e. it has no guest stack trace)
+    public static @Nullable String guestStackTrace(Throwable err) {
+        if (!(err instanceof PolyglotException polyglotErr) || !polyglotErr.isGuestException()) {
+            return null;
+        }
+        var trace = new StringBuilder();
+        for (var frame : polyglotErr.getPolyglotStackTrace()) {
+            if (frame.isGuestFrame()) {
+                trace.append("\n    at ").append(frame);
+            }
+        }
+        return trace.isEmpty() ? null : trace.toString();
     }
 
     /// Convert value to a Polyglot guest object, converting collection values to a

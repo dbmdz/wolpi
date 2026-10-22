@@ -45,6 +45,12 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
     private final IFactory picoCliFactory;
 
+    /// Subcommands that Wolpi understands, must match the subcommands declared on this class.
+    ///
+    /// Also used to decide whether an invocation serves HTTP requests or only performs an
+    /// operational task.
+    public static final List<String> SUBCOMMANDS = List.of("validate", "install-validator", "install-extensions");
+
     Consumer<Integer> exitHandler = System::exit;
 
     public CliRunner(IFactory picoCliFactory) {
@@ -53,9 +59,8 @@ public class CliRunner implements CommandLineRunner, Runnable {
 
     @Override
     public void run(String... args) throws Exception {
-        // Pass over to picocli if "validate" command is given
-        if (Arrays.stream(args).anyMatch(arg -> List.of("validate", "install-validator", "install-extensions")
-                .contains(arg))) {
+        // Pass over to picocli if a subcommand is given
+        if (Arrays.stream(args).anyMatch(SUBCOMMANDS::contains)) {
             var filteredArgs = Arrays.stream(args)
                     .filter(arg -> !arg.startsWith("--spring.")
                             && !arg.startsWith("-D")
