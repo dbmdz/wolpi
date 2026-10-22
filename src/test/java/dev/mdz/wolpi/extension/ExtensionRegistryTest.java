@@ -10,6 +10,7 @@ import dev.mdz.wolpi.config.ExtensionConfig.PkgSource;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.config.WolpiConfig.ExtensionDebugConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
+import dev.mdz.wolpi.extension.exceptions.ExtensionInitializationException;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.info.BuildProperties;
 
 @ExtendWith(MockitoExtension.class)
@@ -303,7 +306,63 @@ def resolve(self, identifier, etag, last_modified):
                 .satisfiesExactly(ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test PY File Extension"));
     }
 
+    @DisplayName("should abort when a configured extension fails to load")
+    @Test
+    void shouldAbortWhenConfiguredExtensionFailsToLoad() {
+        var working = new ExtensionConfig(Path.of("src/test/resources/test.js"), null, null, Map.of(), false);
+        var broken = new ExtensionConfig(Path.of("src/test/resources/invalid.js"), null, null, Map.of(), false);
+        assertThatThrownBy(() -> buildRegistryWithExtensions(working, broken))
+                .isInstanceOf(ExtensionInitializationException.class)
+                .hasMessageContaining("Failed to load 1 of 2 configured extension(s)")
+                .hasMessageContaining("invalid.js")
+                .hasMessageContaining("mandatory 'info' hook");
+    }
+
+    @DisplayName("should include the guest stack trace of a load failure in the error message")
+    @Test
+    void shouldIncludeGuestStackTraceInLoadFailure() {
+        var broken =
+                new ExtensionConfig(Path.of("src/test/resources/broken-authorize.js"), null, null, Map.of(), false);
+        assertThatThrownBy(() -> buildRegistryWithExtensions(broken))
+                .isInstanceOf(ExtensionInitializationException.class)
+                .hasMessageContaining("boom during extension initialization")
+                .hasMessageContaining("broken-authorize.js")
+                .hasMessageContaining("at <js> info(");
+    }
+
+    @DisplayName("should only log load failures and continue when invoked for a CLI subcommand")
+    @Test
+    void shouldContinueWithoutFailedExtensionsForSubcommands() {
+        var applicationArguments = mock(ApplicationArguments.class);
+        when(applicationArguments.getNonOptionArgs()).thenReturn(List.of("validate", "some/extension"));
+        var working = new ExtensionConfig(Path.of("src/test/resources/test.js"), null, null, Map.of(), false);
+        var broken =
+                new ExtensionConfig(Path.of("src/test/resources/broken-authorize.js"), null, null, Map.of(), false);
+        var registry = buildRegistryWithExtensions(applicationArguments, working, broken);
+        assertThat(registry.getExtensions())
+                .hasSize(1)
+                .satisfiesExactly(ext -> assertThat(ext.extensionInfo().name()).isEqualTo("Test JS File Extension"));
+        assertThat(registry.getExtensions(ExtensionHooks.AUTHORIZE)).hasSize(1);
+    }
+
+    @DisplayName("should still abort when the arguments do not match a known subcommand")
+    @Test
+    void shouldAbortForUnknownPositionalArguments() {
+        var applicationArguments = mock(ApplicationArguments.class);
+        when(applicationArguments.getNonOptionArgs()).thenReturn(List.of("not-a-subcommand"));
+        var broken =
+                new ExtensionConfig(Path.of("src/test/resources/broken-authorize.js"), null, null, Map.of(), false);
+        assertThatThrownBy(() -> buildRegistryWithExtensions(applicationArguments, broken))
+                .isInstanceOf(ExtensionInitializationException.class)
+                .hasMessageContaining("Failed to load 1 of 1 configured extension(s)");
+    }
+
     private ExtensionRegistry buildRegistryWithExtensions(ExtensionConfig... exts) {
+        return buildRegistryWithExtensions(null, exts);
+    }
+
+    private ExtensionRegistry buildRegistryWithExtensions(
+            @Nullable ApplicationArguments applicationArguments, ExtensionConfig... exts) {
         WolpiConfig wolpiConfig = new WolpiConfig(
                 Path.of("/data"),
                 null,
@@ -327,7 +386,8 @@ def resolve(self, identifier, etag, last_modified):
                 npmInstaller,
                 mock(GenericKeyedObjectPool.class),
                 new GraalContextSupplier(wolpiConfig),
-                guestContextFactory);
+                guestContextFactory,
+                applicationArguments);
     }
 
     private ExtensionConfig writePyExtension(String name, String source) throws IOException {

@@ -322,6 +322,22 @@ For end-to-end installation examples, refer to the [extensions how-to][exts-doc]
 
 [exts-doc]: ../how-to/install-extensions.md#configuration
 
+### Extension load failures
+
+Wolpi loads all configured extensions before it starts accepting requests. If a configured
+extension cannot be loaded, Wolpi **refuses to start** and reports every failing extension,
+including the position in the extension code that caused the failure (if the extension runtime can
+provide it).
+
+This is deliberate: an extension that is configured but not loaded silently stops enforcing the
+hooks it implements. An `authorize` extension that fails to load would effectively turn the server
+into "everything is publicly accessible", so Wolpi treats a failed extension as a configuration
+error instead of a recoverable one.
+
+The `validate` and `install-extensions` [subcommands](cli.md) are exempt from this, since they exist
+to help diagnose a broken configuration. They log the failure, continue with the remaining
+extensions, and never serve production traffic.
+
 ## Extension Runtime Configuration
 
 The `extension-runtime` section controls runtime behavior shared by all extension execution
