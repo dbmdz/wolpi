@@ -390,8 +390,8 @@ public interface ExtensionRuntime extends AutoCloseable {
                     .toList();
             boolean authorized = false;
             int completed = 0;
-            while (completed < authExts.size()) {
-                try {
+            try {
+                while (completed < authExts.size()) {
                     var future = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
                     if (future == null) {
                         log.warn("Timeout waiting for extension authorization, denying access");
@@ -404,15 +404,18 @@ public interface ExtensionRuntime extends AutoCloseable {
                         // One extension denied access, no need to wait for the others
                         break;
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e) {
-                    handleExtensionException(e.getCause());
                 }
+            } catch (InterruptedException e) {
+                // `poll` fails immediately on an interrupted thread, so continuing this loop would
+                // spin forever without ever completing another extension. Fail closed instead.
+                Thread.currentThread().interrupt();
+                throw new ExtensionExecutionException("Interrupted while waiting for extension authorization", e);
+            } catch (ExecutionException e) {
+                handleExtensionException(e.getCause());
+            } finally {
+                // Cancel all remaining futures, including the ones abandoned by an early exit
+                futs.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
             }
-
-            // Cancel all remaining futures if we didn't complete them all
-            futs.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
 
             return authorized;
         }
@@ -513,8 +516,8 @@ public interface ExtensionRuntime extends AutoCloseable {
             ImageSource resolved = null;
             int completed = 0;
             Throwable err = null;
-            while (completed < resolveExts.size()) {
-                try {
+            try {
+                while (completed < resolveExts.size()) {
                     var fut = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
                     if (fut == null) {
                         log.warn("Timeout waiting for extension resolving, returning null");
@@ -526,20 +529,23 @@ public interface ExtensionRuntime extends AutoCloseable {
                         // One extension resolved the source, no need to wait for the others
                         break;
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e) {
-                    Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    log.warn("Resolver extension raised an error.", cause);
-                    if (err == null) {
-                        err = cause;
-                    }
-                    completed++;
                 }
+            } catch (InterruptedException e) {
+                // `poll` fails immediately on an interrupted thread, so continuing this loop would
+                // spin forever without ever completing another extension.
+                Thread.currentThread().interrupt();
+                throw new ExtensionExecutionException("Interrupted while waiting for extension resolution", e);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log.warn("Resolver extension raised an error.", cause);
+                if (err == null) {
+                    err = cause;
+                }
+                completed++;
+            } finally {
+                // Cancel all remaining futures, including the ones abandoned by an early exit
+                futures.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
             }
-
-            // Cancel all remaining futures if we didn't complete them all
-            futures.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
 
             // If we didn't get a result, but had an error, rethrow it
             if (resolved == null && err != null) {

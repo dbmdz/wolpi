@@ -86,6 +86,8 @@ Notes:
 
 - `validate` expects a local file or directory path
 - Wolpi starts its embedded server as part of the validation workflow
+- a configured extension that fails to load does not abort the command, the failure is logged and
+  validation continues with the remaining extensions
 - in watch mode, local package live reload has extra prerequisites, please refer to the
   [extension development documentation](../extension-development.md#live-reload-for-local-extensions)
   for details.
@@ -116,6 +118,9 @@ Use this when you want to:
 This is usually the most useful operational subcommand for deployments that use extensions, see
 the corresponding [How-To guide](../how-to/build-containers-with-pre-installed-extensions.md)
 for a practical example of how this subcommand fits into a container-based deployment.
+
+Like `validate`, this subcommand does not abort on extensions that fail to load; their errors are
+logged so the failure can be diagnosed before the configuration is used for a server.
 
 ## Related docs
 

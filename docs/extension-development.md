@@ -202,6 +202,10 @@ against the official IIIF Image API test suite and refuses to start if validatio
 is performed per extension in isolation, and unchanged extensions may be skipped on later startups
 if their cached validation result is still valid.
 
+Wolpi also refuses to start if an extension cannot be loaded at all, since hooks implemented by it
+would silently not be enforced, see the
+[configuration reference](../reference/configuration.md#extension-load-failures) for details.
+
 Practically, as an extension developer, this means:
 
 - If possible, gate your custom logic behind syntax that does not conflict with IIIF syntax. For
