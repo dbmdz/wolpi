@@ -33,12 +33,11 @@ export default {
       this.gaugeMetric.set(value);
     }
     if (identifier.startsWith("timed-")) {
-      const Thread = Java.type("java.lang.Thread");
+      const TimeUnit = Java.type("java.util.concurrent.TimeUnit");
       const parts = identifier.split("-");
       const milliSeconds = parseInt(parts[1], 10);
       const recorded = this.timerMetric.record(() => {
-        // Simulate some processing time
-        Thread.sleep(milliSeconds);
+        wolpi.config.clock.add(milliSeconds, TimeUnit.MILLISECONDS);
         return milliSeconds;
       });
       if (recorded !== milliSeconds) {
@@ -46,16 +45,5 @@ export default {
       }
     }
     return true;
-  },
-
-  resolve(identifier, eTag, lastModified) {
-    const Thread = Java.type("java.lang.Thread");
-    const timerContext = this.timerMetric.start();
-    try {
-      // Simulate some processing time
-      Thread.sleep(3000);
-    } finally {
-      timerContext.stop();
-    }
   }
 }

@@ -32,6 +32,8 @@
 
   <properties>
     <java.version>25</java.version>
+    <surefire.jvm.extraArgs>-XX:TieredStopAtLevel=1</surefire.jvm.extraArgs>
+    <wolpi.test.guest-jit>false</wolpi.test.guest-jit>
     <classgraph.version>6.0.0</classgraph.version>
     <commons-io.version>2.22.0</commons-io.version>
     <guava.version>33.7.2-jre</guava.version>
@@ -195,6 +197,9 @@
             </goals>
             <configuration>
               <propertyName>surefireArgLine</propertyName>
+              <includes>
+                <include>dev.mdz.wolpi.*</include>
+              </includes>
             </configuration>
           </execution>
           <execution>
@@ -214,7 +219,11 @@
 						--add-exports=org.graalvm.polyglot/org.graalvm.polyglot.impl=ALL-UNNAMED
 						-Dpolyglot.engine.WarnInterpreterOnly=false
 						--enable-native-access=ALL-UNNAMED,org.graalvm.truffle,app.photofox.vipsffm,wolpi
-						-XX:+EnableDynamicAgentLoading</argLine>
+						-XX:+EnableDynamicAgentLoading
+						${surefire.jvm.extraArgs}</argLine>
+          <systemPropertyVariables>
+            <wolpi.test.guest-jit>${wolpi.test.guest-jit}</wolpi.test.guest-jit>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
@@ -289,5 +298,14 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>test-guest-jit</id>
+      <properties>
+        <wolpi.test.guest-jit>true</wolpi.test.guest-jit>
+      </properties>
+    </profile>
+  </profiles>
 
 </project>

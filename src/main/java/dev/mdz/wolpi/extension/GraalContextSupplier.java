@@ -77,6 +77,9 @@ public class GraalContextSupplier {
         this.hostAccess = buildHostAccess();
         var engineBuilder =
                 Engine.newBuilder("python", "js").allowExperimentalOptions(true).option("js.text-encoding", "true");
+        if (isGraalVm() && !Boolean.parseBoolean(System.getProperty("wolpi.test.guest-jit", "true"))) {
+            engineBuilder.option("engine.Compilation", "false");
+        }
         if (config != null) {
             ExtensionDebugConfig debugCfg = config.extensionDebug();
             if (debugCfg != null && debugCfg.enabled()) {
@@ -86,6 +89,10 @@ public class GraalContextSupplier {
             }
         }
         this.graalEngine = engineBuilder.build();
+    }
+
+    private static boolean isGraalVm() {
+        return System.getProperty("java.vendor.version", "").contains("GraalVM");
     }
 
     /// Configure host access for GraalVM polyglot contexts.
