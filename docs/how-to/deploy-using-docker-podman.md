@@ -98,6 +98,8 @@ custom image with pre-installed extensions as described in
 
 ## Next steps
 
+- If you run multiple instances, give each its own source cache and
+  [route requests by image identifier](./expose-wolpi-behind-a-reverse-proxy.md#route-requests-by-image-identifier).
 - If you want to publish Wolpi under a public hostname, TLS terminator, or path prefix, see
   [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md).
 - For extension configuration examples, see [Using Extensions](./install-extensions.md).

@@ -15,6 +15,9 @@ server:
 wolpi:
   data-directory: "/tmp/wolpi-data"
   image-base-dir: "./images"
+  # Individual cache tests use isolated temporary directories.
+  http-source-cache:
+    enabled: false
   extensions:
     - path: "src/test/resources/js-extension/index.js"
   extension-pool:

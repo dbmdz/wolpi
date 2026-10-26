@@ -1,0 +1,84 @@
+package dev.mdz.wolpi.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.util.unit.DataSize;
+
+class HttpSourceCacheConfigTest {
+    @Test
+    void defaultsEnableDiskBackedCaching() {
+        var config = new Binder(new MapConfigurationPropertySource(Map.of()))
+                .bindOrCreate("wolpi.http-source-cache", HttpSourceCacheConfig.class);
+        assertThat(config).isEqualTo(HttpSourceCacheConfig.defaults());
+        assertThat(config.maxResourceSize().toBytes()).isEqualTo(128L * 1024 * 1024);
+        assertThat(config.maxFreshness()).isEqualTo(Duration.ofHours(1));
+        assertThat(config.staleIfError()).isEqualTo(Duration.ofDays(7));
+    }
+
+    @Test
+    void bindsCacheSettings() {
+        var properties = new MapConfigurationPropertySource(Map.of(
+                "wolpi.http-source-cache.max-resource-size", "20MB",
+                "wolpi.http-source-cache.expose-response-headers", "false",
+                "wolpi.http-source-cache.directory", "/var/cache/wolpi",
+                "wolpi.http-source-cache.max-size", "2GB",
+                "wolpi.http-source-cache.max-freshness", "5m",
+                "wolpi.http-source-cache.stale-if-error", "0s"));
+        var config = new Binder(properties).bindOrCreate("wolpi.http-source-cache", HttpSourceCacheConfig.class);
+        assertThat(config.enabled()).isTrue();
+        assertThat(config.exposeResponseHeaders()).isFalse();
+        assertThat(config.maxResourceSize()).isEqualTo(DataSize.ofMegabytes(20));
+        assertThat(config.directory()).isEqualTo(Path.of("/var/cache/wolpi"));
+        assertThat(config.maxSize()).isEqualTo(DataSize.ofGigabytes(2));
+        assertThat(config.maxFreshness()).isEqualTo(Duration.ofMinutes(5));
+        assertThat(config.staleIfError()).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    void rejectsInvalidSizesAndFreshness() {
+        var defaults = HttpSourceCacheConfig.defaults();
+        assertThatThrownBy(() -> new HttpSourceCacheConfig(
+                        true,
+                        null,
+                        DataSize.ofBytes(0),
+                        defaults.maxFreshness(),
+                        defaults.maxResourceSize(),
+                        true,
+                        defaults.staleIfError()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new HttpSourceCacheConfig(
+                        true,
+                        null,
+                        defaults.maxSize(),
+                        Duration.ZERO,
+                        defaults.maxResourceSize(),
+                        true,
+                        defaults.staleIfError()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new HttpSourceCacheConfig(
+                        true,
+                        null,
+                        defaults.maxSize(),
+                        defaults.maxFreshness(),
+                        DataSize.ofBytes(-1),
+                        true,
+                        defaults.staleIfError()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new HttpSourceCacheConfig(
+                        true,
+                        null,
+                        defaults.maxSize(),
+                        defaults.maxFreshness(),
+                        defaults.maxResourceSize(),
+                        true,
+                        Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+}

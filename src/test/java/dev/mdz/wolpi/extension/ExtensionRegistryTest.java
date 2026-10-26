@@ -318,6 +318,7 @@ def resolve(self, identifier, etag, last_modified):
                 null,
                 null,
                 null,
+                null,
                 null);
         var guestContextFactory = new GuestContextFactory(buildProperties, wolpiConfig, Arena.ofAuto(), null, null);
         guestContextFactories.add(guestContextFactory);

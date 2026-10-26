@@ -42,7 +42,16 @@ public class HttpStatusException extends ExtensionExecutionException {
             int httpStatusCode,
             @Nullable Map<String, Object> details,
             @Nullable HttpHeaders responseHeaders) {
-        super(message);
+        this(message, httpStatusCode, details, responseHeaders, null);
+    }
+
+    public HttpStatusException(
+            String message,
+            int httpStatusCode,
+            @Nullable Map<String, Object> details,
+            @Nullable HttpHeaders responseHeaders,
+            @Nullable Throwable cause) {
+        super(message, cause);
         this.httpStatusCode = httpStatusCode;
         this.details = details;
         this.responseHeaders = responseHeaders;

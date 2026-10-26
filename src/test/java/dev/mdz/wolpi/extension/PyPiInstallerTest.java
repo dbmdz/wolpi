@@ -59,7 +59,8 @@ class PyPiInstallerTest {
                 new PackagingConfig(null, pythonPath, Duration.ofSeconds(5)),
                 null,
                 null,
-                Collections.emptyMap());
+                Collections.emptyMap(),
+                null);
         installer = new PyPiInstaller(config, new JsonMapper());
         pypiDir = tempDir.resolve("pypi");
         Files.createDirectories(pypiDir);
@@ -147,7 +148,8 @@ class PyPiInstallerTest {
                 new PackagingConfig(null, null, Duration.ofSeconds(5)),
                 null,
                 null,
-                Collections.emptyMap());
+                Collections.emptyMap(),
+                null);
         try (MockedStatic<CommandRunner> sys = Mockito.mockStatic(CommandRunner.class)) {
             sys.when(() -> CommandRunner.getEnvVar("PATH")).thenReturn("");
 

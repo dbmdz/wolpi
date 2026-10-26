@@ -3,6 +3,7 @@ package dev.mdz.wolpi.controller;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsError;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.http.cache.HttpSourceCache;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.exceptions.NotImplementedException;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
@@ -10,6 +11,7 @@ import dev.mdz.wolpi.iiif.model.ImageRequest;
 import dev.mdz.wolpi.image.ImageLoader;
 import dev.mdz.wolpi.image.ImageProcessor;
 import dev.mdz.wolpi.metrics.WolpiMetrics;
+import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageInfo;
 import dev.mdz.wolpi.model.ImageSource;
 import dev.mdz.wolpi.model.SourceNotModified;
@@ -120,32 +122,32 @@ public class IIIFImageAPIController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .headers(outHeaders)
                     .body(Map.of("error", "Image not found"));
-        } else if (source.resolvedImage() instanceof SourceNotModified) {
+        }
+
+        // Resolver indicated that the resource was not modified, forward to client
+        if (source.resolvedImage() instanceof SourceNotModified || clientNotModified(webRequest, source)) {
+            outHeaders.setCacheControl(config.cacheControlHeaders().infoJson());
+            setCacheHeaders(outHeaders, source);
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
                     .headers(outHeaders)
                     .body(null);
         }
 
-        if (source.cacheInfo() != null) {
-            boolean notModified = false;
-            if (source.cacheInfo().lastModified() != null) {
-                notModified = webRequest.checkNotModified(
-                        cacheETag(source), source.cacheInfo().lastModified().toEpochMilli());
-            } else if (source.cacheInfo().eTag() != null) {
-                notModified = webRequest.checkNotModified(cacheETag(source));
-            }
-            if (notModified) {
-                outHeaders.setCacheControl(config.cacheControlHeaders().infoJson());
-                setCacheHeaders(outHeaders, source);
-                return ResponseEntity.status(HttpStatus.NOT_MODIFIED).body(null);
-            }
-        }
-
         ImageInfo imageInfo = loader.getImageInfo(source);
+        setSourceCacheHeader(outHeaders, source);
         if (imageInfo == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .headers(outHeaders)
                     .body(Map.of("error", "Could not read image information"));
+        }
+
+        // Check the source-provided (HTTP or file system) validators against the request
+        if (clientNotModified(webRequest, source)) {
+            outHeaders.setCacheControl(config.cacheControlHeaders().infoJson());
+            setCacheHeaders(outHeaders, source);
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                    .headers(outHeaders)
+                    .body(null);
         }
 
         Map<String, Object> infoJson = loader.getImageInfoJson(
@@ -214,36 +216,30 @@ public class IIIFImageAPIController {
                     .headers(outHeaders)
                     .contentType(MediaType.TEXT_PLAIN)
                     .body(ByteBuffer.wrap("Image not found".getBytes()));
-        } else if (source.resolvedImage() instanceof SourceNotModified) {
+        }
+        if (source.resolvedImage() instanceof SourceNotModified || clientNotModified(webRequest, source)) {
+            outHeaders.setCacheControl(config.cacheControlHeaders().images());
+            setCacheHeaders(outHeaders, source);
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
                     .headers(outHeaders)
                     .body(null);
         }
 
-        // Check client headers if source has caching info, maybe we don't have to process the request?
-        if (source.cacheInfo() != null) {
-            boolean notModified = false;
-            if (source.cacheInfo().lastModified() != null) {
-                notModified = webRequest.checkNotModified(
-                        cacheETag(source), source.cacheInfo().lastModified().toEpochMilli());
-            } else if (source.cacheInfo().eTag() != null) {
-                notModified = webRequest.checkNotModified(cacheETag(source));
-            }
-
-            if (notModified) {
-                setCacheHeaders(outHeaders, source);
-                return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                        .headers(outHeaders)
-                        .body(null);
-            }
-        }
-
         ImageInfo imageInfo = loader.getImageInfo(source);
+        setSourceCacheHeader(outHeaders, source);
         if (imageInfo == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .headers(outHeaders)
                     .contentType(MediaType.TEXT_PLAIN)
                     .body(ByteBuffer.wrap("Could not read image information".getBytes()));
+        }
+
+        if (clientNotModified(webRequest, source)) {
+            outHeaders.setCacheControl(config.cacheControlHeaders().images());
+            setCacheHeaders(outHeaders, source);
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                    .headers(outHeaders)
+                    .body(null);
         }
 
         // Determine canonical form of the request
@@ -327,14 +323,31 @@ public class IIIFImageAPIController {
         }
     }
 
-    /// Set `ETag` and/or `Last-Modified` headers on the given [HttpHeaders] object based on the
-    /// cache information in the [ImageSource].
-    ///
-    /// Will only set the headers if they are not already present in the existing header set.
-    ///
-    /// @param headers The [HttpHeaders] object to set the headers on.
-    /// @param source  The [ImageSource] containing cache information.
+    /// Check the [ImageSource] against the [WebRequest] to see if we can return a 304 Not Modified
+    private boolean clientNotModified(WebRequest request, ImageSource source) {
+        if (source.cacheInfo() == null) {
+            return false;
+        }
+        if (source.cacheInfo().lastModified() != null)
+            return request.checkNotModified(
+                    cacheETag(source), source.cacheInfo().lastModified().toEpochMilli());
+        return source.cacheInfo().eTag() != null && request.checkNotModified(cacheETag(source));
+    }
+
+    private void setSourceCacheHeader(HttpHeaders headers, ImageSource source) {
+        if (config.httpSourceCache().exposeResponseHeaders()
+                && source.resolvedImage() instanceof HttpResolvedImage
+                && source.httpSourceCacheStatus() != null) {
+            headers.set(HttpSourceCache.RESPONSE_HEADER, source.httpSourceCacheStatus());
+            if (config.iiif().features().cors()) {
+                headers.setAccessControlExposeHeaders(List.of(HttpSourceCache.RESPONSE_HEADER));
+            }
+        }
+    }
+
+    /// Apply the same IIIF validators and source diagnostics to successful and conditional responses.
     private void setCacheHeaders(HttpHeaders headers, ImageSource source) {
+        setSourceCacheHeader(headers, source);
         if (source.cacheInfo() == null) {
             return;
         }

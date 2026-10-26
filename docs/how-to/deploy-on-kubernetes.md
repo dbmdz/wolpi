@@ -22,6 +22,8 @@ data:
     http:
       host: "0.0.0.0"
       port: 8080
+    http-source-cache:
+      directory: /var/cache/wolpi/http-source-cache
     extension-pool:
       min-idle: 16
       max-idle: 16
@@ -69,6 +71,8 @@ spec:
             - name: wolpi-config
               mountPath: /app/wolpi.yml
               subPath: wolpi.yml
+            - name: http-source-cache
+              mountPath: /var/cache/wolpi
           securityContext:
               allowPrivilegeEscalation: false
           env:
@@ -99,12 +103,22 @@ spec:
         - name: wolpi-config
           configMap:
             name: wolpi-config
+        - name: http-source-cache
+          emptyDir: {}
 ```
 
 The example starts two replicas. Wolpi itself does not keep request or session state, so serving
-traffic scales horizontally. If you install extensions at runtime or otherwise write files under
-`/app/data`, make that data available to every replica (e.g. through a shared PVC) or
-[bake it into a custom image](./build-containers-with-pre-installed-extensions.md).
+traffic scales horizontally. Each replica has its own HTTP source cache in a pod-local `emptyDir`.
+The cache survives container restarts within that pod, but not pod replacement. For persistence
+across pod replacements, use a StatefulSet with a separate volume per replica on storage that
+supports reliable file locks and atomic moves. Do not share one cache directory between processes
+or put it on NFS/CIFS.
+
+If you install extensions at runtime, make those artifacts available to every replica (e.g. through
+a shared PVC under `/app/data`) or [bake them into a custom image](./build-containers-with-pre-installed-extensions.md).
+Keep the source cache on the separate per-pod volume shown above, even if you share extension
+artifacts. By default, the cache directory sits below `data-directory`; the explicit override in
+this example prevents replicas from trying to lock the same cache directory.
 
 To serve your own images, mount a PVC or NFS volume to `/app/images` inside the container so images
 can be resolved by relative path. If your identifiers do not map directly to file paths, add an
@@ -153,6 +167,14 @@ spec:
     and canonical links use the public URL. See also
     [Expose Wolpi Behind a Reverse Proxy](./expose-wolpi-behind-a-reverse-proxy.md) and the
     [HTTP integration reference](../reference/http.md).
+
+## Route requests to pod endpoints
+
+For source-cache locality across replicas,
+[route requests by image identifier](./expose-wolpi-behind-a-reverse-proxy.md#route-requests-by-image-identifier)
+at your ingress controller or gateway. Configure it to select ready pod endpoints, not just the
+Service's ClusterIP. A standard Kubernetes Service does not provide identifier-based routing;
+another load-balancing hop after hashing can send the request to a different pod.
 
 ## Add metrics scraping (optional)
 

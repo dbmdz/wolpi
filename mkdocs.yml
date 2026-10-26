@@ -4,6 +4,9 @@ repo_url: https://github.com/dbmdz/wolpi
 site_dir: public
 watch:
   - ./docs
+# Architecture decisions live in the repository, not the published documentation.
+exclude_docs: |
+  /architecture/
 copyright: >
   Made with 🐇❤️ in Munich, Germany at the <a href="https://www.bsb-muenchen.de" target="_blank">Bavarian State Library</a>
   .·.·.·. <a href="https://digitale-sammlungen.de/en/imprint">Imprint</a>
