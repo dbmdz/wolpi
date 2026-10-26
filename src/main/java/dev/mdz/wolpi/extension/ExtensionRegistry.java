@@ -3,6 +3,7 @@ package dev.mdz.wolpi.extension;
 import dev.mdz.wolpi.config.ExtensionConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
+import dev.mdz.wolpi.extension.exceptions.ExtensionInitializationException;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
@@ -13,6 +14,8 @@ import dev.mdz.wolpi.extension.model.LoadedExtension;
 import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor;
 import dev.mdz.wolpi.extension.util.FileAlterationMonitor.AlterationEvent;
+import dev.mdz.wolpi.extension.util.PolyglotHelpers;
+import dev.mdz.wolpi.validation.CliRunner;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
@@ -34,10 +37,12 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.stereotype.Component;
 
 /// Responsible for loading and initializing extensions.
@@ -89,7 +94,8 @@ public class ExtensionRegistry implements AutoCloseable {
             NpmInstaller jsInstaller,
             GenericKeyedObjectPool<LoadedExtension, RuntimeContext> extensionContextPool,
             GraalContextSupplier contextSupplier,
-            GuestContextFactory guestContextFactory) {
+            GuestContextFactory guestContextFactory,
+            @Nullable ApplicationArguments applicationArguments) {
         this.pyInstaller = pyInstaller;
         this.jsInstaller = jsInstaller;
         this.extensionContextPool = extensionContextPool;
@@ -111,8 +117,23 @@ public class ExtensionRegistry implements AutoCloseable {
         if (cfg.extensions().isEmpty()) {
             return;
         }
-        // Parallelize extension loading to speed up application startup time
-        Set<ExtensionConfig> failedExtensions = new HashSet<>();
+        loadConfiguredExtensions(cfg, applicationArguments);
+    }
+
+    /// Load all extensions configured in the `wolpi.extensions` list, in parallel.
+    ///
+    /// An extension that was configured but fails to load is not a recoverable condition: hooks
+    /// implemented by it (e.g. `authorize`) would silently not be enforced for incoming requests,
+    /// which is why this aborts startup when Wolpi is about to serve requests. Operational
+    /// subcommands are exempt, they log the failure and continue with the remaining extensions so
+    /// that a broken configuration can be diagnosed.
+    ///
+    /// @param args the application arguments, `null` when the registry is constructed outside of a
+    ///             Spring application
+    /// @throws ExtensionInitializationException if an extension failed to load and this invocation
+    ///                                          serves requests
+    private void loadConfiguredExtensions(WolpiConfig cfg, @Nullable ApplicationArguments args) {
+        Map<ExtensionConfig, Throwable> failures = new ConcurrentHashMap<>();
         try (ExecutorService pool =
                 Executors.newFixedThreadPool(cfg.extensions().size())) {
             List<Callable<LoadedExtension>> loadingTasks = cfg.extensions().stream()
@@ -123,21 +144,93 @@ public class ExtensionRegistry implements AutoCloseable {
                             log.info(
                                     "Extension '{}' loaded.",
                                     loaded.extensionInfo().name());
-                        } catch (ExtensionLoadException e) {
-                            log.error("Failed to load extension from {}: {}", ext, e.getMessage());
+                        } catch (ExtensionLoadException | PolyglotException e) {
+                            failures.put(ext, e);
+                            log.error("Failed to load extension from {}: {}", ext, describeFailure(e));
                             log.debug("Error details:", e);
                         } catch (RuntimeException e) {
+                            failures.put(ext, e);
                             log.error("Unexpected error while loading extension from " + ext, e);
-                        }
-                        if (loaded == null) {
-                            failedExtensions.add(ext);
                         }
                         return loaded;
                     })
                     .toList();
             pool.invokeAll(loadingTasks);
         } catch (InterruptedException e) {
+            // Do not continue with a partially loaded extension set and do not swallow the interrupt.
             Thread.currentThread().interrupt();
+            stopFileMonitor();
+            throw new ExtensionInitializationException("Interrupted while loading configured extensions", e);
+        }
+        if (failures.isEmpty()) {
+            return;
+        }
+        String summary = summarizeLoadFailures(cfg, failures);
+        if (!servesRequests(args)) {
+            log.error(
+                    "{} Continuing with the remaining extensions because this invocation does not serve "
+                            + "requests. Fix the extension configuration before running a server with it.",
+                    summary);
+            return;
+        }
+        stopFileMonitor();
+        throw new ExtensionInitializationException(summary, firstFailure(cfg, failures));
+    }
+
+    /// Determine whether this invocation serves HTTP requests.
+    ///
+    /// Wolpi serves requests unless it was invoked for one of the CLI subcommands, which perform
+    /// their work themselves and terminate the process once they are done. Invocations with
+    /// arguments that do not match a subcommand fall through to the regular server startup, so they
+    /// count as serving requests.
+    ///
+    /// @param args the application arguments, `null` when the registry is constructed outside of a
+    ///             Spring application
+    /// @return whether this invocation serves HTTP requests
+    private static boolean servesRequests(@Nullable ApplicationArguments args) {
+        if (args == null) {
+            return true;
+        }
+        return args.getNonOptionArgs().stream().noneMatch(CliRunner.SUBCOMMANDS::contains);
+    }
+
+    /// Build a human-readable summary of all extension load failures, in configuration order.
+    private static String summarizeLoadFailures(WolpiConfig cfg, Map<ExtensionConfig, Throwable> failures) {
+        var summary = new StringBuilder("Failed to load %d of %d configured extension(s):"
+                .formatted(failures.size(), cfg.extensions().size()));
+        cfg.extensions().stream().filter(failures::containsKey).forEach(ext -> summary.append("\n\n  ")
+                .append(ext)
+                .append("\n    ")
+                .append(describeFailure(failures.get(ext))));
+        return summary.toString();
+    }
+
+    /// Describe a load failure, including the stack trace inside the extension code if available.
+    private static String describeFailure(Throwable err) {
+        String message = err.getMessage() == null ? err.getClass().getSimpleName() : err.getMessage();
+        String guestTrace = PolyglotHelpers.guestStackTrace(err);
+        return guestTrace == null ? message : message + guestTrace;
+    }
+
+    /// Get the failure of the first extension in configuration order, used as the cause of the
+    /// exception that aborts startup.
+    private static @Nullable Throwable firstFailure(WolpiConfig cfg, Map<ExtensionConfig, Throwable> failures) {
+        return cfg.extensions().stream()
+                .filter(failures::containsKey)
+                .map(failures::get)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /// Stop the file monitor for live-reloading if it was started, e.g. because startup is aborted.
+    private void stopFileMonitor() {
+        if (this.fileMonitor == null) {
+            return;
+        }
+        try {
+            this.fileMonitor.stop();
+        } catch (Exception e) {
+            log.warn("Failed to stop extension file monitor.", e);
         }
     }
 
@@ -575,9 +668,7 @@ public class ExtensionRegistry implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        if (this.fileMonitor != null) {
-            this.fileMonitor.stop();
-        }
+        stopFileMonitor();
     }
 
     /// AutoCloseable that re-enables all extensions when closed, used for temporarily isolating an

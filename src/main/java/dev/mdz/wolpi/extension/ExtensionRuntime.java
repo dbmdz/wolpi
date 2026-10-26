@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -249,7 +250,39 @@ public interface ExtensionRuntime extends AutoCloseable {
             this.metrics = metrics;
         }
 
+        /// Borrow the runtime contexts for the given extensions, in parallel.
+        ///
+        /// Called before hook calls are submitted, see [#ensureRuntimeContext(LoadedExtension)].
+        ///
+        /// @param exts the extensions to borrow contexts for
+        private void borrowRuntimeContexts(List<LoadedExtension> exts) {
+            try {
+                // Context creation is expensive, especially for Python extensions, so do it in parallel
+                var borrows = threadPool.invokeAll(exts.stream()
+                        .<Callable<RuntimeContext>>map(ext -> () -> ensureRuntimeContext(ext))
+                        .toList());
+                for (var borrow : borrows) {
+                    borrow.get();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new ExtensionExecutionException("Interrupted while initializing extension contexts", e);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause() == null ? e : e.getCause();
+                if (cause instanceof RuntimeException runtimeErr) {
+                    throw runtimeErr;
+                }
+                throw new ExtensionExecutionException("Failed to initialize extension runtime context", cause);
+            }
+        }
+
         /// Borrow a [RuntimeContext] for a [LoadedExtension] from the pool if it doesn't already exist.
+        ///
+        /// All contexts of a runtime are borrowed up-front with [#borrowRuntimeContexts(List)], before
+        /// any hook call is submitted: hook calls are cancelled once another extension produced a
+        /// result, but a hook call that is still waiting for a context cannot be interrupted. A
+        /// context borrowed after [#close()] handed the borrowed ones back to the pool would never be
+        /// returned and would starve the pool over time.
         private RuntimeContext ensureRuntimeContext(LoadedExtension ext) {
             return borrowedContexts.computeIfAbsent(ext, key -> {
                 try {
@@ -292,24 +325,27 @@ public interface ExtensionRuntime extends AutoCloseable {
 
             // Multiple extensions: We can safely skip only hooks that are skippable for every
             // loaded extension (i.e. the intersection of all skippable hooks).
+            borrowRuntimeContexts(allExtensions);
             var futs = allExtensions.stream()
-                    .map(e -> CompletableFuture.supplyAsync(
-                            () -> {
-                                String extName = e.extensionInfo().name();
-                                var timer = metrics.startExtensionTimer();
-                                metrics.incrementExtensionInvocations(extName, "skippableHooks");
-                                RuntimeContext ctx = ensureRuntimeContext(e);
-                                try {
-                                    Set<ExtensionHooks> skippableHooks =
-                                            ctx.run(ext -> getSkippableHooksFromExtension(e, ext, request, allHooks));
-                                    metrics.recordExtensionExecution(timer, extName, "skippableHooks");
-                                    return skippableHooks;
-                                } catch (Exception ex) {
-                                    metrics.incrementExtensionErrors(extName, "skippableHooks");
-                                    throw ex;
-                                }
-                            },
-                            threadPool))
+                    .map(e -> {
+                        RuntimeContext ctx = ensureRuntimeContext(e);
+                        return CompletableFuture.supplyAsync(
+                                () -> {
+                                    String extName = e.extensionInfo().name();
+                                    var timer = metrics.startExtensionTimer();
+                                    metrics.incrementExtensionInvocations(extName, "skippableHooks");
+                                    try {
+                                        Set<ExtensionHooks> skippableHooks = ctx.run(
+                                                ext -> getSkippableHooksFromExtension(e, ext, request, allHooks));
+                                        metrics.recordExtensionExecution(timer, extName, "skippableHooks");
+                                        return skippableHooks;
+                                    } catch (Exception ex) {
+                                        metrics.incrementExtensionErrors(extName, "skippableHooks");
+                                        throw ex;
+                                    }
+                                },
+                                threadPool);
+                    })
                     .toList();
             Set<ExtensionHooks> commonSkippableHooks = new HashSet<>(allHooks);
             futs.stream().map(CompletableFuture::join).forEach(commonSkippableHooks::retainAll);
@@ -370,28 +406,31 @@ public interface ExtensionRuntime extends AutoCloseable {
             }
 
             // Multiple extensions: All must authorize access, run in parallel and cancel on first failure
+            borrowRuntimeContexts(authExts);
             var completionService = new ExecutorCompletionService<Boolean>(threadPool);
             var futs = authExts.stream()
-                    .map(e -> completionService.submit(() -> {
-                        String extName = e.extensionInfo().name();
-                        var timer = metrics.startExtensionTimer();
-                        metrics.incrementExtensionInvocations(extName, "authorize");
+                    .map(e -> {
                         RuntimeContext ctx = ensureRuntimeContext(e);
-                        try {
-                            boolean result =
-                                    ctx.run(ext -> runAuthExtension(ctx.getLang(), ext, identifier, headers, clientIp));
-                            metrics.recordExtensionExecution(timer, extName, "authorize");
-                            return result;
-                        } catch (Exception ex) {
-                            metrics.incrementExtensionErrors(extName, "authorize");
-                            throw ex;
-                        }
-                    }))
+                        return completionService.submit(() -> {
+                            String extName = e.extensionInfo().name();
+                            var timer = metrics.startExtensionTimer();
+                            metrics.incrementExtensionInvocations(extName, "authorize");
+                            try {
+                                boolean result = ctx.run(
+                                        ext -> runAuthExtension(ctx.getLang(), ext, identifier, headers, clientIp));
+                                metrics.recordExtensionExecution(timer, extName, "authorize");
+                                return result;
+                            } catch (Exception ex) {
+                                metrics.incrementExtensionErrors(extName, "authorize");
+                                throw ex;
+                            }
+                        });
+                    })
                     .toList();
             boolean authorized = false;
             int completed = 0;
-            while (completed < authExts.size()) {
-                try {
+            try {
+                while (completed < authExts.size()) {
                     var future = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
                     if (future == null) {
                         log.warn("Timeout waiting for extension authorization, denying access");
@@ -404,15 +443,18 @@ public interface ExtensionRuntime extends AutoCloseable {
                         // One extension denied access, no need to wait for the others
                         break;
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e) {
-                    handleExtensionException(e.getCause());
                 }
+            } catch (InterruptedException e) {
+                // `poll` fails immediately on an interrupted thread, so continuing this loop would
+                // spin forever without ever completing another extension. Fail closed instead.
+                Thread.currentThread().interrupt();
+                throw new ExtensionExecutionException("Interrupted while waiting for extension authorization", e);
+            } catch (ExecutionException e) {
+                handleExtensionException(e.getCause());
+            } finally {
+                // Cancel all remaining futures, including the ones abandoned by an early exit
+                futs.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
             }
-
-            // Cancel all remaining futures if we didn't complete them all
-            futs.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
 
             return authorized;
         }
@@ -490,14 +532,15 @@ public interface ExtensionRuntime extends AutoCloseable {
             }
 
             // Run the resolving extensions in parallel and return the first valid result
+            borrowRuntimeContexts(resolveExts);
             var completionService = new ExecutorCompletionService<@Nullable ImageSource>(threadPool);
             List<Future<ImageSource>> futures = new ArrayList<>();
             for (LoadedExtension resolveExt : resolveExts) {
+                RuntimeContext ctx = ensureRuntimeContext(resolveExt);
                 futures.add(completionService.submit(() -> {
                     String extName = resolveExt.extensionInfo().name();
                     var timer = metrics.startExtensionTimer();
                     metrics.incrementExtensionInvocations(extName, "resolve");
-                    RuntimeContext ctx = ensureRuntimeContext(resolveExt);
                     try (var lease = ctx.enter()) {
                         ImageSource result =
                                 runResolvingExtension(lease.extension(), identifier, eTag, lastModifiedStr);
@@ -513,33 +556,42 @@ public interface ExtensionRuntime extends AutoCloseable {
             ImageSource resolved = null;
             int completed = 0;
             Throwable err = null;
-            while (completed < resolveExts.size()) {
-                try {
+            try {
+                while (completed < resolveExts.size()) {
                     var fut = completionService.poll(60, java.util.concurrent.TimeUnit.SECONDS);
                     if (fut == null) {
                         log.warn("Timeout waiting for extension resolving, returning null");
                         break;
                     }
-                    resolved = fut.get();
+                    try {
+                        resolved = fut.get();
+                    } catch (ExecutionException e) {
+                        // A failing resolver must not fail the request, another extension may still
+                        // be able to resolve the identifier. Remember the error and only report it
+                        // if no extension resolved the identifier.
+                        Throwable cause = e.getCause() != null ? e.getCause() : e;
+                        log.warn("Resolver extension raised an error.", cause);
+                        if (err == null) {
+                            err = cause;
+                        }
+                        completed++;
+                        continue;
+                    }
                     completed++;
                     if (resolved != null) {
                         // One extension resolved the source, no need to wait for the others
                         break;
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (ExecutionException e) {
-                    Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    log.warn("Resolver extension raised an error.", cause);
-                    if (err == null) {
-                        err = cause;
-                    }
-                    completed++;
                 }
+            } catch (InterruptedException e) {
+                // `poll` fails immediately on an interrupted thread, so continuing this loop would
+                // spin forever without ever completing another extension.
+                Thread.currentThread().interrupt();
+                throw new ExtensionExecutionException("Interrupted while waiting for extension resolution", e);
+            } finally {
+                // Cancel all remaining futures, including the ones abandoned by an early exit
+                futures.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
             }
-
-            // Cancel all remaining futures if we didn't complete them all
-            futures.stream().filter(f -> !f.isDone()).forEach(f -> f.cancel(true));
 
             // If we didn't get a result, but had an error, rethrow it
             if (resolved == null && err != null) {

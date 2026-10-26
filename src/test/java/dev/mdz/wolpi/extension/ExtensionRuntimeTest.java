@@ -1,8 +1,11 @@
 package dev.mdz.wolpi.extension;
 
 import static dev.mdz.wolpi.testutil.WolpiAssertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
@@ -56,12 +59,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
@@ -75,6 +82,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -328,6 +336,18 @@ public class ExtensionRuntimeTest {
                         .hasMessageContaining("Extension raised an error during execution");
             }
         }
+
+        @Test
+        @DisplayName("Should fail closed instead of spinning when the waiting thread is interrupted")
+        void shouldFailClosedWhenWaitingThreadIsInterrupted() throws IOException, InterruptedException {
+            var exts = List.of(blockingAuthExtension("blocking-auth-a"), blockingAuthExtension("blocking-auth-b"));
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                var thrown = interruptDuring(() -> runtime.authorize("someId", Map.of(), "127.0.0.1"));
+                assertThat(thrown)
+                        .isInstanceOf(ExtensionExecutionException.class)
+                        .hasMessageContaining("Interrupted while waiting for extension authorization");
+            }
+        }
     }
 
     @Nested
@@ -339,6 +359,36 @@ public class ExtensionRuntimeTest {
         void shouldReturnNullWithNoResolverExtensions() {
             try (ExtensionRuntime runtime = getRuntimeWithExtensions()) {
                 assertThat(runtime.resolve("not-found", null, null)).isNull();
+            }
+        }
+
+        @RepeatedTest(5)
+        @DisplayName("Should still use another resolver when one resolver raises")
+        void shouldUseOtherResolverWhenOneRaises() {
+            // JS resolver (prefix "") raises immediately for "js-raise"
+            // the Python HTTP resolver (prefix "") resolves any identifier to a URL.
+            var exts = List.of(
+                    getTestResolverExtension("", TestResolvingType.FILESYSTEM),
+                    getTestResolverExtension("", TestResolvingType.HTTP));
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                var result = runtime.resolve("js-raise", null, null);
+                assertThat(result).isNotNull();
+                assertThat(result.resolvedImage()).isInstanceOf(HttpResolvedImage.class);
+                var http = (HttpResolvedImage) result.resolvedImage();
+                assertThat(http.url()).isEqualTo(URI.create("https://example.com/resource/js-raise"));
+            }
+        }
+
+        @Test
+        @DisplayName("Should fail instead of spinning when the waiting thread is interrupted")
+        void shouldFailWhenWaitingThreadIsInterrupted() throws IOException, InterruptedException {
+            var exts = List.of(
+                    blockingResolveExtension("blocking-resolve-a"), blockingResolveExtension("blocking-resolve-b"));
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                var thrown = interruptDuring(() -> runtime.resolve("someId", null, null));
+                assertThat(thrown)
+                        .isInstanceOf(ExtensionExecutionException.class)
+                        .hasMessageContaining("Interrupted while waiting for extension resolution");
             }
         }
 
@@ -487,9 +537,10 @@ public class ExtensionRuntimeTest {
                 assertThat(result).isNotNull();
                 assertThat(result.resolvedImage()).isNotNull();
                 assertThat(result.resolvedImage()).isInstanceOf(BinaryResolvedImage.class);
-                // HTTP resolver sleeps for 10 seconds, so if it was not cancelled, the total duration would
-                // be > 1 minute
-                assertThat(duration).isLessThan(Duration.ofMillis(500));
+                // The HTTP resolver sleeps for 10 seconds, so if it was not cancelled, the total
+                // duration would exceed that. The budget still allows for creating the runtime
+                // contexts of all three resolvers, which happens before the hook calls are submitted.
+                assertThat(duration).isLessThan(Duration.ofSeconds(2));
             }
         }
 
@@ -557,6 +608,54 @@ public class ExtensionRuntimeTest {
         }
 
         @Test
+        @DisplayName("Should borrow all contexts before running hook calls")
+        void shouldBorrowAllContextsBeforeRunningHookCalls() throws Exception {
+            // The first extension resolves the identifier while the second one needs a long time to
+            // borrow its context, so its hook call is cancelled while it is still waiting for it.
+            // Context creation is not interruptible, so the borrow finishes anyway - if that happened
+            // after the runtime handed the borrowed contexts back to the pool, the context would be
+            // lost to the pool forever.
+            var fastWinner = new ExtensionConfig(
+                    Path.of("src/test/resources/js-extension/index.js"),
+                    null,
+                    null,
+                    Map.of("prefix", "", "resolvingType", "BINARY"),
+                    false);
+            var slowLoser = new ExtensionConfig(
+                    Path.of("src/test/resources/js-extension/index.js"),
+                    null,
+                    null,
+                    Map.of("prefix", "js-", "resolvingType", "FILESYSTEM"),
+                    false);
+            var spyPool = spy(contextPool);
+            doAnswer(invocation -> {
+                        var ext = (LoadedExtension) invocation.getArgument(0);
+                        if (ext.config() == slowLoser) {
+                            var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+                            while (System.nanoTime() < deadline) {
+                                try {
+                                    Thread.sleep(50);
+                                } catch (InterruptedException _) {
+                                    // Context creation is not interruptible, keep going
+                                }
+                            }
+                        }
+                        return invocation.callRealMethod();
+                    })
+                    .when(spyPool)
+                    .borrowObject(any());
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(spyPool, List.of(fastWinner, slowLoser))) {
+                var result = runtime.resolve("foo", null, null);
+                assertThat(result).isNotNull();
+                assertThat(result.resolvedImage()).isInstanceOf(BinaryResolvedImage.class);
+                // Both contexts must have been borrowed before any hook call was submitted, the one
+                // of the cancelled extension included.
+                assertThat(spyPool.getNumActive()).isEqualTo(2);
+            }
+            assertThat(spyPool.getNumActive()).isZero();
+        }
+
+        @Test
         @DisplayName("Should reuse borrowed contexts for same extension")
         void shouldReuseBorrowedContexts() {
             assertThat(contextPool.getNumActive()).isZero();
@@ -597,7 +696,7 @@ public class ExtensionRuntimeTest {
                             false));
             config.extensions().addAll(exts);
             var registry = new ExtensionRegistry(
-                    config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config));
+                    config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
             var metrics = new WolpiMetrics(meterRegistry);
             for (int i = 0; i < 3; i++) {
                 final int idx = i;
@@ -1163,9 +1262,14 @@ public class ExtensionRuntimeTest {
     }
 
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
+        return getRuntimeWithExtensions(contextPool, extensions);
+    }
+
+    private ExtensionRuntime getRuntimeWithExtensions(
+            KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool, List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
         var registry = new ExtensionRegistry(
-                config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config));
+                config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
         var metrics = new WolpiMetrics(meterRegistry);
         return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics) {
             @Override
@@ -1180,6 +1284,78 @@ public class ExtensionRuntimeTest {
                 }
             }
         };
+    }
+
+    /// Run a hook call on a separate thread and interrupt that thread while it waits for the
+    /// results of the parallel extension invocations.
+    ///
+    /// @param hookCall the hook invocation under test
+    /// @return the error the hook call failed with
+    private Throwable interruptDuring(Callable<?> hookCall) throws InterruptedException {
+        var callerExecutor = Executors.newSingleThreadExecutor(r -> {
+            var thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
+        });
+        Future<?> call;
+        try {
+            call = callerExecutor.submit(hookCall);
+            // Give the runtime time to hand the hook to all extensions, then interrupt the calling
+            // thread while it waits on their results.
+            Thread.sleep(500);
+        } finally {
+            callerExecutor.shutdownNow();
+        }
+        Throwable failure;
+        try {
+            call.get(5, TimeUnit.SECONDS);
+            throw new AssertionError("Hook call returned normally even though its thread was interrupted");
+        } catch (ExecutionException e) {
+            failure = e.getCause();
+        } catch (TimeoutException e) {
+            // Without dedicated interrupt handling, the caller spins in `poll` forever after the
+            // interrupt, since `poll` fails immediately on an interrupted thread.
+            throw new AssertionError("Hook call kept running after its thread was interrupted", e);
+        }
+        // Wait for the cancelled extension invocations to finish before the caller returns the
+        // borrowed runtime contexts to the pool.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (threadPool.getActiveCount() > 0 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        return failure;
+    }
+
+    private ExtensionConfig blockingAuthExtension(String name) throws IOException {
+        return writeJsExtension(name, """
+                export function info() {
+                  return { name: "%s", apiVersion: 1, description: "blocks until interrupted" };
+                }
+
+                export function authorize(identifier, headers, clientIp) {
+                  // Blocks until the worker thread is cancelled by the interrupted caller
+                  Java.type("java.lang.Thread").sleep(60000);
+                  return true;
+                }
+
+                export function cleanup() {}
+                """.formatted(name));
+    }
+
+    private ExtensionConfig blockingResolveExtension(String name) throws IOException {
+        return writeJsExtension(name, """
+                export function info() {
+                  return { name: "%s", apiVersion: 1, description: "blocks until interrupted" };
+                }
+
+                export function resolve(identifier, etag, lastModified) {
+                  // Blocks until the worker thread is cancelled by the interrupted caller
+                  Java.type("java.lang.Thread").sleep(60000);
+                  return null;
+                }
+
+                export function cleanup() {}
+                """.formatted(name));
     }
 
     private ExtensionConfig writeJsExtension(String name, String source) throws IOException {
@@ -1292,8 +1468,8 @@ public class ExtensionRuntimeTest {
             var poolConfig = new GenericKeyedObjectPoolConfig<RuntimeContext>();
             poolConfig.setJmxEnabled(false);
             pool = new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(supplier), poolConfig);
-            registry =
-                    new ExtensionRegistry(cfg, pyPiInstaller, npmInstaller, null, supplier, guestContextFactory(cfg));
+            registry = new ExtensionRegistry(
+                    cfg, pyPiInstaller, npmInstaller, null, supplier, guestContextFactory(cfg), null);
             runtime = new ExtensionRuntime.ExtensionRuntimeImpl(
                     registry, pool, executor, new WolpiMetrics(meterRegistry));
         }
