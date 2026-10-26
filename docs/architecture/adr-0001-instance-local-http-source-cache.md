@@ -108,6 +108,12 @@ record. Stale fallback can expose an older image during an origin outage.
 - **Range/block caching:** could reduce cold transfers for large images, but
   adds seekable access, cross-range consistency, and block coordination. Deferred
   because it is more complex than whole-resource caching.
+- **Static TTL instead of upstream HTTP cache semantics:** considered reusing
+  eligible sources for a configured TTL regardless of upstream freshness
+  directives, then conditionally revalidating with origin validators. The reduction
+  in implementation complexity would have been negligible, and given that we want
+  to support a block-based cache of partial responses in the future which as a hard
+  requirement on proper HTTP cache semantics, this was rejected.
 - **An additional cache service, such as Redis:** rejected to avoid deployment
   dependencies, cost, and operational complexity.
 - **A shared network-filesystem cache:** rejected to avoid coordinating writes
