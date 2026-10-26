@@ -1,8 +1,11 @@
 package dev.mdz.wolpi.extension;
 
 import static dev.mdz.wolpi.testutil.WolpiAssertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.VipsOption;
@@ -79,6 +82,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -358,6 +362,23 @@ public class ExtensionRuntimeTest {
             }
         }
 
+        @RepeatedTest(5)
+        @DisplayName("Should still use another resolver when one resolver raises")
+        void shouldUseOtherResolverWhenOneRaises() {
+            // JS resolver (prefix "") raises immediately for "js-raise"
+            // the Python HTTP resolver (prefix "") resolves any identifier to a URL.
+            var exts = List.of(
+                    getTestResolverExtension("", TestResolvingType.FILESYSTEM),
+                    getTestResolverExtension("", TestResolvingType.HTTP));
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
+                var result = runtime.resolve("js-raise", null, null);
+                assertThat(result).isNotNull();
+                assertThat(result.resolvedImage()).isInstanceOf(HttpResolvedImage.class);
+                var http = (HttpResolvedImage) result.resolvedImage();
+                assertThat(http.url()).isEqualTo(URI.create("https://example.com/resource/js-raise"));
+            }
+        }
+
         @Test
         @DisplayName("Should fail instead of spinning when the waiting thread is interrupted")
         void shouldFailWhenWaitingThreadIsInterrupted() throws IOException, InterruptedException {
@@ -516,9 +537,10 @@ public class ExtensionRuntimeTest {
                 assertThat(result).isNotNull();
                 assertThat(result.resolvedImage()).isNotNull();
                 assertThat(result.resolvedImage()).isInstanceOf(BinaryResolvedImage.class);
-                // HTTP resolver sleeps for 10 seconds, so if it was not cancelled, the total duration would
-                // be > 1 minute
-                assertThat(duration).isLessThan(Duration.ofMillis(500));
+                // The HTTP resolver sleeps for 10 seconds, so if it was not cancelled, the total
+                // duration would exceed that. The budget still allows for creating the runtime
+                // contexts of all three resolvers, which happens before the hook calls are submitted.
+                assertThat(duration).isLessThan(Duration.ofSeconds(2));
             }
         }
 
@@ -583,6 +605,54 @@ public class ExtensionRuntimeTest {
             // (maxIdlePerKey is 2, so both contexts should be kept)
             assertThat(contextPool.getNumActive()).isZero();
             assertThat(contextPool.getNumIdle()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("Should borrow all contexts before running hook calls")
+        void shouldBorrowAllContextsBeforeRunningHookCalls() throws Exception {
+            // The first extension resolves the identifier while the second one needs a long time to
+            // borrow its context, so its hook call is cancelled while it is still waiting for it.
+            // Context creation is not interruptible, so the borrow finishes anyway - if that happened
+            // after the runtime handed the borrowed contexts back to the pool, the context would be
+            // lost to the pool forever.
+            var fastWinner = new ExtensionConfig(
+                    Path.of("src/test/resources/js-extension/index.js"),
+                    null,
+                    null,
+                    Map.of("prefix", "", "resolvingType", "BINARY"),
+                    false);
+            var slowLoser = new ExtensionConfig(
+                    Path.of("src/test/resources/js-extension/index.js"),
+                    null,
+                    null,
+                    Map.of("prefix", "js-", "resolvingType", "FILESYSTEM"),
+                    false);
+            var spyPool = spy(contextPool);
+            doAnswer(invocation -> {
+                        var ext = (LoadedExtension) invocation.getArgument(0);
+                        if (ext.config() == slowLoser) {
+                            var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+                            while (System.nanoTime() < deadline) {
+                                try {
+                                    Thread.sleep(50);
+                                } catch (InterruptedException _) {
+                                    // Context creation is not interruptible, keep going
+                                }
+                            }
+                        }
+                        return invocation.callRealMethod();
+                    })
+                    .when(spyPool)
+                    .borrowObject(any());
+            try (ExtensionRuntime runtime = getRuntimeWithExtensions(spyPool, List.of(fastWinner, slowLoser))) {
+                var result = runtime.resolve("foo", null, null);
+                assertThat(result).isNotNull();
+                assertThat(result.resolvedImage()).isInstanceOf(BinaryResolvedImage.class);
+                // Both contexts must have been borrowed before any hook call was submitted, the one
+                // of the cancelled extension included.
+                assertThat(spyPool.getNumActive()).isEqualTo(2);
+            }
+            assertThat(spyPool.getNumActive()).isZero();
         }
 
         @Test
@@ -1192,6 +1262,11 @@ public class ExtensionRuntimeTest {
     }
 
     private ExtensionRuntime getRuntimeWithExtensions(List<ExtensionConfig> extensions) {
+        return getRuntimeWithExtensions(contextPool, extensions);
+    }
+
+    private ExtensionRuntime getRuntimeWithExtensions(
+            KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool, List<ExtensionConfig> extensions) {
         config.extensions().addAll(extensions);
         var registry = new ExtensionRegistry(
                 config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
