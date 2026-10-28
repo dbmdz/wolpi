@@ -30,19 +30,46 @@ jobs:
 
   verify:
     runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - jvm: OpenJDK
+            distribution: temurin
+            maven-args: ""
+          - jvm: GraalVM
+            distribution: graalvm
+            maven-args: "-Ptest-guest-jit"
+    name: Verify (${{ matrix.jvm }})
     steps:
       - uses: actions/checkout@v7
       - name: Install libvips
-        run: sudo apt update && sudo apt install -y libvips-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvips42t64 libglib2.0-0t64
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libvips.so.42 /usr/lib/x86_64-linux-gnu/libvips.so
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 /usr/lib/x86_64-linux-gnu/libglib-2.0.so
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 /usr/lib/x86_64-linux-gnu/libgobject-2.0.so
+          sudo ldconfig
+      - name: Verify libvips
+        run: ldconfig -p | grep libvips
       - uses: jdx/mise-action@v5
+      - uses: actions/setup-java@v6
+        with:
+          distribution: ${{ matrix.distribution }}
+          java-version: "25"
       - uses: actions/cache@v6
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
-      - run: mvn $MAVEN_CLI_OPTS verify
+      - name: Verify JVM selection
+        run: |
+          java -version
+          mvn -version
+      - run: mvn $MAVEN_CLI_OPTS verify ${{ matrix.maven-args }}
       - name: Save release JAR
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && matrix.jvm == 'OpenJDK'
         uses: actions/upload-artifact@v7
         with:
           name: release-jar

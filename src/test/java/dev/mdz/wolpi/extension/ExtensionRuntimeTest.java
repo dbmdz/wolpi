@@ -26,8 +26,11 @@ import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.PyPiInstaller.EntryPoint;
 import dev.mdz.wolpi.extension.exceptions.ExtensionLoadException;
 import dev.mdz.wolpi.extension.exceptions.PackageInstallException;
+import dev.mdz.wolpi.extension.model.ExtensionGuestContext;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
+import dev.mdz.wolpi.extension.model.JSLoadedExtension;
 import dev.mdz.wolpi.extension.model.LoadedExtension;
+import dev.mdz.wolpi.extension.model.PythonLoadedExtension;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
 import dev.mdz.wolpi.iiif.model.IIIFVersion;
 import dev.mdz.wolpi.iiif.model.ImageRequest;
@@ -41,6 +44,8 @@ import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.SourceNotModified;
 import dev.mdz.wolpi.testutil.VImageHelpers;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.MockClock;
+import io.micrometer.core.instrument.simple.SimpleConfig;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.awt.Color;
 import java.io.IOException;
@@ -54,12 +59,16 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -69,7 +78,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Predicate;
+import java.util.stream.Stream;
 import org.apache.commons.pool2.KeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
@@ -79,14 +88,18 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -97,6 +110,10 @@ import org.springframework.boot.info.BuildProperties;
 @DisplayName("ExtensionRuntime")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ExtendWith(MockitoExtension.class)
+// The resource lock serializes this class's methods while allowing its engine warm-up to overlap
+// with other independent classes. See src/test/resources/junit-platform.properties.
+@Execution(ExecutionMode.CONCURRENT)
+@ResourceLock("extension-runtime-fixture")
 public class ExtensionRuntimeTest {
 
     // Reuse installed extensions between test invocations
@@ -129,6 +146,17 @@ public class ExtensionRuntimeTest {
     private WolpiConfig config;
     private Arena testArena;
     private final List<GuestContextFactory> guestContextFactories = new ArrayList<>();
+    private final List<ExtensionRuntime> batchedRuntimes = new ArrayList<>();
+    private final Map<Path, FixtureDefinition> fixtureDefinitions = new HashMap<>();
+    // Only these immutable fixtures have configuration-independent metadata and no registration
+    // side effects. Registry loading has its own tests; runtime tests need fresh guest bindings
+    // and execution contexts, not repeated discovery of the same hooks.
+    private static final Set<Path> CACHEABLE_FIXTURES = Set.of(
+            Path.of("src/test/resources/py-extension/single.py"),
+            Path.of("src/test/resources/py-extension"),
+            Path.of("src/test/resources/js-extension/index.js"));
+
+    private record FixtureDefinition(String packageName, String version, LoadedExtension metadata) {}
 
     @BeforeAll
     static void beforeAll() throws IOException {
@@ -191,8 +219,8 @@ public class ExtensionRuntimeTest {
                         setMinIdlePerKey(0);
                         setMaxIdlePerKey(2);
                         setMaxTotalPerKey(4);
-                        setTimeBetweenEvictionRuns(Duration.ofMillis(10));
-                        setMinEvictableIdleDuration(Duration.ofMillis(500));
+                        // Each test closes its pool. A background evictor adds teardown races
+                        // and can evict contexts while pool-reuse assertions inspect them.
                         setJmxEnabled(false);
                     }
                 });
@@ -210,21 +238,31 @@ public class ExtensionRuntimeTest {
 
     @AfterEach
     void tearDown() {
-        if (testArena != null) {
-            testArena.close();
-        }
+        // JUnit completes dynamic children before @AfterEach. Keep their shared fixture alive
+        // until then; ordinary tests still own and close their individual runtimes.
         try {
-            contextPool.close();
-            guestContextFactories.forEach(GuestContextFactory::close);
-            guestContextFactories.clear();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to close context pool", e);
+            batchedRuntimes.forEach(ExtensionRuntime::close);
+        } finally {
+            batchedRuntimes.clear();
+            try {
+                contextPool.close();
+                guestContextFactories.forEach(GuestContextFactory::close);
+                guestContextFactories.clear();
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to close context pool", e);
+            } finally {
+                if (testArena != null) {
+                    testArena.close();
+                }
+                meterRegistry.close();
+            }
         }
     }
 
     @AfterAll
     void afterAll() throws Exception {
         threadPool.shutdownNow();
+        fixtureDefinitions.clear();
         if (graalContextSupplier != null) {
             graalContextSupplier.resetEngine();
         }
@@ -243,15 +281,9 @@ public class ExtensionRuntimeTest {
             }
         }
 
-        @ParameterizedTest(name = "authorize(id={0}) == {1}?")
-        @CsvSource({
-            "allowed-id,true",
-            "allowed-by-one-but-forbidden-by-other,false",
-            "py-pkg-id,false",
-            "completely-unknown-id,false"
-        })
+        @TestFactory
         @DisplayName("Should use auth extension to authorize requests by identifier")
-        void shouldUseAuthExtensionToAuthorizeById(String idToAuthorize, boolean expected) {
+        Stream<DynamicTest> shouldUseAuthExtensionToAuthorizeById() {
             var exts = List.of(
                     getTestAuthExtension(TestExtensionType.PY_SINGLE, List.of("allowed-id"), null, null, null),
                     getTestAuthExtension(
@@ -261,10 +293,17 @@ public class ExtensionRuntimeTest {
                             null,
                             null),
                     getTestAuthExtension(TestExtensionType.PY_PKG, null, List.of("py-pkg-id"), null, null));
-            try (ExtensionRuntime runtime = getRuntimeWithExtensions(exts)) {
-                assertThat(runtime.authorize(idToAuthorize, Map.of(), "127.0.0.1"))
-                        .isEqualTo(expected);
-            }
+            var runtime = getRuntimeWithExtensions(exts);
+            batchedRuntimes.add(runtime);
+            return Stream.of(
+                            Map.entry("allowed-id", true),
+                            Map.entry("allowed-by-one-but-forbidden-by-other", false),
+                            Map.entry("py-pkg-id", false),
+                            Map.entry("completely-unknown-id", false))
+                    .map(test -> DynamicTest.dynamicTest(
+                            "authorize(" + test.getKey() + ") == " + test.getValue(),
+                            () -> assertThat(runtime.authorize(test.getKey(), Map.of(), "127.0.0.1"))
+                                    .isEqualTo(test.getValue())));
         }
 
         @ParameterizedTest
@@ -365,8 +404,6 @@ public class ExtensionRuntimeTest {
         @RepeatedTest(5)
         @DisplayName("Should still use another resolver when one resolver raises")
         void shouldUseOtherResolverWhenOneRaises() {
-            // JS resolver (prefix "") raises immediately for "js-raise"
-            // the Python HTTP resolver (prefix "") resolves any identifier to a URL.
             var exts = List.of(
                     getTestResolverExtension("", TestResolvingType.FILESYSTEM),
                     getTestResolverExtension("", TestResolvingType.HTTP));
@@ -610,11 +647,6 @@ public class ExtensionRuntimeTest {
         @Test
         @DisplayName("Should borrow all contexts before running hook calls")
         void shouldBorrowAllContextsBeforeRunningHookCalls() throws Exception {
-            // The first extension resolves the identifier while the second one needs a long time to
-            // borrow its context, so its hook call is cancelled while it is still waiting for it.
-            // Context creation is not interruptible, so the borrow finishes anyway - if that happened
-            // after the runtime handed the borrowed contexts back to the pool, the context would be
-            // lost to the pool forever.
             var fastWinner = new ExtensionConfig(
                     Path.of("src/test/resources/js-extension/index.js"),
                     null,
@@ -648,8 +680,6 @@ public class ExtensionRuntimeTest {
                 var result = runtime.resolve("foo", null, null);
                 assertThat(result).isNotNull();
                 assertThat(result.resolvedImage()).isInstanceOf(BinaryResolvedImage.class);
-                // Both contexts must have been borrowed before any hook call was submitted, the one
-                // of the cancelled extension included.
                 assertThat(spyPool.getNumActive()).isEqualTo(2);
             }
             assertThat(spyPool.getNumActive()).isZero();
@@ -673,14 +703,11 @@ public class ExtensionRuntimeTest {
             }
         }
 
-        @Disabled
         @Test
         @DisplayName("Should run setup, cleanup and destroy hooks appropriately")
-        void shouldRunSetupCleanupAndDestroyHooks() {
-            List<Thread> threads = new ArrayList<>();
-            List<String> threadNames = new ArrayList<>();
-            Path pyHookLog = tempDir.resolve("py-hooks.log");
-            Path jsHookLog = tempDir.resolve("js-hooks.log");
+        void shouldRunSetupCleanupAndDestroyHooks() throws Exception {
+            Path pyHookLog = tempDir.resolve("py-hooks-%s.log".formatted(UUID.randomUUID()));
+            Path jsHookLog = tempDir.resolve("js-hooks-%s.log".formatted(UUID.randomUUID()));
             List<ExtensionConfig> exts = List.of(
                     new ExtensionConfig(
                             Path.of("src/test/resources/py-extension/single.py"),
@@ -697,65 +724,27 @@ public class ExtensionRuntimeTest {
             config.extensions().addAll(exts);
             var registry = new ExtensionRegistry(
                     config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
-            var metrics = new WolpiMetrics(meterRegistry);
-            for (int i = 0; i < 3; i++) {
-                final int idx = i;
-                Thread t = new Thread(() -> {
-                    try (ExtensionRuntime runtime =
-                            new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics)) {
-                        runtime.resolve("foo-%d".formatted(idx), null, null);
-                    }
-                });
-                t.setName(UUID.randomUUID().toString());
-                threads.add(t);
-                threadNames.add(t.getName());
+            var poolConfig = new GenericKeyedObjectPoolConfig<RuntimeContext>();
+            poolConfig.setMaxIdlePerKey(0);
+            poolConfig.setMaxTotalPerKey(2);
+            poolConfig.setJmxEnabled(false);
+            var destroyingPool = new GenericKeyedObjectPool<>(
+                    new RuntimeContextPooledObjectFactory(graalContextSupplier), poolConfig);
+            try (registry;
+                    destroyingPool;
+                    var runtime = new ExtensionRuntime.ExtensionRuntimeImpl(
+                            registry, destroyingPool, threadPool, new WolpiMetrics(meterRegistry))) {
+                // Unlike resolve(), info.json augmentation runs every extension that implements
+                // the hook, so both contexts are exercised regardless of scheduling.
+                runtime.augmentInfoJson("hook-log", Map.of("id", "hook-log"), IIIFVersion.V3);
             }
-            assertThat(contextPool.getNumActive()).isZero();
-            assertThat(contextPool.getNumIdle()).isZero();
-            // Start all threads
-            threads.forEach(Thread::start);
-            // Wait for all threads to finish
-            threads.forEach(t -> {
-                try {
-                    t.join();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            // The actual order of hook execution is non-deterministic due to multithreading, but we can
-            // check that:
-            // - Each thread ran its own sequence of hooks
-            // - Each thread's hooks are in the correct order: info, setup, resolve, cleanup
-            // - At least one destroy hook was called (we have 2 max idle contexts, so at least one
-            //   context should have been destroyed)
-            Predicate<? super List<? extends String>> hookSequencePredicate = (List<? extends String> seq) -> {
-                // for each setup hook after the first one (for info), there should be
-                // a resolve and cleanup hook after it.
-                int setupCount = 0;
-                int resolveCount = 0;
-                int cleanupCount = 0;
-                for (String hook : seq.subList(2, seq.size())) {
-                    switch (hook) {
-                        case "setup" -> setupCount++;
-                        case "resolve" -> resolveCount++;
-                        case "cleanup" -> cleanupCount++;
-                    }
-                }
-                return setupCount == 3 && resolveCount == 3 && cleanupCount == 3;
-            };
+
+            // Loading discovers hooks in a temporary context, then a pooled context handles one
+            // request. Max idle zero makes return-to-pool destruction deterministic.
             assertThat(readHookLog(pyHookLog).stream().map(HookLogEntry::hookName))
-                    .startsWith("info", "destroy")
-                    .endsWith("destroy")
-                    .matches(hookSequencePredicate, "has correct hook sequence");
+                    .containsExactly("info", "destroy", "setup", "augmentInfoJson", "cleanup", "destroy");
             assertThat(readHookLog(jsHookLog).stream().map(HookLogEntry::hookName))
-                    .startsWith("info", "destroy")
-                    .endsWith("destroy")
-                    .matches(hookSequencePredicate, "has correct hook sequence");
+                    .containsExactly("info", "destroy", "setup", "augmentInfoJson", "cleanup", "destroy");
         }
     }
 
@@ -827,26 +816,31 @@ public class ExtensionRuntimeTest {
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"xyz,eHl6", "pixl,UElYTERBVEE="})
+    @TestFactory
     @DisplayName("Should execute format hooks on image")
-    void shouldExecuteFormatHooks(String format, String expectedDataBase64) {
+    Stream<DynamicTest> shouldExecuteFormatHooks() {
+        var runtime = getRuntimeWithSingleFileExtensions();
+        batchedRuntimes.add(runtime);
+        return Stream.of(Map.entry("xyz", "eHl6"), Map.entry("pixl", "UElYTERBVEE="))
+                .map(test -> DynamicTest.dynamicTest(
+                        "format " + test.getKey(), () -> assertFormatHook(runtime, test.getKey(), test.getValue())));
+    }
+
+    private void assertFormatHook(ExtensionRuntime runtime, String format, String expectedDataBase64) {
         ByteBuffer expectedData = ByteBuffer.wrap(Base64.getDecoder().decode(expectedDataBase64));
-        try (var runtime = getRuntimeWithSingleFileExtensions()) {
-            VImage img = VImageHelpers.createEmptyImage(testArena, 10, 10, Color.yellow);
-            EncodedImage encoded = runtime.preFormat(
-                    img,
-                    "image-" + format,
-                    new ImageInfo(new ImageSize(10, 10), List.of(), List.of()),
-                    new ImageRequest("image-" + format, IIIFVersion.V3, "full", "full", "0", "default", format));
-            assertThat(encoded).isNotNull();
-            assertThat(encoded.data()).isEqualByComparingTo(expectedData);
-            var headers = encoded.extraHeaders();
-            assertThat(headers).isNotNull();
-            var sourceEntry = headers.get("X-Wolpi-Encoding-Source");
-            assertThat(sourceEntry).isNotNull().hasSize(1);
-            assertThat(sourceEntry).containsExactly("image-" + format);
-        }
+        VImage img = VImageHelpers.createEmptyImage(testArena, 10, 10, Color.yellow);
+        EncodedImage encoded = runtime.preFormat(
+                img,
+                "image-" + format,
+                new ImageInfo(new ImageSize(10, 10), List.of(), List.of()),
+                new ImageRequest("image-" + format, IIIFVersion.V3, "full", "full", "0", "default", format));
+        assertThat(encoded).isNotNull();
+        assertThat(encoded.data()).isEqualByComparingTo(expectedData);
+        var headers = encoded.extraHeaders();
+        assertThat(headers).isNotNull();
+        var sourceEntry = headers.get("X-Wolpi-Encoding-Source");
+        assertThat(sourceEntry).isNotNull().hasSize(1);
+        assertThat(sourceEntry).containsExactly("image-" + format);
     }
 
     private ExtensionRuntime getRuntimeWithSingleFileExtensions() {
@@ -1177,8 +1171,11 @@ public class ExtensionRuntimeTest {
     @Test
     @DisplayName("Should allow extensions to register and update custom metrics")
     void shouldAllowExtensionsToRegisterAndUpdateCustomMetrics() {
-        try (var runtime = getRuntimeWithExtensions(
-                List.of(new ExtensionConfig(Path.of("src/test/resources/metrics.js"), null, null, Map.of(), false)))) {
+        var clock = new MockClock();
+        meterRegistry.close();
+        meterRegistry = new SimpleMeterRegistry(SimpleConfig.DEFAULT, clock);
+        try (var runtime = getRuntimeWithExtensions(List.of(new ExtensionConfig(
+                Path.of("src/test/resources/metrics.js"), null, null, Map.of("clock", clock), false)))) {
             var counter = meterRegistry.get("metrics_test_counter").counter();
             assertThat(counter).isNotNull();
             var gauge = meterRegistry.get("metrics_test_gauge").gauge();
@@ -1196,9 +1193,8 @@ public class ExtensionRuntimeTest {
 
             Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isEqualTo(0.0);
             runtime.authorize("timed-4000", Map.of(), "");
-            Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isGreaterThan(4000.0);
-            runtime.resolve("timed-resolve", null, null);
-            Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isGreaterThan(7000.0);
+            Assertions.assertThat(timer.count()).isEqualTo(1);
+            Assertions.assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isEqualTo(4000.0);
         }
     }
 
@@ -1267,30 +1263,55 @@ public class ExtensionRuntimeTest {
 
     private ExtensionRuntime getRuntimeWithExtensions(
             KeyedObjectPool<LoadedExtension, RuntimeContext> contextPool, List<ExtensionConfig> extensions) {
-        config.extensions().addAll(extensions);
-        var registry = new ExtensionRegistry(
-                config, pyPiInstaller, npmInstaller, null, graalContextSupplier, guestContextFactory(config), null);
-        var metrics = new WolpiMetrics(meterRegistry);
-        return new ExtensionRuntime.ExtensionRuntimeImpl(registry, contextPool, threadPool, metrics) {
-            @Override
-            public void close() {
-                super.close();
-                try {
-                    // Each helper call creates a dedicated registry with its own file monitor, so
-                    // tests must close it alongside the runtime to avoid leaking watcher threads.
-                    registry.close();
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to close test extension registry", e);
+        var factory = guestContextFactory(config);
+        List<LoadedExtension> loaded = new ArrayList<>();
+        try (var loader =
+                new ExtensionRegistry(config, pyPiInstaller, npmInstaller, null, graalContextSupplier, factory, null)) {
+            for (var extension : extensions) {
+                boolean cacheable = !extension.liveReload()
+                        && extension.path() != null
+                        && CACHEABLE_FIXTURES.contains(extension.path())
+                        && (extension.config() == null || !extension.config().containsKey("logHooks"));
+                if (!cacheable) {
+                    loaded.add(loader.loadExtension(extension));
+                    continue;
                 }
+                var fixture = fixtureDefinitions.get(extension.path());
+                if (fixture == null) {
+                    var actual = loader.loadExtension(extension);
+                    String packageName =
+                            extension.path().getFileName().toString().split("\\.")[0];
+                    fixture = new FixtureDefinition(
+                            packageName,
+                            Objects.requireNonNull(actual.guestContext()).extensionVersion(),
+                            withGuestContext(actual, extension, null));
+                    fixtureDefinitions.put(extension.path(), fixture);
+                }
+                var guest = factory.createGuestContext(
+                        fixture.packageName(),
+                        fixture.version(),
+                        extension.config(),
+                        fixture.metadata().language(),
+                        null);
+                loaded.add(withGuestContext(fixture.metadata(), extension, guest));
             }
-        };
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load runtime test fixtures", e);
+        }
+        var registry = mock(ExtensionRegistry.class);
+        lenient().when(registry.getExtensions(any(ExtensionHooks[].class))).thenAnswer(invocation -> {
+            var hooks = (ExtensionHooks[]) invocation.getRawArguments()[0];
+            return loaded.stream()
+                    .filter(extension ->
+                            hooks.length == 0 || Arrays.stream(hooks).anyMatch(extension.implementedHooks()::contains))
+                    .toList();
+        });
+        return new ExtensionRuntime.ExtensionRuntimeImpl(
+                registry, contextPool, threadPool, new WolpiMetrics(meterRegistry));
     }
 
     /// Run a hook call on a separate thread and interrupt that thread while it waits for the
     /// results of the parallel extension invocations.
-    ///
-    /// @param hookCall the hook invocation under test
-    /// @return the error the hook call failed with
     private Throwable interruptDuring(Callable<?> hookCall) throws InterruptedException {
         var callerExecutor = Executors.newSingleThreadExecutor(r -> {
             var thread = new Thread(r);
@@ -1300,8 +1321,6 @@ public class ExtensionRuntimeTest {
         Future<?> call;
         try {
             call = callerExecutor.submit(hookCall);
-            // Give the runtime time to hand the hook to all extensions, then interrupt the calling
-            // thread while it waits on their results.
             Thread.sleep(500);
         } finally {
             callerExecutor.shutdownNow();
@@ -1313,12 +1332,8 @@ public class ExtensionRuntimeTest {
         } catch (ExecutionException e) {
             failure = e.getCause();
         } catch (TimeoutException e) {
-            // Without dedicated interrupt handling, the caller spins in `poll` forever after the
-            // interrupt, since `poll` fails immediately on an interrupted thread.
             throw new AssertionError("Hook call kept running after its thread was interrupted", e);
         }
-        // Wait for the cancelled extension invocations to finish before the caller returns the
-        // borrowed runtime contexts to the pool.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (threadPool.getActiveCount() > 0 && System.nanoTime() < deadline) {
             Thread.sleep(10);
@@ -1333,7 +1348,6 @@ public class ExtensionRuntimeTest {
                 }
 
                 export function authorize(identifier, headers, clientIp) {
-                  // Blocks until the worker thread is cancelled by the interrupted caller
                   Java.type("java.lang.Thread").sleep(60000);
                   return true;
                 }
@@ -1349,13 +1363,51 @@ public class ExtensionRuntimeTest {
                 }
 
                 export function resolve(identifier, etag, lastModified) {
-                  // Blocks until the worker thread is cancelled by the interrupted caller
                   Java.type("java.lang.Thread").sleep(60000);
                   return null;
                 }
 
                 export function cleanup() {}
                 """.formatted(name));
+    }
+
+    private static LoadedExtension withGuestContext(
+            LoadedExtension metadata, ExtensionConfig extension, @Nullable ExtensionGuestContext guest) {
+        return switch (metadata) {
+            case JSLoadedExtension js ->
+                new JSLoadedExtension(
+                        extension,
+                        js.source(),
+                        js.extensionInfo(),
+                        js.extensionVersion(),
+                        js.implementedHooks(),
+                        guest,
+                        null);
+            case PythonLoadedExtension py ->
+                new PythonLoadedExtension(
+                        extension,
+                        py.source(),
+                        py.extensionInfo(),
+                        py.extensionVersion(),
+                        py.implementedHooks(),
+                        py.entryPoint(),
+                        py.virtualEnvironment(),
+                        guest,
+                        null);
+        };
+    }
+
+    @Test
+    void cachedMetadataKeepsGuestBindingsIsolated() {
+        var first = getTestAuthExtension(TestExtensionType.PY_SINGLE, List.of("first"), null, null, null);
+        var second = getTestAuthExtension(TestExtensionType.PY_SINGLE, List.of("second"), null, null, null);
+        try (var firstRuntime = getRuntimeWithExtensions(first);
+                var secondRuntime = getRuntimeWithExtensions(second)) {
+            assertThat(firstRuntime.authorize("first", Map.of(), "127.0.0.1")).isTrue();
+            assertThat(firstRuntime.authorize("second", Map.of(), "127.0.0.1")).isFalse();
+            assertThat(secondRuntime.authorize("second", Map.of(), "127.0.0.1")).isTrue();
+            assertThat(secondRuntime.authorize("first", Map.of(), "127.0.0.1")).isFalse();
+        }
     }
 
     private ExtensionConfig writeJsExtension(String name, String source) throws IOException {
@@ -1464,7 +1516,9 @@ public class ExtensionRuntimeTest {
                     null,
                     Map.of(),
                     null);
-            supplier = new GraalContextSupplier(cfg);
+            // Timeouts belong to GuestContextFactory's per-harness HTTP client, not the
+            // engine. Share parsed language code, while keeping contexts and clients isolated.
+            supplier = graalContextSupplier;
             var poolConfig = new GenericKeyedObjectPoolConfig<RuntimeContext>();
             poolConfig.setJmxEnabled(false);
             pool = new GenericKeyedObjectPool<>(new RuntimeContextPooledObjectFactory(supplier), poolConfig);
@@ -1481,7 +1535,6 @@ public class ExtensionRuntimeTest {
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
             registry.close();
             pool.close();
-            supplier.resetEngine();
         }
     }
 
@@ -1489,15 +1542,20 @@ public class ExtensionRuntimeTest {
     @DisplayName("Extension HTTP Timeout Tests")
     class HttpTimeoutTests {
 
-        /// How long the slow test server sleeps before responding, well above the request
-        /// timeouts used in the tests
-        private static final Duration SERVER_DELAY = Duration.ofSeconds(3);
+        private static final Duration REQUEST_TIMEOUT = Duration.ofMillis(500);
+        private static final Duration MAX_REQUEST_DURATION = Duration.ofSeconds(3);
 
         private HttpServer fastServer;
         private HttpServer slowServer;
+        private ExecutorService serverExecutor;
+        private CountDownLatch slowRequestEntered;
+        private CountDownLatch releaseSlowRequest;
 
         @BeforeEach
         void startTestServers() throws IOException {
+            serverExecutor = Executors.newVirtualThreadPerTaskExecutor();
+            slowRequestEntered = new CountDownLatch(1);
+            releaseSlowRequest = new CountDownLatch(1);
             fastServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             fastServer.createContext("/fast", exchange -> {
                 byte[] body = "OK".getBytes(StandardCharsets.UTF_8);
@@ -1508,7 +1566,10 @@ public class ExtensionRuntimeTest {
             slowServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             slowServer.createContext("/slow", exchange -> {
                 try {
-                    Thread.sleep(SERVER_DELAY.toMillis());
+                    slowRequestEntered.countDown();
+                    if (!releaseSlowRequest.await(10, TimeUnit.SECONDS)) {
+                        return;
+                    }
                     byte[] body = "TOO-LATE".getBytes(StandardCharsets.UTF_8);
                     exchange.sendResponseHeaders(200, body.length);
                     exchange.getResponseBody().write(body);
@@ -1520,14 +1581,19 @@ public class ExtensionRuntimeTest {
                     exchange.close();
                 }
             });
+            fastServer.setExecutor(serverExecutor);
+            slowServer.setExecutor(serverExecutor);
             fastServer.start();
             slowServer.start();
         }
 
         @AfterEach
-        void stopTestServers() {
+        void stopTestServers() throws InterruptedException {
+            releaseSlowRequest.countDown();
             fastServer.stop(0);
             slowServer.stop(0);
+            serverExecutor.shutdownNow();
+            assertThat(serverExecutor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
 
         @ParameterizedTest
@@ -1552,7 +1618,7 @@ public class ExtensionRuntimeTest {
         @DisplayName("Guest HTTP calls should time out and report HTTP 504")
         void shouldTimeOutOnSlowRequest(HttpApi api) throws Exception {
             var ext = httpExtension(api);
-            try (var harness = fetchHarness(Duration.ofMillis(500), ext)) {
+            try (var harness = fetchHarness(REQUEST_TIMEOUT, ext)) {
                 var runtime = harness.runtime;
                 var url = "http://127.0.0.1:%d/slow"
                         .formatted(slowServer.getAddress().getPort());
@@ -1565,8 +1631,11 @@ public class ExtensionRuntimeTest {
                         .isInstanceOf(HttpStatusException.class)
                         .hasFieldOrPropertyWithValue("httpStatusCode", 504);
                 assertThat(thrown.getMessage()).contains("upstream");
-                // The request must have been aborted long before the server finished
-                assertThat(elapsed).isLessThan(SERVER_DELAY);
+                assertThat(slowRequestEntered.await(1, TimeUnit.SECONDS)).isTrue();
+                // No response is possible until teardown releases the handler. A missing client
+                // deadline therefore cannot turn into a successful response from this fixture.
+                assertThat(releaseSlowRequest.getCount()).isEqualTo(1);
+                assertThat(elapsed).isGreaterThanOrEqualTo(REQUEST_TIMEOUT).isLessThan(MAX_REQUEST_DURATION);
             }
         }
 

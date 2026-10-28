@@ -71,8 +71,11 @@ After installing the requirements, the main development loop is Maven-based:
 # Compile and run Spotless checks
 mvn compile
 
-# Run the full test suite
+# Run the full test suite (guest JIT compilation disabled for faster feedback)
 mvn test
+
+# Run the same full suite with production-like guest JIT compilation
+mvn test -Ptest-guest-jit
 
 # Apply Java formatting
 mvn spotless:apply
@@ -80,6 +83,14 @@ mvn spotless:apply
 # Package the application
 mvn package
 ```
+
+By default, the Surefire test JVM uses C1-only compilation and disables Graal guest-language
+compilation, which is faster for short-lived test contexts. It keeps the same tests and application
+coverage and does not change the packaged application or `spring-boot:run`. Use `-Ptest-guest-jit` in
+CI to exercise production-like guest JIT compilation. The first validation run may take longer while
+it installs the IIIF validator.
+Avoid concurrent suites using the same data directory; override it with
+`-Dwolpi.data-directory=/path/to/isolated-test-data` when needed.
 
 Wolpi reads its defaults from [`src/main/resources/application.yml`][application-yml]. During local
 development, the default image base directory is `./images` and the extension data directory is

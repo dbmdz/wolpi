@@ -28,11 +28,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.ApplicationArguments;
@@ -40,6 +45,10 @@ import org.springframework.boot.info.BuildProperties;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ExtensionRegistry")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+// Keep methods serial while overlapping this independent engine warm-up with the runtime tests.
+@Execution(ExecutionMode.CONCURRENT)
+@ResourceLock("extension-registry-engine")
 class ExtensionRegistryTest {
 
     @Mock
@@ -55,10 +64,30 @@ class ExtensionRegistryTest {
     private Path tempDir;
 
     private final List<GuestContextFactory> guestContextFactories = new ArrayList<>();
+    private final List<ExtensionRegistry> registries = new ArrayList<>();
+    private final List<Arena> arenas = new ArrayList<>();
+    private GraalContextSupplier contextSupplier;
 
     @AfterEach
-    void closeHttpClients() {
-        guestContextFactories.forEach(GuestContextFactory::close);
+    void closeFixtures() throws Exception {
+        try {
+            for (var registry : registries) {
+                registry.close();
+            }
+        } finally {
+            registries.clear();
+            guestContextFactories.forEach(GuestContextFactory::close);
+            guestContextFactories.clear();
+            arenas.forEach(Arena::close);
+            arenas.clear();
+        }
+    }
+
+    @AfterAll
+    void releaseEngineCaches() {
+        if (contextSupplier != null) {
+            contextSupplier.resetEngine();
+        }
     }
 
     @DisplayName("should not load extensions when config is empty")
@@ -379,16 +408,23 @@ def resolve(self, identifier, etag, last_modified):
                 null,
                 null,
                 null);
-        var guestContextFactory = new GuestContextFactory(buildProperties, wolpiConfig, Arena.ofAuto(), null, null);
+        if (contextSupplier == null) {
+            contextSupplier = new GraalContextSupplier(wolpiConfig);
+        }
+        var arena = Arena.ofShared();
+        arenas.add(arena);
+        var guestContextFactory = new GuestContextFactory(buildProperties, wolpiConfig, arena, null, null);
         guestContextFactories.add(guestContextFactory);
-        return new ExtensionRegistry(
+        var registry = new ExtensionRegistry(
                 wolpiConfig,
                 pyPiInstaller,
                 npmInstaller,
                 mock(GenericKeyedObjectPool.class),
-                new GraalContextSupplier(wolpiConfig),
+                contextSupplier,
                 guestContextFactory,
                 applicationArguments);
+        registries.add(registry);
+        return registry;
     }
 
     private ExtensionConfig writePyExtension(String name, String source) throws IOException {
