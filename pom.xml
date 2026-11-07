@@ -40,7 +40,7 @@
     <graalvm.version>25.0.5</graalvm.version>
     <jspecify.version>1.0.1</jspecify.version>
     <picocli.version>4.7.7</picocli.version>
-    <vips-ffm.version>1.9.9</vips-ffm.version>
+    <vips-ffm.version>1.11.1</vips-ffm.version>
   </properties>
 
   <dependencies>
