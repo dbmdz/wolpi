@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.mdz.wolpi.config.HttpSourceCacheConfig;
+import dev.mdz.wolpi.exceptions.CacheDirectoryLockedException;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.http.cache.CacheFixture.MutableClock;
 import io.netty.buffer.Unpooled;
@@ -96,6 +97,29 @@ class HttpSourceCacheTest {
 
     private HttpSourceCache configuredCache(HttpSourceCacheConfig config) {
         return new HttpSourceCache(config, directory, client, clock, Duration.ofSeconds(30));
+    }
+
+    @Test
+    void refusesToShareCacheDirectoryWithAnotherInstance() throws Exception {
+        var settings = config(128, Duration.ofSeconds(60), 128);
+        try (var owner = configuredCache(settings)) {
+            assertThatThrownBy(() -> configuredCache(settings))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("already in use by another Wolpi instance")
+                    .hasCauseInstanceOf(CacheDirectoryLockedException.class);
+        }
+    }
+
+    @Test
+    void subcommandInvocationFallsBackToTemporaryDirectoryWhenDirectoryIsLocked() throws Exception {
+        var settings = config(128, Duration.ofSeconds(60), 128);
+        try (var owner = configuredCache(settings);
+                var subcommand =
+                        new HttpSourceCache(settings, directory, client, clock, Duration.ofSeconds(30), true)) {
+            // The owner keeps its directory, the subcommand gets its own throwaway cache
+            assertThat(owner.tryAcquireFresh(URI_IMAGE, null, null)).isNull();
+            assertThat(subcommand.tryAcquireFresh(URI_IMAGE, null, null)).isNull();
+        }
     }
 
     @Test

@@ -2,11 +2,13 @@ package dev.mdz.wolpi.http.cache;
 
 import dev.mdz.wolpi.config.HttpSourceCacheConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.exceptions.CacheDirectoryLockedException;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.model.CacheInfo;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.HttpSourceLease;
 import dev.mdz.wolpi.model.ImageInfo;
+import dev.mdz.wolpi.validation.CliRunner;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -29,10 +31,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
@@ -75,17 +79,28 @@ public final class HttpSourceCache implements AutoCloseable {
     private int activeFileLeases;
 
     @Autowired
-    public HttpSourceCache(WolpiConfig config, HttpClient client) {
+    public HttpSourceCache(WolpiConfig config, HttpClient client, @Nullable ApplicationArguments args) {
         this(
                 config.httpSourceCache(),
                 config.dataDirectory(),
                 client,
                 Clock.systemUTC(),
-                config.httpTimeouts().forSources().request());
+                config.httpTimeouts().forSources().request(),
+                CliRunner.isSubcommandInvocation(args));
     }
 
     public HttpSourceCache(
             HttpSourceCacheConfig config, Path dataDirectory, HttpClient client, Clock clock, Duration requestTimeout) {
+        this(config, dataDirectory, client, clock, requestTimeout, false);
+    }
+
+    HttpSourceCache(
+            HttpSourceCacheConfig config,
+            Path dataDirectory,
+            HttpClient client,
+            Clock clock,
+            Duration requestTimeout,
+            boolean ephemeralOnLockConflict) {
         AcquisitionDeadline.validate(requestTimeout);
         this.config = config;
         this.client = client;
@@ -94,13 +109,59 @@ public final class HttpSourceCache implements AutoCloseable {
         if (config.enabled()) {
             Path directory =
                     config.directory() == null ? dataDirectory.resolve("http-source-cache") : config.directory();
-            try {
-                disk = new DiskStore(directory, config.maxSize().toBytes());
-            } catch (IOException e) {
-                throw new IllegalStateException("Could not initialize HTTP source cache directory " + directory, e);
-            }
+            disk = openDiskStore(directory, config.maxSize().toBytes(), ephemeralOnLockConflict);
         } else {
             disk = null;
+        }
+    }
+
+    /// Open the on-disk cache, allowing operational subcommands to fall back to a throwaway
+    /// directory.
+    ///
+    /// A server instance must never share its cache directory, so a lock conflict aborts startup
+    /// there. Subcommands such as `validate` do not serve production traffic but are commonly run
+    /// next to a live instance, where failing on the lock would make them unusable.
+    private static DiskStore openDiskStore(Path directory, long maxSize, boolean ephemeralOnLockConflict) {
+        try {
+            return new DiskStore(directory, maxSize);
+        } catch (CacheDirectoryLockedException e) {
+            if (!ephemeralOnLockConflict) {
+                throw new IllegalStateException(
+                        ("Could not initialize HTTP source cache directory %s, it is already in use by another "
+                                        + "Wolpi instance. Use a separate directory per instance (e.g. a pod-local "
+                                        + "volume) or disable the cache with wolpi.http-source-cache.enabled=false.")
+                                .formatted(directory),
+                        e);
+            }
+            return openEphemeralDiskStore(directory, maxSize, e);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not initialize HTTP source cache directory " + directory, e);
+        }
+    }
+
+    private static DiskStore openEphemeralDiskStore(Path directory, long maxSize, IOException cause) {
+        Path temporary;
+        try {
+            temporary = Files.createTempDirectory("wolpi-http-source-cache-");
+        } catch (IOException e) {
+            e.addSuppressed(cause);
+            throw new IllegalStateException("Could not initialize HTTP source cache directory " + directory, e);
+        }
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(() -> FileUtils.deleteQuietly(temporary.toFile()), "http-source-cache-cleanup"));
+        log.warn(
+                "HTTP source cache directory {} is in use by another instance ({}), using the temporary directory {}"
+                        + " for this invocation.",
+                directory,
+                cause.getMessage(),
+                temporary);
+        try {
+            return new DiskStore(temporary, maxSize);
+        } catch (IOException e) {
+            e.addSuppressed(cause);
+            throw new IllegalStateException(
+                    "Could not initialize temporary HTTP source cache directory " + temporary, e);
         }
     }
 
