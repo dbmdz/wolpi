@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.4.0] - 2026-11-24
+
 ### Changed
 - **Breaking:** Wolpi now refuses to start when a configured extension cannot be loaded, instead
   of logging the error and starting without it. An extension that is configured but not loaded no
@@ -63,7 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limits that were introduced in October 2026, but it also serves to discourage
   inheriting from Wolpi in other Java projects, since the Extension API is
   intended as the sole officially supported means of customizing Wolpi.
-
 
 ### Fixed
 - Requesting the `bitonal` quality with the default `otsu` binarization method no longer fails with
