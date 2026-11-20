@@ -18,7 +18,9 @@ You can specify a different configuration file location by either:
 Top-level configuration keys:
 
 - `data-directory`: Location where Wolpi stores extensions installed from packages; defaults to
-  `./data`.
+  `./data`. Wolpi also keeps its HTTP source cache, the native resources GraalVM extracts for the
+  extension runtime (`<data-directory>/.truffle`), and the npm and pip caches used to install
+  extensions (`<data-directory>/npm/.cache`, `<data-directory>/pypi/.cache`) below this directory.
 - `image-base-dir`: Fallback location for images if no resolving extension provides the asset;
   defaults to `./images`.
 

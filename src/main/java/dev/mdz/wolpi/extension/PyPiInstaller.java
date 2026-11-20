@@ -382,6 +382,7 @@ public class PyPiInstaller {
                         pythonPath,
                         baseDir,
                         processTimeout,
+                        pythonEnvironment(),
                         "-m",
                         "venv",
                         venvPath.toAbsolutePath().toString());
@@ -404,8 +405,10 @@ public class PyPiInstaller {
         cmd.add("-m");
         cmd.add("pip");
         cmd.addAll(Arrays.stream(args).filter(s -> !s.isBlank()).toList());
+        Map<String, String> pipEnv = new HashMap<>(pythonEnvironment());
+        pipEnv.putAll(env);
         try {
-            return CommandRunner.runCommand(pythonInVenv, baseDir, processTimeout, env, cmd.toArray(new String[0]));
+            return CommandRunner.runCommand(pythonInVenv, baseDir, processTimeout, pipEnv, cmd.toArray(new String[0]));
         } catch (IOException | InterruptedException e) {
             throw new PackageInstallException(e);
         }
@@ -443,4 +446,13 @@ public class PyPiInstaller {
     public record EntryPoint(String module, String function) {}
 
     private record ParsedPackage(String name, String version) {}
+
+    /// Environment for Python invocations.
+    ///
+    /// pip caches downloads below `$HOME` by default, which does not exist (or is not writable) for
+    /// the unprivileged user in the container image. Keeping the cache inside the installation
+    /// directory means pip and the GraalPy wheel builds it spawns need no home directory at all.
+    private Map<String, String> pythonEnvironment() {
+        return Map.of("PIP_CACHE_DIR", baseDir.resolve(".cache").toString(), "PIP_DISABLE_PIP_VERSION_CHECK", "1");
+    }
 }
