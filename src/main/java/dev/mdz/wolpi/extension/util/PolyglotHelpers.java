@@ -28,6 +28,22 @@ public class PolyglotHelpers {
     private static final Converter<String, String> camelToSnake =
             CaseFormat.LOWER_CAMEL.converterTo(CaseFormat.LOWER_UNDERSCORE);
 
+    /// Read a string-like polyglot value as a Java [String].
+    ///
+    /// [Value#asString] is the only reliable accessor for values that come from an embedded Python
+    /// runtime: `as(String.class)` can hand back a GraalPy `TruffleString` host object instead of a
+    /// `java.lang.String`, so a cast on the result fails and callers that check convertibility that
+    /// way silently decline values they could have handled.
+    ///
+    /// @param value the polyglot value to read
+    /// @return the value as a Java string, or `null` if it is not a string
+    public static @Nullable String asJavaString(Value value) {
+        if (value.isString()) {
+            return value.asString();
+        }
+        return null;
+    }
+
     /// Check if a Value has either a dictionary entry or an object member with the given name
     ///
     /// @param name   The name of the member or dictionary entry to check for
