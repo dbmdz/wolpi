@@ -119,16 +119,14 @@ public class GraalContextSupplier {
                 Value.class,
                 URI.class,
                 v -> {
-                    try {
-                        String s = v.as(String.class);
-                        return s != null && URI_PATTERN.matcher(s).matches();
-                    } catch (Exception ignored) {
-                        return false;
-                    }
+                    // GraalPy hands back a TruffleString host object for `as(String.class)`, so a cast
+                    // to String throws and would silently decline this mapping.
+                    String s = PolyglotHelpers.asJavaString(v);
+                    return s != null && URI_PATTERN.matcher(s).matches();
                 },
                 v -> {
                     try {
-                        return new URI(v.as(String.class));
+                        return new URI(PolyglotHelpers.asJavaString(v));
                     } catch (Exception e) {
                         return null;
                     }

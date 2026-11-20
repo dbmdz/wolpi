@@ -1410,6 +1410,33 @@ public class ExtensionRuntimeTest {
         }
     }
 
+    @Test
+    @DisplayName("Should accept an image returned from an image hook as-is")
+    void shouldAcceptImageReturnedFromImageHook() throws IOException {
+        var ext = writeJsExtension("returns-new-image", """
+                export function info() {
+                  return { name: "Returns New Image", apiVersion: 1, description: "test" };
+                }
+
+                export function cleanup() {}
+
+                export function preQuality(image) {
+                  return image.copyMemory();
+                }
+                """);
+        try (ExtensionRuntime runtime = getRuntimeWithExtensions(ext)) {
+            VImage img = VImageHelpers.createEmptyImage(testArena, 10, 10, Color.yellow);
+            VImage result = runtime.preQuality(
+                    img,
+                    "some-image",
+                    new ImageInfo(new ImageSize(10, 10), List.of(), List.of()),
+                    ImageRequest.full("some-image", IIIFVersion.V3));
+            assertThat(result).isNotNull();
+            assertThat(result.getWidth()).isEqualTo(10);
+            assertThat(result.getHeight()).isEqualTo(10);
+        }
+    }
+
     private ExtensionConfig writeJsExtension(String name, String source) throws IOException {
         Path path = tempDir.resolve("%s-%s.js".formatted(name, UUID.randomUUID()));
         Files.writeString(path, source);
