@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (UID/GID `10001`) by default. Existing bind mounts or volumes for `/app/data`
   that are owned by root must be writable by this user (or, in Kubernetes,
   use `securityContext.fsGroup: 10001`). Mounted configuration and image files must
-  be readable by this user. The default user can be changed.
+  be readable by this user. The default user can be changed. The image itself does not
+  require a writable home directory: GraalVM's native resource cache and the npm and pip
+  caches used for installing extensions live below the data directory.
 - **Breaking:** Client conditional headers (`If-None-Match`, `If-Modified-Since`) are no longer
   forwarded to HTTP image sources. Wolpi evaluates them after reading the source, so a conditional
   request may download the full source before returning `304`, including when the HTTP source cache
