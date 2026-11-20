@@ -10,10 +10,13 @@ import static org.mockito.Mockito.when;
 import app.photofox.vipsffm.VImage;
 import app.photofox.vipsffm.Vips;
 import app.photofox.vipsffm.VipsHelper;
+import app.photofox.vipsffm.enums.VipsInterpretation;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.IIIFConfig.Qualities;
 import dev.mdz.wolpi.config.IIIFConfig.ScalingFeature;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.config.WolpiConfig.BinarizationMethod;
+import dev.mdz.wolpi.config.WolpiConfig.ImageProcessingConfig;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.extension.model.ExtensionHooks;
 import dev.mdz.wolpi.iiif.ImageRequestParser;
@@ -32,6 +35,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import org.assertj.core.api.Assertions;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,9 +59,13 @@ public class ImageProcessorTest {
 
     @BeforeEach
     public void createProcessor() {
+        createProcessor(new Qualities("color", List.of("color")), null);
+    }
+
+    private void createProcessor(Qualities qualities, @Nullable ImageProcessingConfig imageProcessing) {
         var iiifConfig = mock(IIIFConfig.class, Answers.RETURNS_DEEP_STUBS);
         when(iiifConfig.features().scaling()).thenReturn(new ScalingFeature(true, true, true, true, true, false));
-        when(iiifConfig.qualities()).thenReturn(new Qualities("color", List.of("color")));
+        when(iiifConfig.qualities()).thenReturn(qualities);
         when(iiifConfig.formats().allowed().contains(any())).thenReturn(true);
         var config = new WolpiConfig(
                 Path.of("/tmp/wolpi-test-tmp"),
@@ -72,7 +80,7 @@ public class ImageProcessorTest {
                 null,
                 null,
                 null,
-                null,
+                imageProcessing,
                 Map.of(),
                 null);
         runtime = mock(ExtensionRuntime.class);
@@ -116,6 +124,33 @@ public class ImageProcessorTest {
         boolean hasICC =
                 VipsHelper.image_get_typeof(arena, finalImage.getUnsafeStructAddress(), "icc-profile-data") != 0;
         assertThat(hasICC).isFalse();
+    }
+
+    @Test
+    @DisplayName("should binarize JPEG sources with Otsu's method")
+    public void shouldBinarizeJpegSourceWithOtsu() throws NotImplementedException, IOException, InterruptedException {
+        // JPEG is decoded sequentially, so an implementation that evaluates the source twice (one pass
+        // for the histogram, one for the thresholding) fails with "out of order read"
+        createProcessor(
+                new Qualities("color", List.of("color", "bitonal")),
+                new ImageProcessingConfig(BinarizationMethod.OTSU));
+        var ident = "embedded_icc_colorspace.jpg";
+        var request = new ImageRequest(ident, IIIFVersion.V3, "full", "!300,300", "0", "bitonal", "png");
+        var source = new ImageSource(
+                ident,
+                new FilesystemResolvedImage(Path.of("src/test/resources/images/embedded_icc_colorspace.jpg")),
+                null,
+                null);
+        var info = loader.getImageInfo(source);
+
+        var processed = processor.processImage(source, request);
+        var encoded = processor.encodeImage(processed, info, request);
+
+        var bytes = new byte[encoded.data().remaining()];
+        encoded.data().get(bytes);
+        var finalImage = VImage.newFromBytes(arena, bytes);
+        Assertions.assertThat(VipsHelper.image_get_interpretation(finalImage.getUnsafeStructAddress()))
+                .isEqualTo(VipsInterpretation.INTERPRETATION_B_W.getRawValue());
     }
 
     @Test
