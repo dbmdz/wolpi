@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Fixed
+- Requesting the `bitonal` quality with the default `otsu` binarization method no longer fails with
+  a HTTP 500 response for JPEG sources. Computing the threshold and applying it evaluated the
+  source twice, and sequential JPEG decoding cannot rewind.
 - An interrupted request thread no longer spins in the parallel `authorize` and `resolve` hook
   loops. The remaining extension calls are cancelled and the request fails with an error response
   instead.

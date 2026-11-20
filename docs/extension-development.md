@@ -1577,6 +1577,31 @@ standard implementation (see [below][java-api]) for details on how to interact w
 For `preProcessImage`, the returned image must preserve the input dimensions; results with a
 different width or height are logged and ignored.
 
+!!! warning "The image is a lazy pipeline"
+    The `VImage` you receive does not hold pixels yet. It describes the operations to perform, and
+    libvips only executes them when something finally reads the pixels, which normally happens when
+    the result is encoded for the response.
+
+    That has a consequence for hooks that need actual pixel data, e.g. for analysis. Such a call
+    evaluates the pipeline at that point. If you then return the **same** image, Wolpi reads the
+    source a second time, and sources that are loaded with sequential access
+    (which happens very often) cannot rewind and the request fails with an `out
+    of order read` error from libvips.
+
+    To prevent that, materialize the image once and return that instead:
+
+    ```javascript
+    function preQuality(image, identifier, info, request) {
+        // Reading pixels evaluates the pipeline; keep the result and return it
+        const materialized = image.copyMemory();
+        wolpi.logger.info(`processing ${materialized.width()}x${materialized.height()}`);
+        return materialized;
+    }
+    ```
+
+    Reading only header metadata such as `width`, `height`, `bands` or `getInt("bits-per-sample")`
+    does not evaluate the pipeline and needs no materialization.
+
 [java-api]: #working-with-java-classes-from-extensions
 
 === "JavaScript"
