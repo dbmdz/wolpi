@@ -29,7 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory for each instance. Existing Kubernetes Deployments with multiple replicas must mount
   a pod-local `emptyDir` at the cache directory, switch to a StatefulSet with a separate volume per
   replica, or disable caching with `wolpi.http-source-cache.enabled: false`. Replicas cannot share
-  one cache directory; Wolpi refuses to start if another instance owns it.
+  one cache directory; Wolpi refuses to start if another instance owns it. The `validate`,
+  `install-validator`, and `install-extensions` subcommands are exempt: when another instance
+  owns the configured directory they log a warning and use a temporary directory for that
+  invocation, so they remain usable next to a running server.
 
 ### Added
 - Shared `http-timeouts.{connect,request}` settings (defaults `10s`/`30s`), with optional
