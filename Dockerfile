@@ -82,7 +82,10 @@ RUN java -Djarmode=tools -jar /app.jar extract && \
     rm -rf /app/app
 
 # Install the IIIF Image API validator
+# The Truffle, npm and pip caches are instance-local and would be root-owned from this build step,
+# drop them so the unprivileged runtime user can populate them itself.
 RUN wolpi install-validator && \
+    rm -rf /app/data/.truffle /app/data/npm/.cache /app/data/pypi/.cache && \
     mv /app/data /app/.data_preinstalled && \
     mkdir -p /app/data
 

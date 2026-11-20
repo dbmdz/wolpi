@@ -151,7 +151,7 @@ public class NpmInstaller {
             args.add(2, customTempConfig.toString());
         }
         try {
-            CommandRunner.runCommand(npmPath, baseDir, processTimeout, args.toArray(String[]::new));
+            CommandRunner.runCommand(npmPath, baseDir, processTimeout, npmEnvironment(), args.toArray(String[]::new));
         } catch (IOException | InterruptedException e) {
             throw new PackageInstallException(e);
         } finally {
@@ -179,7 +179,7 @@ public class NpmInstaller {
                     "npm executable not found or configured, cannot install package in " + localPackageDir);
         }
 
-        log.info("Installing Python extension from {}", localPackageDir.toAbsolutePath());
+        log.info("Installing JavaScript extension from {}", localPackageDir.toAbsolutePath());
         if (!Files.isDirectory(localPackageDir) || !Files.isRegularFile(localPackageDir.resolve("package.json"))) {
             throw new PackageInstallException(
                     "localPackageDir must exist and contain a package.json: " + localPackageDir);
@@ -190,6 +190,7 @@ public class NpmInstaller {
                     npmPath,
                     baseDir,
                     processTimeout,
+                    npmEnvironment(),
                     "install",
                     "--install-links=false",
                     "--no-audit",
@@ -297,7 +298,7 @@ public class NpmInstaller {
             return false;
         }
         try {
-            var version = CommandRunner.runCommand(npmPath, null, Duration.ofSeconds(10), "--version")
+            var version = CommandRunner.runCommand(npmPath, null, Duration.ofSeconds(10), npmEnvironment(), "--version")
                     .trim();
             int major = Integer.parseInt(version.split("\\.")[0]);
             return major >= 10;
@@ -319,5 +320,14 @@ public class NpmInstaller {
         if (entryPoint == null) {
             throw new ExtensionLoadException("Failed to verify installed package: " + packageName, cause);
         }
+    }
+
+    /// Environment for npm invocations.
+    ///
+    /// npm writes its cache and logs below `$HOME` by default, which does not exist (or is not
+    /// writable) for the unprivileged user in the container image. Keeping them inside the
+    /// installation directory means npm needs no home directory at all.
+    private Map<String, String> npmEnvironment() {
+        return Map.of("npm_config_cache", baseDir.resolve(".cache").toString());
     }
 }
