@@ -84,6 +84,13 @@ public class RecordValueMapper<T extends Record> {
     /// @see graalContextSupplier.buildHostAccess the [RecordValueMapper] registration
     ///      that enables `element.as(elementClass)` to re-enter record conversion
     private static @Nullable Object convertMember(Value value, RecordComponent member) {
+        // String members must not go through `as(String.class)`, see PolyglotHelpers#asJavaString
+        if (member.getType() == String.class) {
+            String asString = PolyglotHelpers.asJavaString(value);
+            if (asString != null) {
+                return asString;
+            }
+        }
         Type genericType = member.getGenericType();
         if (genericType instanceof ParameterizedType pt
                 && member.getType() == List.class
