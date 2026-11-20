@@ -30,6 +30,10 @@ public class Binarization {
     /// Binarize an image using Otsu's method, resulting in an image that keeps clearly defined lines
     /// and shapes, but eliminates texture and gradients.
     public static VImage otsu(VImage image) {
+        // Computing the threshold and applying it evaluate the pipeline twice. Sequential loaders
+        // such as JPEG cannot rewind, so a lazy source fails with "out of order read" on the second
+        // pass. Materializing once keeps the source decode to a single pass.
+        image = image.copyMemory();
         // Blur the image a bit before to help with noise, sigma=0.85 corresponds to a ~5x5 kernel
         image = image.gaussblur(0.85, VipsOption.Enum("precision", VipsPrecision.PRECISION_INTEGER));
         double binarizationThreshold = otsuThreshold(image);
