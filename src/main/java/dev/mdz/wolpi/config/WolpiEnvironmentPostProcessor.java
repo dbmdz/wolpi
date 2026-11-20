@@ -3,6 +3,7 @@ package dev.mdz.wolpi.config;
 import dev.mdz.wolpi.config.WolpiConfig.LogFormat;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
@@ -74,6 +75,8 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
         }
         WolpiConfig config = bound.get();
 
+        configureTruffleResourceCache(config);
+
         CompositePropertySource src = new CompositePropertySource("wolpi-overrides");
 
         src.addPropertySource(getLoggingOverrides(config));
@@ -88,6 +91,30 @@ public class WolpiEnvironmentPostProcessor implements EnvironmentPostProcessor {
         }
 
         environment.getPropertySources().addFirst(src);
+    }
+
+    /// Keep Truffle's extracted native resources inside the data directory.
+    ///
+    /// Truffle extracts its attach library into `$HOME/.cache` by default and silently falls back to
+    /// an interpreter-only runtime when that location is not writable, which slows down every
+    /// JavaScript and Python extension hook. Deployments without a writable home directory (e.g. the
+    /// container image running as an unprivileged user) would otherwise lose the optimized runtime.
+    ///
+    /// An explicitly configured `polyglot.engine.userResourceCache` always wins, so operators can
+    /// point it elsewhere.
+    private static void configureTruffleResourceCache(WolpiConfig config) {
+        String property = "polyglot.engine.userResourceCache";
+        if (System.getProperty(property) != null) {
+            return;
+        }
+        Path cacheDir = config.dataDirectory().toAbsolutePath().normalize().resolve(".truffle");
+        try {
+            Files.createDirectories(cacheDir);
+        } catch (IOException | RuntimeException e) {
+            // Read-only data directory: leave Truffle's default in place, it degrades gracefully.
+            return;
+        }
+        System.setProperty(property, cacheDir.toString());
     }
 
     private @Nullable EnumerablePropertySource<Object> getExternalConfigSource(ConfigurableEnvironment env) {
