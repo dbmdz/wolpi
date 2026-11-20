@@ -1,5 +1,6 @@
 package dev.mdz.wolpi.http.cache;
 
+import dev.mdz.wolpi.exceptions.CacheDirectoryLockedException;
 import dev.mdz.wolpi.http.cache.CacheEntry.DiskBody;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -87,11 +88,12 @@ final class DiskStore implements AutoCloseable {
             acquired = lockChannel.tryLock();
         } catch (OverlappingFileLockException | IOException e) {
             lockChannel.close();
-            throw new IOException("HTTP source cache directory is already in use or cannot be locked", e);
+            throw new CacheDirectoryLockedException(
+                    "HTTP source cache directory is already in use or cannot be locked", e);
         }
         if (acquired == null) {
             lockChannel.close();
-            throw new IOException("HTTP source cache directory is already in use");
+            throw new CacheDirectoryLockedException("HTTP source cache directory is already in use");
         }
         return acquired;
     }

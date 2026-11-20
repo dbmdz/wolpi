@@ -188,10 +188,7 @@ public class ExtensionRegistry implements AutoCloseable {
     ///             Spring application
     /// @return whether this invocation serves HTTP requests
     private static boolean servesRequests(@Nullable ApplicationArguments args) {
-        if (args == null) {
-            return true;
-        }
-        return args.getNonOptionArgs().stream().noneMatch(CliRunner.SUBCOMMANDS::contains);
+        return !CliRunner.isSubcommandInvocation(args);
     }
 
     /// Build a human-readable summary of all extension load failures, in configuration order.

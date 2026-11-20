@@ -16,8 +16,10 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.web.server.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
@@ -52,6 +54,18 @@ public class CliRunner implements CommandLineRunner, Runnable {
     public static final List<String> SUBCOMMANDS = List.of("validate", "install-validator", "install-extensions");
 
     Consumer<Integer> exitHandler = System::exit;
+
+    /// Determine whether this invocation runs one of the operational subcommands instead of serving
+    /// HTTP requests.
+    ///
+    /// Such invocations terminate once their work is done, so they must not contend with a server
+    /// instance for instance-local resources such as the HTTP source cache directory.
+    ///
+    /// @param args the application arguments, `null` when constructed outside of a Spring application
+    /// @return whether a subcommand was requested
+    public static boolean isSubcommandInvocation(@Nullable ApplicationArguments args) {
+        return args != null && args.getNonOptionArgs().stream().anyMatch(SUBCOMMANDS::contains);
+    }
 
     public CliRunner(IFactory picoCliFactory) {
         this.picoCliFactory = picoCliFactory;
