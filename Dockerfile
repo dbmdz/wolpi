@@ -39,8 +39,8 @@ ENV LD_PRELOAD="/usr/local/lib/libjemalloc.so"
 # Configure jemalloc to use background thread for purging dirty and muzzy pages after 5s
 ENV MALLOC_CONF="background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000"
 
-ENV GRAALVM_URL="https://gds.oracle.com/download/graal/25/archive/graalvm-jdk-25.0.5_linux-x64_bin.tar.gz"
-ARG GRAALVM_SHA256="2ae8b03dfcb0a5bbcb55ffd122e8ffee24e3afce04bccc82932789acd005d1e1"
+ENV GRAALVM_URL="https://gds.oracle.com/download/graal/25/archive/graalvm-jdk-25.0.5.1_linux-x64_bin.tar.gz"
+ARG GRAALVM_SHA256="b3505b8e8f73726885044820f7de593c7b0273c691286655cdb7ece2a23ad75a"
 RUN set -eux; \
     curl --fail --show-error --location "${GRAALVM_URL}" \
         --output /tmp/graalvm.tar.gz; \
