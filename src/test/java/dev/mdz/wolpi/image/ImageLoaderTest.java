@@ -12,6 +12,9 @@ import app.photofox.vipsffm.Vips;
 import com.sun.net.httpserver.HttpServer;
 import dev.mdz.wolpi.config.HttpSourceCacheConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.config.WolpiConfig.BinarizationMethod;
+import dev.mdz.wolpi.config.WolpiConfig.ExifOrientation;
+import dev.mdz.wolpi.config.WolpiConfig.ImageProcessingConfig;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.http.TimeoutHttpClient;
@@ -22,6 +25,7 @@ import dev.mdz.wolpi.model.FilesystemResolvedImage;
 import dev.mdz.wolpi.model.HttpResolvedImage;
 import dev.mdz.wolpi.model.ImageSize;
 import dev.mdz.wolpi.model.ImageSource;
+import dev.mdz.wolpi.testutil.VImageHelpers;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -71,6 +75,10 @@ class ImageLoaderTest {
     }
 
     private static WolpiConfig config(Path images) {
+        return config(images, null);
+    }
+
+    private static WolpiConfig config(Path images, @Nullable ExifOrientation orientation) {
         return new WolpiConfig(
                 Path.of("/tmp/wolpi-test-tmp"),
                 images,
@@ -84,7 +92,7 @@ class ImageLoaderTest {
                 null,
                 null,
                 null,
-                null,
+                orientation == null ? null : new ImageProcessingConfig(BinarizationMethod.OTSU, orientation),
                 Map.of(),
                 null);
     }
@@ -114,6 +122,51 @@ class ImageLoaderTest {
         VImage image = VImage.newFromFile(arena, IMAGES.resolve(imageName).toString());
         var info = imageLoader.getImageInfo(new ImageSource(imageName, null, null, null), image);
         assertThat(info.format()).isEqualTo(expectedFormat);
+    }
+
+    /// A 128x96 source that carries a real EXIF orientation tag, the way a scan would.
+    private static ImageSource exifOrientedSource() throws IOException {
+        Path tmp = Files.createTempFile("wolpi-exif-load", ".jpg");
+        tmp.toFile().deleteOnExit();
+        VImage img = VImageHelpers.createEmptyImage(arena, 128, 96, java.awt.Color.green);
+        img.set("orientation", 8);
+        img.writeToFile(tmp.toString());
+        return new ImageSource(tmp.getFileName().toString(), new FilesystemResolvedImage(tmp), null, null);
+    }
+
+    @Test
+    void ignoresExifOrientationByDefault() throws Exception {
+        var source = exifOrientedSource();
+        var info = imageLoader.getImageInfo(source);
+        assertThat(info.nativeSize()).isEqualTo(new ImageSize(128, 96));
+        // The tag is left on the image; ImageProcessor normalizes it when encoding
+        assertThat(imageLoader.loadImage(source).getInt("orientation")).isEqualTo(8);
+    }
+
+    @Test
+    void rotatesAccordingToExifOrientationWhenConfigured() throws Exception {
+        var loader = new ImageLoader(
+                config(IMAGES, ExifOrientation.ROTATE),
+                arena,
+                null,
+                null,
+                mock(WolpiMetrics.class),
+                mock(HttpSourceCache.class));
+        var source = exifOrientedSource();
+
+        var info = loader.getImageInfo(source);
+        // Orientation 8 is a 270 degree rotation, so the reported dimensions are transposed
+        assertThat(info.nativeSize()).isEqualTo(new ImageSize(96, 128));
+
+        VImage loaded = loader.loadImage(source);
+        assertThat(loaded.getWidth()).isEqualTo(96);
+        assertThat(loaded.getHeight()).isEqualTo(128);
+        // autorot() drops the field, so nothing downstream can apply it a second time
+        assertThat(hasField(loaded, "orientation")).isFalse();
+    }
+
+    private static boolean hasField(VImage image, String field) {
+        return app.photofox.vipsffm.VipsHelper.image_get_typeof(arena, image.getUnsafeStructAddress(), field) != 0L;
     }
 
     @Test

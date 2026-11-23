@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-validator`, and `install-extensions` subcommands are exempt: when another instance
   owns the configured directory they log a warning and use a temporary directory for that
   invocation, so they remain usable next to a running server.
+- Added `wolpi.image-processing.exif-orientation`, which controls whether the source's EXIF
+  `Orientation` tag is baked into the pixels (`rotate`) or ignored (`ignore`, the default).
+  `ignore` reproduces the previous behaviour and keeps reported dimensions unchanged; `rotate`
+  changes the reported dimensions of affected images, **so derivative and client-side caches need to
+  be invalidated after switching.**
+- Image responses no longer carry source metadata (EXIF, XMP, IPTC, ICC)
 
 ### Added
 - Shared `http-timeouts.{connect,request}` settings (defaults `10s`/`30s`), with optional
