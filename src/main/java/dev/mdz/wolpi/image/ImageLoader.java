@@ -8,6 +8,7 @@ import app.photofox.vipsffm.VipsOption;
 import app.photofox.vipsffm.enums.VipsSize;
 import dev.mdz.wolpi.config.IIIFConfig;
 import dev.mdz.wolpi.config.WolpiConfig;
+import dev.mdz.wolpi.config.WolpiConfig.ExifOrientation;
 import dev.mdz.wolpi.exceptions.HttpStatusException;
 import dev.mdz.wolpi.extension.ExtensionRuntime;
 import dev.mdz.wolpi.http.cache.HttpSourceCache;
@@ -89,6 +90,9 @@ public class ImageLoader {
     /// IIIF settings from the configuration
     private final IIIFConfig iiifConfig;
 
+    /// How to treat the EXIF `Orientation` tag of source images
+    private final ExifOrientation exifOrientation;
+
     /// Metrics
     private final WolpiMetrics metrics;
 
@@ -103,6 +107,10 @@ public class ImageLoader {
         this.httpSourceCache = httpSourceCache;
         this.imageBaseDirectory = cfg.imageBaseDir();
         this.iiifConfig = cfg.iiif();
+        var imageProcessing = cfg.imageProcessing();
+        this.exifOrientation = imageProcessing == null || imageProcessing.exifOrientation() == null
+                ? ExifOrientation.IGNORE
+                : imageProcessing.exifOrientation();
         this.extensionRuntime = extensionRuntime;
         this.complianceRegistry = complianceRegistry;
         this.metrics = metrics;
@@ -373,20 +381,14 @@ public class ImageLoader {
         var img =
                 switch (source.resolvedImage()) {
                     case FilesystemResolvedImage(Path path) ->
-                        VImage.thumbnail(
-                                arena,
-                                path.toString(),
-                                targetSize.width(),
-                                VipsOption.Int("height", targetSize.height()),
-                                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+                        VImage.thumbnail(arena, path.toString(), targetSize.width(), thumbnailOptions(targetSize));
                     case HttpResolvedImage ignored -> loadFromHttp(source, targetSize);
                     case BinaryResolvedImage(byte[] data) ->
                         VImage.thumbnailBuffer(
                                 arena,
                                 VBlob.newFromBytes(arena, data),
                                 targetSize.width(),
-                                VipsOption.Int("height", targetSize.height()),
-                                VipsOption.Enum("size", VipsSize.SIZE_FORCE));
+                                thumbnailOptions(targetSize));
                     case SourceNotModified ignored ->
                         throw new IllegalArgumentException("Cannot load image from SourceNotModified images.");
                 };
@@ -395,13 +397,15 @@ public class ImageLoader {
     }
 
     private VImage openImage(ImageSource source, VipsOption... options) throws IOException, InterruptedException {
-        return switch (source.resolvedImage()) {
-            case FilesystemResolvedImage(Path path) ->
-                VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
-            case HttpResolvedImage ignored -> loadFromHttp(source, null, options);
-            case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
-            default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
-        };
+        VImage image =
+                switch (source.resolvedImage()) {
+                    case FilesystemResolvedImage(Path path) ->
+                        VImage.newFromFile(arena, path.toAbsolutePath().toString(), options);
+                    case HttpResolvedImage ignored -> loadFromHttp(source, null, options);
+                    case BinaryResolvedImage(byte[] data) -> VImage.newFromBytes(arena, data, options);
+                    default -> throw new IllegalArgumentException("Cannot load image from unsupported resolved image.");
+                };
+        return exifOrientation == ExifOrientation.ROTATE ? image.autorot() : image;
     }
 
     /// Record validators from the HTTP body actually acquired. ImageSource.cacheInfo() still
@@ -484,11 +488,14 @@ public class ImageLoader {
         }
     }
 
-    private static VipsOption[] thumbnailOptions(ImageSize targetSize, VipsOption... options) {
-        var thumbOptions = new VipsOption[options.length + 2];
+    private VipsOption[] thumbnailOptions(ImageSize targetSize, VipsOption... options) {
+        var thumbOptions = new VipsOption[options.length + 3];
         System.arraycopy(options, 0, thumbOptions, 0, options.length);
         thumbOptions[options.length] = VipsOption.Int("height", targetSize.height());
         thumbOptions[options.length + 1] = VipsOption.Enum("size", VipsSize.SIZE_FORCE);
+        // libvips' `thumbnail` autorotates unless told otherwise, which would make the requested
+        // dimensions describe a different frame than the one we report in info.json.
+        thumbOptions[options.length + 2] = VipsOption.Boolean("no-rotate", exifOrientation != ExifOrientation.ROTATE);
         return thumbOptions;
     }
 

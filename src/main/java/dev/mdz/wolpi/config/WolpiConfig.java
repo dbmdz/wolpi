@@ -175,10 +175,27 @@ public record WolpiConfig(
 
     /// Configure various image processing aspects
     ///
-    /// @param binarizationMethod Select the binarization method to use for the `bitonal` output
-    ///                           quality, defaults to `otsu` (a global thresholding method)
+    /// @param binarizationMethod Method used for the `bitonal` output quality, defaults to `otsu`
+    ///                           (a global thresholding method)
+    /// @param exifOrientation    How to treat the EXIF `Orientation` tag of source images, defaults
+    ///                           to `ignore`
     public record ImageProcessingConfig(
-            @DefaultValue("otsu") BinarizationMethod binarizationMethod) {}
+            @DefaultValue("otsu") BinarizationMethod binarizationMethod,
+            @DefaultValue("ignore") ExifOrientation exifOrientation) {}
+
+    /// How the EXIF `Orientation` tag of a source image is treated.
+    ///
+    /// The tag is always removed from responses regardless of this setting, so that clients never
+    /// receive a stale orientation (see [dev.mdz.wolpi.image.ImageProcessor]). The setting only
+    /// decides whether the transform described by the tag is baked into the pixels.
+    public enum ExifOrientation {
+        /// Serve the stored pixel data unchanged. Choose this when orientation tags in the source
+        /// corpus are unreliable, since it keeps the served dimensions identical to the source.
+        IGNORE,
+        /// Apply the tag's transform at the start of the pipeline, so that crops and sizes are
+        /// expressed in the oriented frame and `info.json` reports the oriented dimensions.
+        ROTATE
+    }
 
     /// Supported binarization methods for the `bitonal` output quality
     public enum BinarizationMethod {

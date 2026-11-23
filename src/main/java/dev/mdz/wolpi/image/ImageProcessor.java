@@ -60,6 +60,10 @@ public class ImageProcessor {
     private final ExtensionRuntime extensionRuntime;
     private final WolpiMetrics metrics;
 
+    /// Formats whose libvips saver accepts the `keep` option for metadata control.
+    private static final Set<String> FORMATS_SUPPORTING_KEEP_OPTION =
+            Set.of("jpg", "png", "webp", "tif", "gif", "heif");
+
     private final ThreadLocal<@Nullable ProcessingRequestState> processingRequestState = new ThreadLocal<>();
 
     public ImageProcessor(
@@ -315,7 +319,7 @@ public class ImageProcessor {
         }
         IIIFQuality quality = parser.parseQuality(qualitySpec);
 
-        // Embedded color profiles are converted to sRGB in LAB connection space with perceptual intent
+        // Embedded color profiles are converted to sRGB in LAB connection space with perceptual intent.
         boolean hasColorProfile =
                 VipsHelper.image_get_typeof(vipsArena, image.getUnsafeStructAddress(), "icc-profile-data") != 0;
         if (hasColorProfile) {
@@ -459,11 +463,17 @@ public class ImageProcessor {
                 request.formatSpec(), outputSize, croppedArea, requestType, requestState.scaleCropMode());
 
         try {
+            // Normalize the orientation before handing the image to extensions, so that an
+            // extension encoding it itself inherits the same guarantee as our own encoder below.
+            image.set("orientation", 1);
+
             EncodedImage extensionEncoded = null;
             if (!requestState.skippableHooks.contains(ExtensionHooks.FORMAT)) {
                 extensionEncoded = extensionRuntime.preFormat(image, request.identifier(), info, request);
             }
 
+            // An extension that takes over encoding controls the output bytes completely, including
+            // whether any metadata is embedded.
             if (extensionEncoded != null) {
                 return new EncodedImage(
                         extensionEncoded.data(), extensionEncoded.contentType(), extensionEncoded.extraHeaders());
@@ -475,11 +485,15 @@ public class ImageProcessor {
                 throw new IllegalArgumentException("Unsupported output format: " + suffix);
             }
 
-            List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, new ArrayList<>());
+            // Ignore custom options to keep image metadata, we always strip it.
+            List<VipsOption> options = formatEncodingOptions.getOrDefault(suffix, List.of()).stream()
+                    .filter(option -> !option.key().equals("keep"))
+                    .collect(Collectors.toCollection(ArrayList::new));
+            if (FORMATS_SUPPORTING_KEEP_OPTION.contains(suffix)) {
+                options.add(VipsOption.Int("keep", 0 /* Don't keep any metadata */));
+            }
 
             if (request.qualitySpec().equals("bitonal") && (suffix.equals("png") || suffix.equals("gif"))) {
-                // Create a mutable copy of the options we can modify
-                options = new ArrayList<>(options);
                 options.add(VipsOption.Int("bitdepth", 1));
             }
 

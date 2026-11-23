@@ -133,6 +133,7 @@ wolpi:
 
   image-processing:
     binarization-method: otsu
+    exif-orientation: ignore
 
   encoding-options:
     jpg:

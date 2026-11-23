@@ -187,8 +187,7 @@ encoding-options:
 
 ## Image Processing configuration
 
-In the `image-processing` section, you can tweak aspects of the image processing pipeline. As of
-now there is only one option:
+In the `image-processing` section, you can tweak aspects of the image processing pipeline:
 
 - `binarization-method`: One of `otsu` (default) or `dither`. `otsu` is a global thresholding-based
   approach, i.e. Wolpi will determine a gray level as the boundary between foreground and background
@@ -196,6 +195,10 @@ now there is only one option:
   image that preserves hard structure and edges, but discards gradients and texture, making it most
   suited to text and drawings. `dither` on the other hand will preserve texture and gradients, at the
   expense of edges and structure, making it more suitable for photographic content.
+- `exif-orientation`: How to treat the EXIF `Orientation` tag of source images, either `ignore`
+  (default) or `rotate`. With `ignore` the stored pixel data is served unchanged; with `rotate` the
+  transform described by the tag is applied at the start of the pipeline, so crops and sizes refer to
+  the oriented frame and `info.json` reports the oriented dimensions.
 
 ## IIIF configuration
 
