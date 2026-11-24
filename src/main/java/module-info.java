@@ -9,7 +9,7 @@ open module wolpi {
     requires io.github.classgraph;
     requires java.net.http;
     requires micrometer.core;
-    requires com.fasterxml.jackson.core;
+    requires com.fasterxml.jackson.annotation;
     requires org.apache.commons.pool2;
     requires org.apache.tomcat.embed.core;
     requires org.graalvm.polyglot;
